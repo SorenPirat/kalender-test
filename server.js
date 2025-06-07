@@ -38,10 +38,9 @@ async function getSheetData() {
 
 async function getCalendarEventsForDate(date) {
   const calendarId = process.env.CLUB_CALENDAR_ID;
-  const timeMin = new Date(date);
-  timeMin.setHours(0, 0, 0, 0);
-  const timeMax = new Date(timeMin);
-  timeMax.setHours(23, 59, 59, 999);
+
+  const timeMin = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+  const timeMax = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
   const response = await calendar.events.list({
     calendarId,
@@ -53,6 +52,7 @@ async function getCalendarEventsForDate(date) {
 
   return response.data.items.map(event => event.summary);
 }
+
 
 async function updateSheetEntry(day, name) {
   const current = await getSheetData();
