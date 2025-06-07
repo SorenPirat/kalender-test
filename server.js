@@ -6,6 +6,11 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { google } from 'googleapis';
 
+const calendar = google.calendar({ version: 'v3', auth: new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+  scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+}) });
+
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
@@ -29,6 +34,24 @@ async function getSheetData() {
     result[date] = value;
   }
   return result;
+}
+
+async function getCalendarEventsForDate(date) {
+  const calendarId = process.env.CLUB_CALENDAR_ID;
+  const timeMin = new Date(date);
+  timeMin.setHours(0, 0, 0, 0);
+  const timeMax = new Date(timeMin);
+  timeMax.setHours(23, 59, 59, 999);
+
+  const response = await calendar.events.list({
+    calendarId,
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  return response.data.items.map(event => event.summary);
 }
 
 async function updateSheetEntry(day, name) {
@@ -67,6 +90,25 @@ app.get('/assignments', async (req, res) => {
   } catch (err) {
     console.error('Fejl ved hentning:', err);
     res.status(500).json({ error: 'Serverfejl' });
+  }
+});
+
+app.get('/assignments-with-events', async (req, res) => {
+  try {
+    const assignments = await getSheetData();
+    const result = {};
+
+    for (const key of Object.keys(assignments)) {
+      const [month, day] = key.split('-').map(Number);
+      const date = new Date(2025, month - 1, day);
+      const events = await getCalendarEventsForDate(date);
+      result[key] = { name: assignments[key], events };
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Fejl i assignments-with-events:', err);
+    res.status(500).json({ error: 'Fejl ved hentning af data' });
   }
 });
 
