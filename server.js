@@ -39,14 +39,16 @@ async function getSheetData() {
 async function getAllCalendarEvents() {
   const calendarId = process.env.CLUB_CALENDAR_ID;
 
-  // Hent events for et bredt spænd – fx hele året
-  const timeMin = new Date(2025, 5, 1).toISOString(); // juni 2025
-  const timeMax = new Date(2025, 11, 31, 23, 59, 59).toISOString(); // december 2025
+  const timeMin = new Date(2025, 5, 1);
+  const timeMax = new Date(2025, 11, 31, 23, 59, 59);
+
+  timeMin.setDate(timeMin.getDate() - 7);
+  timeMax.setDate(timeMax.getDate() + 7);
 
   const response = await calendar.events.list({
     calendarId,
-    timeMin,
-    timeMax,
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
   });
@@ -106,11 +108,11 @@ app.get('/assignments-with-events', async (req, res) => {
       date.setHours(0, 0, 0, 0);
       const isoDate = date.toISOString().split('T')[0];
 
-      const matchingEvents = calendarEvents.filter(event => {
-        if (event.start.date) {
-          const start = new Date(event.start.date);
-          const end = new Date(event.end.date);
-          return date >= start && date < end;
+    const matchingEvents = calendarEvents.filter(event => {
+      if (event.start.date && event.end.date) {
+      const start = new Date(event.start.date);
+      const end = new Date(event.end.date);
+      return date >= start && date < end;
         } else if (event.start.dateTime) {
           const eventDate = new Date(event.start.dateTime);
           return eventDate.toDateString() === date.toDateString();
