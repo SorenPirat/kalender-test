@@ -51,6 +51,8 @@ async function getAllCalendarEvents() {
     timeMax: timeMax.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
+    singleEvents: true,
+
   });
 
   return response.data.items || [];
@@ -108,21 +110,20 @@ app.get('/assignments-with-events', async (req, res) => {
       date.setHours(0, 0, 0, 0);
       const isoDate = date.toISOString().split('T')[0];
 
-    const matchingEvents = calendarEvents.filter(event => {
-  const start = event.start.date
-    ? new Date(event.start.date)
-    : new Date(event.start.dateTime);
-  const end = event.end.date
-    ? new Date(event.end.date)
-    : new Date(event.end.dateTime);
-    
+   const matchingEvents = calendarEvents.filter(event => {
   if (event.start.date && event.end.date) {
-    end.setMilliseconds(end.getMilliseconds() - 1);
+    const start = new Date(event.start.date);
+    const end = new Date(event.end.date);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    return date >= start && date < end;
+  } else if (event.start.dateTime) {
+    const eventDate = new Date(event.start.dateTime);
+    eventDate.setHours(0, 0, 0, 0);
+    return eventDate.getTime() === date.getTime();
   }
-
-  return start <= date && date <= end;
+  return false;
 });
-
 
       result[key] = {
         name: assignments[key],
