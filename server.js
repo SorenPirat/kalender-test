@@ -36,23 +36,23 @@ async function getSheetData() {
   return result;
 }
 
-async function getCalendarEventsForDate(date) {
+async function getAllCalendarEvents() {
   const calendarId = process.env.CLUB_CALENDAR_ID;
 
-  const timeMin = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-  const timeMax = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+  // Hent events for et bredt spænd – fx hele året
+  const timeMin = new Date(2025, 5, 1).toISOString(); // juni 2025
+  const timeMax = new Date(2025, 11, 31, 23, 59, 59).toISOString(); // december 2025
 
   const response = await calendar.events.list({
     calendarId,
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
+    timeMin,
+    timeMax,
     singleEvents: true,
     orderBy: 'startTime',
   });
 
-  return response.data.items.map(event => event.summary);
+  return response.data.items || [];
 }
-
 
 async function updateSheetEntry(day, name) {
   const current = await getSheetData();
@@ -96,13 +96,32 @@ app.get('/assignments', async (req, res) => {
 app.get('/assignments-with-events', async (req, res) => {
   try {
     const assignments = await getSheetData();
+    const calendarEvents = await getAllCalendarEvents();
+
     const result = {};
 
     for (const key of Object.keys(assignments)) {
       const [month, day] = key.split('-').map(Number);
       const date = new Date(2025, month - 1, day);
-      const events = await getCalendarEventsForDate(date);
-      result[key] = { name: assignments[key], events };
+      date.setHours(0, 0, 0, 0);
+      const isoDate = date.toISOString().split('T')[0];
+
+      const matchingEvents = calendarEvents.filter(event => {
+        if (event.start.date) {
+          const start = new Date(event.start.date);
+          const end = new Date(event.end.date);
+          return date >= start && date < end;
+        } else if (event.start.dateTime) {
+          const eventDate = new Date(event.start.dateTime);
+          return eventDate.toDateString() === date.toDateString();
+        }
+        return false;
+      });
+
+      result[key] = {
+        name: assignments[key],
+        events: matchingEvents.map(ev => ev.summary)
+      };
     }
 
     res.json(result);
