@@ -94,7 +94,9 @@
 
 for (let day = 1; day <= daysInMonth; day++) {
   const key = getGlobalKey(month, day);
-  const entry = assignments[key] || "";
+  const entryData = assignments[key] || {};
+  const entry = entryData.name || "";
+  const eventList = entryData.events || [];
 
   const dateObj = new Date(year, month, day);
   dateObj.setHours(0, 0, 0, 0); // Nulstil tidspunkt direkte
