@@ -109,16 +109,20 @@ app.get('/assignments-with-events', async (req, res) => {
       const isoDate = date.toISOString().split('T')[0];
 
     const matchingEvents = calendarEvents.filter(event => {
-      if (event.start.date && event.end.date) {
-      const start = new Date(event.start.date);
-      const end = new Date(event.end.date);
-      return date >= start && date < end;
-        } else if (event.start.dateTime) {
-          const eventDate = new Date(event.start.dateTime);
-          return eventDate.toDateString() === date.toDateString();
-        }
-        return false;
-      });
+  const start = event.start.date
+    ? new Date(event.start.date)
+    : new Date(event.start.dateTime);
+  const end = event.end.date
+    ? new Date(event.end.date)
+    : new Date(event.end.dateTime);
+    
+  if (event.start.date && event.end.date) {
+    end.setMilliseconds(end.getMilliseconds() - 1);
+  }
+
+  return start <= date && date <= end;
+});
+
 
       result[key] = {
         name: assignments[key],
