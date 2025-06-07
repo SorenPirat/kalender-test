@@ -57,8 +57,8 @@
   const calendarContainer = document.getElementById('calendar');
 
   async function fetchAssignments() {
-    const res = await fetch(`${API_URL}/assignments`);
-    return await res.json();
+  const res = await fetch(`${API_URL}/assignments-with-events`);
+  return await res.json();
   }
 
   async function updateAssignment(key, value) {
@@ -88,7 +88,7 @@
     if (month === currentMonth) content.classList.add('active');
 
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Handling</th></tr>';
+    table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr>';
 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -167,8 +167,17 @@ for (let day = 1; day <= daysInMonth; day++) {
   tdActions.appendChild(closeBtn);
 }
 
+const tdEvents = document.createElement('td');
+const entryData = assignments[key];
+const eventList = entryData && entryData.events ? entryData.events : [];
+
+tdEvents.textContent = eventList.length > 0
+  ? eventList.join(', ')
+  : '–';
+
       tr.appendChild(tdDate);
       tr.appendChild(tdName);
+      tr.appendChild(tdEvents);
       tr.appendChild(tdActions);
       table.appendChild(tr);
     }
