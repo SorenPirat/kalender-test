@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <title>Nøglebærer-kalender 2025</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 2rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    td.name { cursor: pointer; }
+    button.toggle { background: none; border: none; font-size: 1rem; font-weight: bold; padding: 0.5rem 0; cursor: pointer; width: 100%; text-align: left; }
+    .month-block { border: 1px solid #ccc; border-radius: 5px; margin-bottom: 1rem; padding: 0.5rem; }
+    .month-content { display: none; }
+    .month-content.active { display: block; }
+    .past { color: #aaa; background-color: #f9f9f9; }
+    .today { background-color: #e0f0ff !important; border-left: 4px solid #3399ff; }
+  </style>
+</head>
+<body>
+  <h2>Nøglebærer-kalender: Juni–December 2025</h2>
+  <div id="calendar"></div>
+  <script>
+  const API_URL = 'https://n-gleb-rer-kalender.onrender.com';
+  const months = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
+  const weekdays = ['søn', 'man', 'tirs', 'ons', 'tors', 'fre', 'lør'];
+  const year = 2025;
+  const startMonth = 5;
+  const currentMonth = new Date().getMonth();
+  const calendarContainer = document.getElementById('calendar');
+
+  async function fetchAssignments() {
+    const res = await fetch(`${API_URL}/assignments`);
+    return await res.json();
+  }
+
+  async function updateAssignment(key, value) {
+    await fetch(`${API_URL}/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ day: key, name: value })
+    });
+  }
+
+  function getGlobalKey(month, day) {
+    return `${month + 1}-${day}`;
+  }
+
+  async function renderMonth(month) {
+    const assignments = await fetchAssignments();
+    const block = document.createElement('div');
+    block.className = 'month-block';
+
+    const toggle = document.createElement('button');
+    toggle.className = 'toggle';
+    toggle.textContent = months[month].charAt(0).toUpperCase() + months[month].slice(1);
+    block.appendChild(toggle);
+
+    const content = document.createElement('div');
+    content.className = 'month-content';
+    if (month === currentMonth) content.classList.add('active');
+
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Handling</th></tr>';
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = getGlobalKey(month, day);
+      const entry = assignments[key] || "";
+      const dateObj = new Date(year, month, day);
+      const weekday = weekdays[dateObj.getDay()];
+
+      const todayObj = new Date();
+      todayObj.setHours(0, 0, 0, 0); // nulstil klokkeslæt
+      dateObj.setHours(0, 0, 0, 0);
+
+      let dayClass = '';
+      if (dateObj < todayObj) {
+        dayClass = 'past';
+      } else if (dateObj.getTime() === todayObj.getTime()) {
+        dayClass = 'today';
+      }
+
+      const tr = document.createElement('tr');
+      if (dayClass) tr.classList.add(dayClass);
+      const tdDate = document.createElement('td');
+      tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
+
+      const tdName = document.createElement('td');
+      const tdActions = document.createElement('td');
+
+      if (entry === "closed") {
+        tdName.textContent = "🔒 LUKKET";
+        tdName.style.color = "#888";
+        tdActions.innerHTML = `<button onclick="reopenDate('${key}')">Åbn dag</button>`;
+      } else {
+        tdName.textContent = entry || "Klik for at tilføje";
+        tdName.className = 'name';
+        tdName.style.cursor = 'pointer';
+        tdName.addEventListener('click', async () => {
+          const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
+          if (newName !== null) {
+            await updateAssignment(key, newName.trim());
+            location.reload();
+          }
+        });
+
+        tdActions.innerHTML = `
+          <button onclick="deleteName('${key}')">🗑️</button>
+          <button onclick="closeDate('${key}')">Luk dag</button>
+        `;
+      }
+
+      tr.appendChild(tdDate);
+      tr.appendChild(tdName);
+      tr.appendChild(tdActions);
+      table.appendChild(tr);
+    }
+
+    content.appendChild(table);
+    block.appendChild(content);
+    toggle.addEventListener('click', () => content.classList.toggle('active'));
+    calendarContainer.appendChild(block);
+  }
+
+  function deleteName(key) {
+    if (confirm("Vil du slette nøglebærer for denne dag?")) {
+      updateAssignment(key, "").then(() => location.reload());
+    }
+  }
+
+  function closeDate(key) {
+    if (confirm("Vil du markere dagen som lukket?")) {
+      updateAssignment(key, "closed").then(() => location.reload());
+    }
+  }
+
+  function reopenDate(key) {
+    if (confirm("Vil du åbne denne lukkede dag?")) {
+      updateAssignment(key, "").then(() => location.reload());
+    }
+  }
+
+  async function renderCalendar() {
+    for (let m = startMonth; m <= 11; m++) {
+      await renderMonth(m);
+    }
+  }
+
+  renderCalendar();
+</script>
+</body>
+</html>
