@@ -51,7 +51,6 @@ async function getAllCalendarEvents() {
     timeMax: timeMax.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
-    singleEvents: true,
 
   });
 
@@ -103,8 +102,22 @@ app.get('/assignments-with-events', async (req, res) => {
     const calendarEvents = await getAllCalendarEvents();
 
     const result = {};
+    
+function getAllDaysInRange(year, monthStart, monthEnd) {
+  const days = [];
+  for (let m = monthStart; m <= monthEnd; m++) {
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${m + 1}-${d}`;
+      days.push(key);
+    }
+  }
+  return days;
+}
 
-    for (const key of Object.keys(assignments)) {
+const allKeys = getAllDaysInRange(2025, 5, 11);
+
+    for (const key of allKeys) {
       const [month, day] = key.split('-').map(Number);
       const date = new Date(2025, month - 1, day);
       date.setHours(0, 0, 0, 0);
