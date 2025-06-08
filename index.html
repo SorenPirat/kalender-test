@@ -8,6 +8,8 @@
     margin: 0;
     padding: 0.5rem;
     background-color: #f9f9f9;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   table {
@@ -24,14 +26,21 @@
   }
 
   .toggle {
-    width: 100%;
-    padding: 0.6rem;
-    font-size: 1.1rem;
-    text-align: left;
-    margin-top: 1rem;
-    background-color: #eee;
-    border: none;
-    cursor: pointer;
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 1.1rem;
+  text-align: left;
+  margin-top: 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  }
+
+  .toggle:hover {
+  background-color: #0056b3;
   }
 
   .month-content {
@@ -131,9 +140,10 @@
     if (month === currentMonth) content.classList.add('active');
 
     toggle.addEventListener('click', () => {
-      document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
-      content.classList.add('active');
-    });
+    const isActive = content.classList.contains('active');
+    document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
+    if (!isActive) content.classList.add('active');
+  });
 
     const table = document.createElement('table');
     table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr>';
