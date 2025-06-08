@@ -100,8 +100,8 @@
   const calendarContainer = document.getElementById('calendar');
 
   async function fetchAssignments() {
-  const res = await fetch(`${API_URL}/assignments-with-events`);
-  return await res.json();
+    const res = await fetch(`${API_URL}/assignments-with-events`);
+    return await res.json();
   }
 
   async function updateAssignment(key, value) {
@@ -130,105 +130,113 @@
     content.className = 'month-content';
     if (month === currentMonth) content.classList.add('active');
 
+    toggle.addEventListener('click', () => {
+      document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
+      content.classList.add('active');
+    });
+
     const table = document.createElement('table');
     table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr>';
 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-for (let day = 1; day <= daysInMonth; day++) {
-  const key = getGlobalKey(month, day);
-  const entryData = assignments[key] || {};
-  const entry = entryData.name || "";
-  const eventList = entryData.events || [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = getGlobalKey(month, day);
+      const entryData = assignments[key] || {};
+      const entry = entryData.name || "";
+      const eventList = entryData.events || [];
 
-  const dateObj = new Date(year, month, day);
-  dateObj.setHours(0, 0, 0, 0);
-  const weekday = weekdays[dateObj.getDay()];
+      const dateObj = new Date(year, month, day);
+      dateObj.setHours(0, 0, 0, 0);
+      const weekday = weekdays[dateObj.getDay()];
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-  const limitDate = new Date(today);
-  limitDate.setDate(today.getDate() - 3);
-  if (dateObj < limitDate) continue;
+      const limitDate = new Date(today);
+      limitDate.setDate(today.getDate() - 3);
+      if (dateObj < limitDate) continue;
 
-  let dayClass = '';
-  if (dateObj < today) dayClass = 'past';
-  else if (dateObj.getTime() === today.getTime()) dayClass = 'today';
+      let dayClass = '';
+      if (dateObj < today) dayClass = 'past';
+      else if (dateObj.getTime() === today.getTime()) dayClass = 'today';
 
-  const tr = document.createElement('tr');
-  if (dayClass) tr.classList.add(dayClass);
+      const tr = document.createElement('tr');
+      if (dayClass) tr.classList.add(dayClass);
 
-  const tdDate = document.createElement('td');
-  tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
-  tdDate.setAttribute('data-label', 'Dato');
-  
-  const tdName = document.createElement('td');
-    tdName.setAttribute('data-label', 'Nøglebærer');
-  
-  const tdEvents = document.createElement('td');
-  tdEvents.setAttribute('data-label', 'Begivenheder');
-  
-  const tdActions = document.createElement('td');
-  tdActions.setAttribute('data-label', 'Handling');
+      const tdDate = document.createElement('td');
+      tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
+      tdDate.setAttribute('data-label', 'Dato');
 
-  tdEvents.textContent = eventList.length > 0 ? eventList.join(', ') : '–';
+      const tdName = document.createElement('td');
+      tdName.setAttribute('data-label', 'Nøglebærer');
 
-  if (entry.startsWith("closed")) {
-    const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
-    tdName.textContent = "🔒 LUKKET" + (reason ? ` – ${reason}` : "");
-    tdName.style.color = "#888";
+      const tdEvents = document.createElement('td');
+      tdEvents.setAttribute('data-label', 'Begivenheder');
 
-    const reopenBtn = document.createElement("button");
-    reopenBtn.textContent = "Åbn dag";
-    reopenBtn.onclick = () => reopenDate(key);
-    tdActions.appendChild(reopenBtn);
-  } else {
-    tdName.textContent = entry || "Klik for at tilføje";
-    tdName.className = 'name';
-    tdName.style.cursor = 'pointer';
-    tdName.onclick = async () => {
-      const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
-      if (newName !== null) {
-        await updateAssignment(key, newName.trim());
-        location.reload();
+      const tdActions = document.createElement('td');
+      tdActions.setAttribute('data-label', 'Handling');
+
+      tdEvents.textContent = eventList.length > 0 ? `📅 ${eventList.join(', ')}` : '–';
+
+      if (entry.startsWith("closed")) {
+        const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
+        tdName.textContent = "🔒 LUKKET" + (reason ? ` – ${reason}` : "");
+        tdName.style.color = "#888";
+
+        const reopenBtn = document.createElement("button");
+        reopenBtn.textContent = "Åbn dag";
+        reopenBtn.onclick = () => reopenDate(key);
+        tdActions.appendChild(reopenBtn);
+      } else {
+        tdName.textContent = entry || "Klik for at tilføje";
+        tdName.className = 'name';
+        tdName.style.cursor = 'pointer';
+        tdName.onclick = async () => {
+          const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
+          if (newName !== null) {
+            await updateAssignment(key, newName.trim());
+            location.reload();
+          }
+        };
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "🗑️";
+        deleteBtn.onclick = async () => {
+          if (confirm('Vil du slette nøglebærer for denne dag?')) {
+            await updateAssignment(key, "");
+            location.reload();
+          }
+        };
+
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Luk dag";
+        closeBtn.onclick = async () => {
+          const reason = prompt("Hvorfor er dagen lukket? (valgfrit)");
+          if (reason !== null) {
+            await updateAssignment(key, "closed::" + reason.trim());
+            location.reload();
+          }
+        };
+
+        tdActions.appendChild(deleteBtn);
+        tdActions.appendChild(closeBtn);
       }
-    };
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "🗑️";
-    deleteBtn.onclick = async () => {
-      if (confirm('Vil du slette nøglebærer for denne dag?')) {
-        await updateAssignment(key, "");
-        location.reload();
-      }
-    };
-
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "Luk dag";
-    closeBtn.onclick = async () => {
-      const reason = prompt("Hvorfor er dagen lukket? (valgfrit)");
-      if (reason !== null) {
-        await updateAssignment(key, "closed::" + reason.trim());
-        location.reload();
-      }
-    };
-
-    tdActions.appendChild(deleteBtn);
-    tdActions.appendChild(closeBtn);
-  }
-
-  tr.appendChild(tdDate);
-  tr.appendChild(tdName);
-  tr.appendChild(tdEvents);
-  tr.appendChild(tdActions);
-  table.appendChild(tr);
-}
+      tr.appendChild(tdDate);
+      tr.appendChild(tdName);
+      tr.appendChild(tdEvents);
+      tr.appendChild(tdActions);
+      table.appendChild(tr);
+    }
 
     content.appendChild(table);
     block.appendChild(content);
-    toggle.addEventListener('click', () => content.classList.toggle('active'));
     calendarContainer.appendChild(block);
+    
+    if (month === currentMonth) {
+      setTimeout(() => block.scrollIntoView({ behavior: 'smooth' }), 150);
+    }
   }
 
   function reopenDate(key) {
@@ -238,19 +246,19 @@ for (let day = 1; day <= daysInMonth; day++) {
   }
 
   async function renderCalendar() {
-  const loading = document.getElementById("loading");
-  const calendar = document.getElementById("calendar");
+    const loading = document.getElementById("loading");
+    const calendar = document.getElementById("calendar");
 
-  try {
-    for (let m = startMonth; m <= 11; m++) {
-      await renderMonth(m);
+    try {
+      for (let m = startMonth; m <= 11; m++) {
+        await renderMonth(m);
+      }
+      loading.style.display = "none";
+    } catch (err) {
+      console.error("❌ Fejl under hentning af data:", err);
+      loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
     }
-    loading.style.display = "none";
-  } catch (err) {
-    console.error("❌ Fejl under hentning af data:", err);
-    loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
   }
-}
 
   renderCalendar();
 </script>
