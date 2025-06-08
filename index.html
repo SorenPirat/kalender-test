@@ -2,111 +2,114 @@
 <html lang="da">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  body {
-    font-family: sans-serif;
-    margin: 0;
-    padding: 0.5rem;
-    background-color: #f9f9f9;
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1rem;
-  }
-
-  th, td {
-    padding: 0.4rem;
-    font-size: 0.95rem;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-  }
-
-  .month-block {
-  margin-bottom: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  overflow: hidden;
-  }
-
-  .toggle {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #007bff;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 1rem;
-  font-size: 1.1rem;
-  text-align: left;
-  border: none;
-  border-bottom: 1px solid #ccc;
-  cursor: pointer;
-}
-
-
-  .toggle:hover {
-  background-color: #0056b3;
-  }
-
-  .month-content {
-  display: none;
-  }
-
-  .month-content.active {
-  display: block;
-  }
-
-
-  .name {
-    color: #007bff;
-    font-weight: bold;
-  }
-
-  #test-banner {
-    background-color: #ffe08a;
-    color: #333;
-    font-weight: bold;
-    text-align: center;
-    padding: 0.5rem;
-    font-size: 0.95rem;
-  }
-
-  @media screen and (max-width: 600px) {
-    table, thead, tbody, th, td, tr {
-      display: block;
-      width: 100%;
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0.5rem;
+      background-color: #f9f9f9;
+      max-width: 100%;
+      overflow-x: hidden;
     }
 
-    tr {
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+
+    th, td {
+      padding: 0.4rem;
+      font-size: 0.95rem;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .month-block {
       margin-bottom: 1rem;
       border: 1px solid #ccc;
-      padding: 0.5rem;
       border-radius: 6px;
-      background-color: white;
+      overflow: hidden;
     }
 
-    td {
-      font-size: 0.9rem;
-      display: flex;
-      justify-content: space-between;
-      padding: 0.3rem 0;
+    .month-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: #007bff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    td::before {
-      content: attr(data-label);
+    .toggle {
+      all: unset;
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.1rem;
       font-weight: bold;
-      margin-right: 1rem;
+      color: white;
+      text-align: center;
+      cursor: pointer;
     }
 
-    th {
+    .toggle:hover {
+      background-color: #0056b3;
+    }
+
+    .month-content {
       display: none;
     }
-  }
-</style>
+
+    .month-content.active {
+      display: block;
+    }
+
+    .name {
+      color: #007bff;
+      font-weight: bold;
+    }
+
+    #test-banner {
+      background-color: #ffe08a;
+      color: #333;
+      font-weight: bold;
+      text-align: center;
+      padding: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    @media screen and (max-width: 600px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+        width: 100%;
+      }
+
+      tr {
+        margin-bottom: 1rem;
+        border: 1px solid #ccc;
+        padding: 0.5rem;
+        border-radius: 6px;
+        background-color: white;
+      }
+
+      td {
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        padding: 0.3rem 0;
+      }
+
+      td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        margin-right: 1rem;
+      }
+
+      th {
+        display: none;
+      }
+    }
+  </style>
 </head>
 <body>
   <div id="test-banner">🧪 TESTVERSION – Ændringer her påvirker IKKE den rigtige kalender</div>
@@ -144,10 +147,15 @@
     const block = document.createElement('div');
     block.className = 'month-block';
 
+    const header = document.createElement('div');
+    header.className = 'month-header';
+
     const toggle = document.createElement('button');
     toggle.className = 'toggle';
     toggle.textContent = months[month].charAt(0).toUpperCase() + months[month].slice(1);
-    block.appendChild(toggle);
+
+    header.appendChild(toggle);
+    block.appendChild(header);
 
     const content = document.createElement('div');
     content.className = 'month-content';
@@ -156,9 +164,7 @@
     toggle.addEventListener('click', () => {
     const isActive = content.classList.contains('active');
     document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
-    if (!isActive) {
-    content.classList.add('active');
-    }
+    if (!isActive) content.classList.add('active');
   });
 
     const table = document.createElement('table');
