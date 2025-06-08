@@ -25,18 +25,25 @@
     border-bottom: 1px solid #ddd;
   }
 
+  .month-block {
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+  }
+
   .toggle {
-  width: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #007bff;
+  color: white;
   padding: 0.6rem;
   font-size: 1.1rem;
   text-align: left;
-  margin-top: 1rem;
-  background-color: #007bff;
-  color: white;
   border: none;
-  border-radius: 6px;
+  border-bottom: 1px solid #ccc;
   cursor: pointer;
-  transition: background-color 0.2s ease;
   }
 
   .toggle:hover {
@@ -44,8 +51,13 @@
   }
 
   .month-content {
-    margin-bottom: 1rem;
+  display: none;
   }
+
+  .month-content.active {
+  display: block;
+  }
+
 
   .name {
     color: #007bff;
@@ -142,7 +154,9 @@
     toggle.addEventListener('click', () => {
     const isActive = content.classList.contains('active');
     document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
-    if (!isActive) content.classList.add('active');
+    if (!isActive) {
+    content.classList.add('active');
+    }
   });
 
     const table = document.createElement('table');
@@ -243,9 +257,7 @@
     content.appendChild(table);
     block.appendChild(content);
     calendarContainer.appendChild(block);
-    
-    if (month === currentMonth) {
-      setTimeout(() => block.scrollIntoView({ behavior: 'smooth' }), 150);
+
     }
   }
 
@@ -256,19 +268,25 @@
   }
 
   async function renderCalendar() {
-    const loading = document.getElementById("loading");
-    const calendar = document.getElementById("calendar");
+  const loading = document.getElementById("loading");
+  const calendar = document.getElementById("calendar");
 
-    try {
-      for (let m = startMonth; m <= 11; m++) {
-        await renderMonth(m);
-      }
-      loading.style.display = "none";
-    } catch (err) {
-      console.error("❌ Fejl under hentning af data:", err);
-      loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
+  try {
+    for (let m = startMonth; m <= 11; m++) {
+      await renderMonth(m);
     }
+    loading.style.display = "none";
+
+    const activeMonth = document.querySelector('.month-content.active');
+    if (activeMonth) {
+      activeMonth.parentElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (err) {
+    console.error("❌ Fejl under hentning af data:", err);
+    loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
   }
+}
+
 
   renderCalendar();
 </script>
