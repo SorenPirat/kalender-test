@@ -2,129 +2,88 @@
 <html lang="da">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f5f5f5;
-      color: #333;
-    }
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0.5rem;
+    background-color: #f9f9f9;
+  }
 
-    #test-banner {
-      background: #ffc107;
-      color: #000;
-      text-align: center;
-      padding: 8px;
-      font-weight: bold;
-    }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
 
-    h2 {
-      text-align: center;
-      margin: 1rem 0;
-      font-size: 1.4rem;
-    }
+  th, td {
+    padding: 0.4rem;
+    font-size: 0.95rem;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
 
-    #loading {
-      text-align: center;
-      margin: 1rem;
-      font-size: 1rem;
-    }
+  .toggle {
+    width: 100%;
+    padding: 0.6rem;
+    font-size: 1.1rem;
+    text-align: left;
+    margin-top: 1rem;
+    background-color: #eee;
+    border: none;
+    cursor: pointer;
+  }
 
-    .month-block {
-  margin: 1rem 0;
-  border-radius: 6px;
-  background-color: #fff;
-}
+  .month-content {
+    margin-bottom: 1rem;
+  }
 
-.toggle {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background-color: #1976d2;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  color: white;
-  padding: 0.6rem 1rem;
-  font-weight: bold;
-  font-size: 1.1rem;
-  border: none;
-  width: 100%;
-  text-align: left;
-}
-    .month-content {
-      display: none;
-    }
+  .name {
+    color: #007bff;
+    font-weight: bold;
+  }
 
-    .month-content.active {
+  #test-banner {
+    background-color: #ffe08a;
+    color: #333;
+    font-weight: bold;
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  @media screen and (max-width: 600px) {
+    table, thead, tbody, th, td, tr {
       display: block;
-    }
-
-    table {
       width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
     }
 
-    th, td {
-      padding: 0.6rem;
-      border-bottom: 1px solid #ddd;
-      vertical-align: middle;
+    tr {
+      margin-bottom: 1rem;
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      border-radius: 6px;
+      background-color: white;
+    }
+
+    td {
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      padding: 0.3rem 0;
+    }
+
+    td::before {
+      content: attr(data-label);
+      font-weight: bold;
+      margin-right: 1rem;
     }
 
     th {
-      background-color: #f0f0f0;
-      text-align: left;
+      display: none;
     }
-
-    td.name {
-      color: #00796b;
-      font-weight: 500;
-    }
-
-    td.name:hover {
-      text-decoration: underline;
-    }
-
-    button {
-      background-color: #eeeeee;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      padding: 0.3rem 0.6rem;
-      font-size: 0.85rem;
-      cursor: pointer;
-      margin: 2px;
-    }
-
-    button:hover {
-      background-color: #ddd;
-    }
-
-    tr.past td {
-      color: #999;
-    }
-
-    tr.today td {
-      background-color: #e3f2fd;
-      font-weight: bold;
-    }
-
-    @media (max-width: 600px) {
-      th, td {
-        padding: 0.5rem;
-        font-size: 0.85rem;
-      }
-
-      .toggle {
-        font-size: 1rem;
-        padding: 0.6rem;
-      }
-
-      button {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-      }
-    }
-  </style>
+  }
+</style>
 </head>
 <body>
   <div id="test-banner">🧪 TESTVERSION – Ændringer her påvirker IKKE den rigtige kalender</div>
@@ -201,11 +160,18 @@ for (let day = 1; day <= daysInMonth; day++) {
   if (dayClass) tr.classList.add(dayClass);
 
   const tdDate = document.createElement('td');
-  tdDate.textContent = `${weekday} d. ${day}.`;
-
+  tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
+  tdDate.setAttribute('data-label', 'Dato');
+  
   const tdName = document.createElement('td');
-  const tdActions = document.createElement('td');
+    tdName.setAttribute('data-label', 'Nøglebærer');
+  
   const tdEvents = document.createElement('td');
+  tdEvents.setAttribute('data-label', 'Begivenheder');
+  
+  const tdActions = document.createElement('td');
+  tdActions.setAttribute('data-label', 'Handling');
+
   tdEvents.textContent = eventList.length > 0 ? eventList.join(', ') : '–';
 
   if (entry.startsWith("closed")) {
