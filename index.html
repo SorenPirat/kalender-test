@@ -35,16 +35,18 @@
   .toggle {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
   background-color: #007bff;
   color: white;
-  padding: 0.6rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
   font-size: 1.1rem;
   text-align: left;
   border: none;
   border-bottom: 1px solid #ccc;
   cursor: pointer;
-  }
+}
+
 
   .toggle:hover {
   background-color: #0056b3;
@@ -274,11 +276,6 @@
       await renderMonth(m);
     }
     loading.style.display = "none";
-
-    const activeMonth = document.querySelector('.month-content.active');
-    if (activeMonth) {
-      activeMonth.parentElement.scrollIntoView({ behavior: 'smooth' });
-    }
   } catch (err) {
     console.error("❌ Fejl under hentning af data:", err);
     loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
