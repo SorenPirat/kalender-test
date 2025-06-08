@@ -2,115 +2,214 @@
 <html lang="da">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0.5rem;
-      background-color: #f9f9f9;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0.5rem;
+    background-color: #f9f9f9;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
 
-    table {
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+
+  tr.past {
+    background-color: #f0f0f0;
+    color: #888;
+  }
+
+  tr.today {
+    background-color: #e0f3ff;
+    font-weight: bold;
+    border-left: 4px solid #007bff;
+  }
+
+  tr.recent-past {
+    background-color: #f0f0f0;
+    color: #666;
+  }
+
+  td[data-label="Handling"] button {
+    margin-right: 0.5rem;
+    font-size: 1.2rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  td[data-label="Handling"] button:hover {
+    filter: brightness(1.2);
+  }
+
+  th, td {
+    padding: 0.4rem;
+    font-size: 0.95rem;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .sticky-buffer {
+    height: 3.5rem;
+    margin-top: -3.5rem;
+    pointer-events: none;
+  }
+
+  .month-block {
+    margin: 1rem auto;
+    padding-inline: 1rem;
+    border: none;
+    border-radius: 12px;
+    overflow: visible;
+    position: relative;
+    scroll-margin-top: 4rem;
+    padding-top: 0rem;
+    max-width: 100%;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .month-sticky-header {
+    position: sticky;
+    top: 0;
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+    text-align: center;
+    padding: 1rem;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin: 0.5rem auto;
+    width: calc(100% - 2rem); 
+    border-radius: 12px;
+  }
+
+  .toggle:hover {
+    background-color: #0056b3;
+  }
+
+  .month-content {
+    display: none;
+    scroll-margin-top: 4.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .month-content.active {
+    display: block;
+  }
+
+  .name {
+    color: #007bff;
+    font-weight: bold;
+  }
+
+  #test-banner {
+    background-color: #ffe08a;
+    color: #333;
+    font-weight: bold;
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  @media screen and (max-width: 600px) {
+    table, th, td, tr {
+      display: block;
       width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1rem;
     }
 
-    th, td {
-      padding: 0.4rem;
-      font-size: 0.95rem;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
+    tr {
+      margin-bottom: 1rem;
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      border-radius: 6px;
+      background-color: white;
+      box-sizing: border-box;
+    }
+
+    td {
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 0.3rem 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    td::before {
+      content: attr(data-label);
+      font-weight: bold;
+      margin-right: 1rem;
+      flex-shrink: 0;
+      min-width: 80px;
+      word-break: normal;
+    }
+
+    th {
+      display: none;
+    }
+  }
+
+  /* 🌙 Mørk tilstand */
+  @media (prefers-color-scheme: dark) {
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
     }
 
     .month-block {
-    margin-bottom: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
-  }
-
-    .month-header {
-  position: sticky;
-  top: 3.5rem;
-  z-index: 100;
-  background-color: #007bff;
-}
-
-.toggle {
-  all: unset;
-  display: block;
-  width: 100%;
-  padding: 1rem;
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: white;
-  text-align: center;
-  cursor: pointer;
-  background-color: #007bff;
-}
-
-.toggle:hover {
-  background-color: #0056b3;
-}
-
-    .month-content {
-      display: none;
+      background-color: #1e1e1e;
+      box-shadow: none;
     }
 
-    .month-content.active {
-      display: block;
+    .month-sticky-header {
+      background-color: #2a2a2a;
+      color: #ffffff;
+      box-shadow: 0 2px 4px rgba(255,255,255,0.1);
+    }
+
+    table {
+      background-color: transparent;
+    }
+
+    tr {
+      background-color: #2c2c2c;
+    }
+
+    tr.today {
+      background-color: #1a3a5a;
+      border-left: 4px solid #81cfff;
+      color: white;
+    }
+
+    tr.past,
+    tr.recent-past {
+      background-color: #1a1a1a;
+      color: #777;
+    }
+
+    td::before {
+      color: #aaa;
     }
 
     .name {
-      color: #007bff;
-      font-weight: bold;
+      color: #81cfff;
     }
 
     #test-banner {
-      background-color: #ffe08a;
-      color: #333;
-      font-weight: bold;
-      text-align: center;
-      padding: 0.5rem;
-      font-size: 0.95rem;
+      background-color: #333;
+      color: #fff;
     }
-
-    @media screen and (max-width: 600px) {
-      table, thead, tbody, th, td, tr {
-        display: block;
-        width: 100%;
-      }
-
-      tr {
-        margin-bottom: 1rem;
-        border: 1px solid #ccc;
-        padding: 0.5rem;
-        border-radius: 6px;
-        background-color: white;
-      }
-
-      td {
-        font-size: 0.9rem;
-        display: flex;
-        justify-content: space-between;
-        padding: 0.3rem 0;
-      }
-
-      td::before {
-        content: attr(data-label);
-        font-weight: bold;
-        margin-right: 1rem;
-      }
-
-      th {
-        display: none;
-      }
-    }
-  </style>
+  }
+</style>
 </head>
 <body>
   <div id="test-banner">🧪 TESTVERSION – Ændringer her påvirker IKKE den rigtige kalender</div>
@@ -143,144 +242,15 @@
     return `${month + 1}-${day}`;
   }
 
-  async function renderMonth(month) {
-    const assignments = await fetchAssignments();
-    const block = document.createElement('div');
-    block.className = 'month-block';
-
-    const header = document.createElement('div');
-    header.className = 'month-header';
-
-    const toggle = document.createElement('button');
-    toggle.className = 'toggle';
-    toggle.textContent = months[month].charAt(0).toUpperCase() + months[month].slice(1);
-
-    header.appendChild(toggle);
-    block.appendChild(header);
-
-    const content = document.createElement('div');
-    content.className = 'month-content';
-    if (month === currentMonth) content.classList.add('active');
-
-    toggle.addEventListener('click', () => {
-    const isActive = content.classList.contains('active');
-    document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
-    if (!isActive) content.classList.add('active');
-  });
-
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr>';
-
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const key = getGlobalKey(month, day);
-      const entryData = assignments[key] || {};
-      const entry = entryData.name || "";
-      const eventList = entryData.events || [];
-
-      const dateObj = new Date(year, month, day);
-      dateObj.setHours(0, 0, 0, 0);
-      const weekday = weekdays[dateObj.getDay()];
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const limitDate = new Date(today);
-      limitDate.setDate(today.getDate() - 3);
-      if (dateObj < limitDate) continue;
-
-      let dayClass = '';
-      if (dateObj < today) dayClass = 'past';
-      else if (dateObj.getTime() === today.getTime()) dayClass = 'today';
-
-      const tr = document.createElement('tr');
-      if (dayClass) tr.classList.add(dayClass);
-
-      const tdDate = document.createElement('td');
-      tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
-      tdDate.setAttribute('data-label', 'Dato');
-
-      const tdName = document.createElement('td');
-      tdName.setAttribute('data-label', 'Nøglebærer');
-
-      const tdEvents = document.createElement('td');
-      tdEvents.setAttribute('data-label', 'Begivenheder');
-
-      const tdActions = document.createElement('td');
-      tdActions.setAttribute('data-label', 'Handling');
-
-      tdEvents.textContent = eventList.length > 0 ? `📅 ${eventList.join(', ')}` : '–';
-
-      if (entry.startsWith("closed")) {
-        const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
-        tdName.textContent = "🔒 LUKKET" + (reason ? ` – ${reason}` : "");
-        tdName.style.color = "#888";
-
-        const reopenBtn = document.createElement("button");
-        reopenBtn.textContent = "Åbn dag";
-        reopenBtn.onclick = () => reopenDate(key);
-        tdActions.appendChild(reopenBtn);
-      } else {
-        tdName.textContent = entry || "Klik for at tilføje";
-        tdName.className = 'name';
-        tdName.style.cursor = 'pointer';
-        tdName.onclick = async () => {
-          const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
-          if (newName !== null) {
-            await updateAssignment(key, newName.trim());
-            location.reload();
-          }
-        };
-
-        const deleteBtn = document.createElement("button");
-        deleteBtn.textContent = "🗑️";
-        deleteBtn.onclick = async () => {
-          if (confirm('Vil du slette nøglebærer for denne dag?')) {
-            await updateAssignment(key, "");
-            location.reload();
-          }
-        };
-
-        const closeBtn = document.createElement("button");
-        closeBtn.textContent = "Luk dag";
-        closeBtn.onclick = async () => {
-          const reason = prompt("Hvorfor er dagen lukket? (valgfrit)");
-          if (reason !== null) {
-            await updateAssignment(key, "closed::" + reason.trim());
-            location.reload();
-          }
-        };
-
-        tdActions.appendChild(deleteBtn);
-        tdActions.appendChild(closeBtn);
-      }
-
-      tr.appendChild(tdDate);
-      tr.appendChild(tdName);
-      tr.appendChild(tdEvents);
-      tr.appendChild(tdActions);
-      table.appendChild(tr);
-    }
-
-    content.appendChild(table);
-    block.appendChild(content);
-    calendarContainer.appendChild(block);
-    }
-
-  function reopenDate(key) {
-    if (confirm("Vil du åbne denne lukkede dag?")) {
-      updateAssignment(key, "").then(() => location.reload());
-    }
-  }
-
   async function renderCalendar() {
   const loading = document.getElementById("loading");
   const calendar = document.getElementById("calendar");
 
   try {
+    const assignments = await fetchAssignments();
+
     for (let m = startMonth; m <= 11; m++) {
-      await renderMonth(m);
+      renderMonth(m, assignments);
     }
     loading.style.display = "none";
   } catch (err) {
@@ -288,6 +258,156 @@
     loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
   }
 }
+
+function renderMonth(month, assignments) {
+  const block = document.createElement('div');
+  block.className = 'month-block';
+
+  const content = document.createElement('div');
+  content.className = 'month-content';
+  if (month === currentMonth) content.classList.add('active');
+
+  const stickyHeader = document.createElement('div');
+  stickyHeader.className = 'month-sticky-header';
+  stickyHeader.textContent = months[month].charAt(0).toUpperCase() + months[month].slice(1);
+
+  stickyHeader.style.cursor = 'pointer';
+  stickyHeader.addEventListener('click', () => {
+    const wasActive = content.classList.contains('active');
+    document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
+    if (!wasActive) {
+      content.classList.add('active');
+
+      // Scroll korrekt så sticky matcher toppen
+      setTimeout(() => {
+        const offset = stickyHeader.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({ top: offset, behavior: 'smooth' });
+      }, 10);
+    }
+  });
+
+  block.appendChild(stickyHeader);
+  block.appendChild(content);
+  calendarContainer.appendChild(block);
+
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr></thead><tbody></tbody>';
+
+  const tbody = table.querySelector('tbody');
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = getGlobalKey(month, day);
+    const entryData = assignments[key] || {};
+    const entry = entryData.name || "";
+    const eventList = entryData.events || [];
+
+    const dateObj = new Date(year, month, day);
+    dateObj.setHours(0, 0, 0, 0);
+    const weekday = weekdays[dateObj.getDay()];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+	const limitDate = new Date(today);
+	limitDate.setDate(today.getDate() - 3);
+	if (dateObj < limitDate) continue;
+
+	let dayClass = '';
+	if (dateObj < today && dateObj >= limitDate) {
+	dayClass = 'recent-past'; 
+	} else if (dateObj.getTime() === today.getTime()) {
+  dayClass = 'today';
+	}
+
+    const tr = document.createElement('tr');
+    if (dayClass) tr.classList.add(dayClass);
+
+    const tdDate = document.createElement('td');
+    tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
+    tdDate.setAttribute('data-label', 'Dato');
+
+    const tdName = document.createElement('td');
+    tdName.setAttribute('data-label', 'Nøglebærer');
+
+    const tdEvents = document.createElement('td');
+    tdEvents.setAttribute('data-label', 'Begivenheder');
+
+    const tdActions = document.createElement('td');
+    tdActions.setAttribute('data-label', 'Handling');
+
+    tdEvents.textContent = eventList.length > 0 ? `📅 ${eventList.join(', ')}` : '–';
+
+    if (entry.startsWith("closed")) {
+      const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
+      tdName.textContent = "🔒 LUKKET" + (reason ? ` – ${reason}` : "");
+      tdName.style.color = "#888";
+
+      const reopenBtn = document.createElement("button");
+      reopenBtn.textContent = "🔓";
+      reopenBtn.onclick = () => reopenDate(key);
+      tdActions.appendChild(reopenBtn);
+    } else {
+tdName.textContent = entry || "Klik for at tilføje";
+tdName.className = 'name';
+tdName.style.cursor = 'pointer';
+tdName.title = "Klik for at ændre nøglebærer";
+
+tdName.onclick = async () => {
+  const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
+  if (newName !== null) {
+    await updateAssignment(key, newName.trim());
+    location.reload();
+  }
+};
+
+const editBtn = document.createElement("button");
+editBtn.innerHTML = "🔑";
+editBtn.title = "Rediger nøglebærer";
+editBtn.onclick = tdName.onclick;
+
+tdActions.appendChild(editBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "🗑️";
+      deleteBtn.onclick = async () => {
+        if (confirm('Vil du slette nøglebærer for denne dag?')) {
+          await updateAssignment(key, "");
+          location.reload();
+        }
+      };
+
+      const closeBtn = document.createElement("button");
+      closeBtn.textContent = "🔒";
+      closeBtn.onclick = async () => {
+        const reason = prompt("Hvorfor er dagen lukket? (valgfrit)");
+        if (reason !== null) {
+          await updateAssignment(key, "closed::" + reason.trim());
+          location.reload();
+        }
+      };
+
+      tdActions.appendChild(deleteBtn);
+      tdActions.appendChild(closeBtn);
+    }
+
+    tr.appendChild(tdDate);
+    tr.appendChild(tdName);
+    tr.appendChild(tdEvents);
+    tr.appendChild(tdActions);
+    tbody.appendChild(tr);
+  }
+
+  content.appendChild(table);
+  block.appendChild(content);
+  calendarContainer.appendChild(block);
+}
+
+  function reopenDate(key) {
+    if (confirm("Vil du åbne denne lukkede dag?")) {
+      updateAssignment(key, "").then(() => location.reload());
+    }
+  }
 
   renderCalendar();
 </script>
