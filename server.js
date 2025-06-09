@@ -150,10 +150,12 @@ app.get('/assignments-with-events', async (req, res) => {
       });
 
       result[key] = {
-        name: assignments[key],
-        events: matchingEvents.map(ev => ev.summary)
-      };
-    }
+  name: assignments[key],
+  events: matchingEvents.map(ev => ({
+    summary: ev.summary,
+    id: ev.id
+  }))
+};
 
     res.json(result);
   } catch (err) {
@@ -175,6 +177,30 @@ app.post('/assignments', async (req, res) => {
   } catch (err) {
     console.error('Fejl ved opdatering:', err);
     res.status(500).json({ error: 'Kunne ikke opdatere' });
+  }
+});
+
+app.post('/delete-event', async (req, res) => {
+  const { eventId } = req.body;
+
+  if (!eventId) {
+    return res.status(400).json({ error: 'eventId mangler' });
+  }
+
+  try {
+    const authClient = await calendarAuth.getClient();
+    const calendarId = process.env.CLUB_CALENDAR_ID;
+
+    await calendar.events.delete({
+      calendarId,
+      eventId,
+      auth: authClient
+    });
+
+    res.status(200).json({ success: true, message: 'Begivenhed slettet' });
+  } catch (err) {
+    console.error('❌ Fejl ved sletning af begivenhed:', err);
+    res.status(500).json({ error: 'Kunne ikke slette begivenhed' });
   }
 });
 
