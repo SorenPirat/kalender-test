@@ -6,10 +6,12 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { google } from 'googleapis';
 
-const calendar = google.calendar({ version: 'v3', auth: new google.auth.GoogleAuth({
+const calendarAuth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-  scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
-}) });
+  scopes: ['https://www.googleapis.com/auth/calendar']
+});
+
+const calendar = google.calendar({ version: 'v3', auth: calendarAuth });
 
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
@@ -164,6 +166,44 @@ app.post('/assignments', async (req, res) => {
   } catch (err) {
     console.error('Fejl ved opdatering:', err);
     res.status(500).json({ error: 'Kunne ikke opdatere' });
+  }
+});
+
+app.post('/add-event', async (req, res) => {
+  const { title, date, startTime, endTime, description } = req.body;
+
+  if (!title || !date || !startTime || !endTime) {
+    return res.status(400).json({ error: 'Manglende påkrævede felter' });
+  }
+
+  try {
+    const authClient = await calendarAuth.getClient();
+
+    const event = {
+      summary: title,
+      description: description || '',
+      start: {
+        dateTime: new Date(`${date}T${startTime}`).toISOString(),
+        timeZone: 'Europe/Copenhagen',
+      },
+      end: {
+        dateTime: new Date(`${date}T${endTime}`).toISOString(),
+        timeZone: 'Europe/Copenhagen',
+      },
+    };
+
+    const calendarId = process.env.CLUB_CALENDAR_ID;
+
+    await calendar.events.insert({
+      calendarId,
+      resource: event,
+      auth: authClient
+    });
+
+    res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
+  } catch (err) {
+    console.error('❌ Fejl ved oprettelse af begivenhed:', err);
+    res.status(500).json({ error: 'Kunne ikke oprette begivenhed' });
   }
 });
 
