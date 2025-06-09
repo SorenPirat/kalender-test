@@ -170,10 +170,10 @@ app.post('/assignments', async (req, res) => {
 });
 
 app.post('/add-event', async (req, res) => {
-  const { title, date, startTime, endTime, description } = req.body;
+  const { title, date, description } = req.body;
 
-  if (!title || !date || !startTime || !endTime) {
-    return res.status(400).json({ error: 'Manglende påkrævede felter' });
+  if (!title || !date) {
+    return res.status(400).json({ error: 'Manglende titel eller dato' });
   }
 
   try {
@@ -183,13 +183,11 @@ app.post('/add-event', async (req, res) => {
       summary: title,
       description: description || '',
       start: {
-        dateTime: new Date(`${date}T${startTime}`).toISOString(),
-        timeZone: 'Europe/Copenhagen',
+        date: date
       },
       end: {
-        dateTime: new Date(`${date}T${endTime}`).toISOString(),
-        timeZone: 'Europe/Copenhagen',
-      },
+        date: getNextDate(date)
+      }
     };
 
     const calendarId = process.env.CLUB_CALENDAR_ID;
@@ -200,9 +198,9 @@ app.post('/add-event', async (req, res) => {
       auth: authClient
     });
 
-    res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
+    res.status(200).json({ success: true, message: 'Heldagsbegivenhed oprettet' });
   } catch (err) {
-    console.error('❌ Fejl ved oprettelse af begivenhed:', err);
+    console.error('❌ Fejl ved oprettelse af heldagsbegivenhed:', err);
     res.status(500).json({ error: 'Kunne ikke oprette begivenhed' });
   }
 });
