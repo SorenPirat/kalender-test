@@ -129,33 +129,34 @@ app.get('/assignments-with-events', async (req, res) => {
 
     const allKeys = getAllDaysInRange(2025, 5, 11);
 
-    for (const key of allKeys) {
-      const [month, day] = key.split('-').map(Number);
-      const date = new Date(2025, month - 1, day);
-      date.setHours(0, 0, 0, 0);
+for (const key of allKeys) {
+  const [month, day] = key.split('-').map(Number);
+  const date = new Date(2025, month - 1, day);
+  date.setHours(0, 0, 0, 0);
 
-      const matchingEvents = calendarEvents.filter(event => {
-        if (event.start.date && event.end.date) {
-          const start = new Date(event.start.date);
-          const end = new Date(event.end.date);
-          start.setHours(0, 0, 0, 0);
-          end.setHours(0, 0, 0, 0);
-          return date >= start && date < end;
-        } else if (event.start.dateTime) {
-          const eventDate = new Date(event.start.dateTime);
-          eventDate.setHours(0, 0, 0, 0);
-          return eventDate.getTime() === date.getTime();
-        }
-        return false;
-      });
+  const matchingEvents = calendarEvents.filter(event => {
+    if (event.start.date && event.end.date) {
+      const start = new Date(event.start.date);
+      const end = new Date(event.end.date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return date >= start && date < end;
+    } else if (event.start.dateTime) {
+      const eventDate = new Date(event.start.dateTime);
+      eventDate.setHours(0, 0, 0, 0);
+      return eventDate.getTime() === date.getTime();
+    }
+    return false;
+  });
 
-      result[key] = {
-  name: assignments[key],
-  events: matchingEvents.map(ev => ({
-    summary: ev.summary,
-    id: ev.id
-  }))
-};
+  result[key] = {
+    name: assignments[key],
+    events: matchingEvents.map(ev => ({
+      summary: ev.summary,
+      id: ev.id
+    }))
+  };
+}
 
     res.json(result);
   } catch (err) {
