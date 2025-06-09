@@ -153,6 +153,12 @@ const allKeys = getAllDaysInRange(2025, 5, 11);
   }
 });
 
+function getNextDate(dateString) {
+  const date = new Date(dateString);
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+}
+
 app.post('/assignments', async (req, res) => {
   const { day, name } = req.body;
 
