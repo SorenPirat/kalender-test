@@ -117,6 +117,21 @@
     font-size: 0.95rem;
   }
 
+.event-remove-btn {
+  font-size: 0.7rem;
+  margin-left: 0.3rem;
+  background: none;
+  border: none;
+  color: #f00;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.event-remove-btn:hover {
+  color: #d00;
+}
+
   @media screen and (max-width: 600px) {
     table, th, td, tr {
       display: block;
@@ -242,6 +257,34 @@
     return `${month + 1}-${day}`;
   }
 
+async function addCalendarEvent(title, date, description = '') {
+  try {
+    const response = await fetch(`${API_URL}/add-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: title,
+        date: date,
+        description: description
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      alert('✅ Begivenhed tilføjet!');
+      location.reload();
+    } else {
+      alert('❌ Fejl: ' + (result.error || 'Ukendt fejl'));
+    }
+  } catch (err) {
+    console.error('Fejl under netværkskald:', err);
+    alert('❌ Netværksfejl');
+  }
+}
+
   async function renderCalendar() {
   const loading = document.getElementById("loading");
   const calendar = document.getElementById("calendar");
@@ -336,7 +379,50 @@ function renderMonth(month, assignments) {
     const tdActions = document.createElement('td');
     tdActions.setAttribute('data-label', 'Handling');
 
-    tdEvents.textContent = eventList.length > 0 ? `📅 ${eventList.join(', ')}` : '–';
+ tdEvents.innerHTML = '';
+
+if (eventList.length > 0) {
+  for (let i = 0; i < eventList.length; i++) {
+    const ev = eventList[i];
+
+    const wrapper = document.createElement('span');
+    wrapper.style.display = 'inline-flex';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.marginRight = '0.5rem';
+
+    const eventText = document.createElement('span');
+    eventText.textContent = `📅 ${ev.summary}`;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✖';
+    deleteBtn.title = `Slet "${ev.summary}"`;
+    deleteBtn.className = 'event-remove-btn';
+    deleteBtn.onclick = async () => {
+      if (confirm(`Vil du slette "${ev.summary}" fra Google Kalender?`)) {
+        const res = await fetch(`${API_URL}/delete-event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: ev.id })
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          alert("🗑️ Begivenhed slettet");
+          location.reload();
+        } else {
+          alert("❌ Fejl: " + (result.error || "Ukendt fejl"));
+        }
+      }
+    };
+
+    wrapper.appendChild(eventText);
+    wrapper.appendChild(deleteBtn);
+    tdEvents.appendChild(wrapper);
+  }
+} else {
+  tdEvents.textContent = '–';
+}
 
     if (entry.startsWith("closed")) {
       const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
@@ -387,6 +473,39 @@ tdActions.appendChild(editBtn);
         }
       };
 
+const addEventBtn = document.createElement("button");
+addEventBtn.textContent = "➕";
+addEventBtn.title = "Tilføj begivenhed til Google Kalender";
+addEventBtn.onclick = async () => {
+  const title = prompt("Titel på begivenheden:");
+  if (!title) return;
+
+  const description = prompt("Evt. beskrivelse:");
+  const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  await fetch(`${API_URL}/add-event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title,
+      date: isoDate,
+      description
+    })
+  }).then(async res => {
+    const result = await res.json();
+    if (res.ok) {
+      alert("✅ Begivenhed tilføjet!");
+	  location.reload();
+    } else {
+      alert("❌ Fejl: " + result.error);
+    }
+  }).catch(err => {
+    console.error("Netværksfejl:", err);
+    alert("❌ Netværksfejl");
+  });
+};
+
+	  tdActions.appendChild(addEventBtn);
       tdActions.appendChild(deleteBtn);
       tdActions.appendChild(closeBtn);
     }
