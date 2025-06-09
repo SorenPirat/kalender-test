@@ -6,21 +6,29 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { google } from 'googleapis';
 
+// ===== Google Auth =====
 const calendarAuth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
   scopes: ['https://www.googleapis.com/auth/calendar']
 });
-
-const calendar = google.calendar({ version: 'v3', auth: calendarAuth });
 
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
+const calendar = google.calendar({ version: 'v3', auth: calendarAuth });
 const spreadsheetId = process.env.SPREADSHEET_ID;
 const sheetName = 'Sheet1';
 
+// ===== Utility: Beregn næste dag i ISO-format =====
+function getNextDate(dateStr) {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+}
+
+// ===== Google Sheets: Hent data =====
 async function getSheetData() {
   const client = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: client });
@@ -38,12 +46,12 @@ async function getSheetData() {
   return result;
 }
 
+// ===== Google Kalender: Hent begivenheder =====
 async function getAllCalendarEvents() {
   const calendarId = process.env.CLUB_CALENDAR_ID;
 
   const timeMin = new Date(2025, 5, 1);
   const timeMax = new Date(2025, 11, 31, 23, 59, 59);
-
   timeMin.setDate(timeMin.getDate() - 7);
   timeMax.setDate(timeMax.getDate() + 7);
 
@@ -53,12 +61,12 @@ async function getAllCalendarEvents() {
     timeMax: timeMax.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
-
   });
 
   return response.data.items || [];
 }
 
+// ===== Google Sheets: Opdater celle =====
 async function updateSheetEntry(day, name) {
   const current = await getSheetData();
   const client = await auth.getClient();
@@ -78,6 +86,7 @@ async function updateSheetEntry(day, name) {
   });
 }
 
+// ===== Express App Setup =====
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -88,6 +97,7 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+// ===== Routes =====
 app.get('/assignments', async (req, res) => {
   try {
     const data = await getSheetData();
@@ -104,41 +114,40 @@ app.get('/assignments-with-events', async (req, res) => {
     const calendarEvents = await getAllCalendarEvents();
 
     const result = {};
-    
-function getAllDaysInRange(year, monthStart, monthEnd) {
-  const days = [];
-  for (let m = monthStart; m <= monthEnd; m++) {
-    const daysInMonth = new Date(year, m + 1, 0).getDate();
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key = `${m + 1}-${d}`;
-      days.push(key);
-    }
-  }
-  return days;
-}
 
-const allKeys = getAllDaysInRange(2025, 5, 11);
+    function getAllDaysInRange(year, monthStart, monthEnd) {
+      const days = [];
+      for (let m = monthStart; m <= monthEnd; m++) {
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          const key = `${m + 1}-${d}`;
+          days.push(key);
+        }
+      }
+      return days;
+    }
+
+    const allKeys = getAllDaysInRange(2025, 5, 11);
 
     for (const key of allKeys) {
       const [month, day] = key.split('-').map(Number);
       const date = new Date(2025, month - 1, day);
       date.setHours(0, 0, 0, 0);
-      const isoDate = date.toISOString().split('T')[0];
 
-   const matchingEvents = calendarEvents.filter(event => {
-  if (event.start.date && event.end.date) {
-    const start = new Date(event.start.date);
-    const end = new Date(event.end.date);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    return date >= start && date < end;
-  } else if (event.start.dateTime) {
-    const eventDate = new Date(event.start.dateTime);
-    eventDate.setHours(0, 0, 0, 0);
-    return eventDate.getTime() === date.getTime();
-  }
-  return false;
-});
+      const matchingEvents = calendarEvents.filter(event => {
+        if (event.start.date && event.end.date) {
+          const start = new Date(event.start.date);
+          const end = new Date(event.end.date);
+          start.setHours(0, 0, 0, 0);
+          end.setHours(0, 0, 0, 0);
+          return date >= start && date < end;
+        } else if (event.start.dateTime) {
+          const eventDate = new Date(event.start.dateTime);
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate.getTime() === date.getTime();
+        }
+        return false;
+      });
 
       result[key] = {
         name: assignments[key],
@@ -152,12 +161,6 @@ const allKeys = getAllDaysInRange(2025, 5, 11);
     res.status(500).json({ error: 'Fejl ved hentning af data' });
   }
 });
-
-function getNextDate(dateString) {
-  const date = new Date(dateString);
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().split('T')[0];
-}
 
 app.post('/assignments', async (req, res) => {
   const { day, name } = req.body;
@@ -188,12 +191,8 @@ app.post('/add-event', async (req, res) => {
     const event = {
       summary: title,
       description: description || '',
-      start: {
-        date: date,
-      },
-      end: {
-        date: getNextDate(date),
-      },
+      start: { date },
+      end: { date: getNextDate(date) },
     };
 
     const calendarId = process.env.CLUB_CALENDAR_ID;
@@ -211,12 +210,7 @@ app.post('/add-event', async (req, res) => {
   }
 });
 
-function getNextDate(dateStr) {
-  const date = new Date(dateStr);
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().split('T')[0];
-}
-
+// ===== Start Server =====
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
