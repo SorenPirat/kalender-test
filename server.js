@@ -179,7 +179,7 @@ app.post('/add-event', async (req, res) => {
   const { title, date, description } = req.body;
 
   if (!title || !date) {
-    return res.status(400).json({ error: 'Manglende titel eller dato' });
+    return res.status(400).json({ error: 'Manglende påkrævede felter' });
   }
 
   try {
@@ -189,11 +189,11 @@ app.post('/add-event', async (req, res) => {
       summary: title,
       description: description || '',
       start: {
-        date: date
+        date: date,
       },
       end: {
-        date: getNextDate(date)
-      }
+        date: getNextDate(date),
+      },
     };
 
     const calendarId = process.env.CLUB_CALENDAR_ID;
@@ -204,12 +204,18 @@ app.post('/add-event', async (req, res) => {
       auth: authClient
     });
 
-    res.status(200).json({ success: true, message: 'Heldagsbegivenhed oprettet' });
+    res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
   } catch (err) {
     console.error('❌ Fejl ved oprettelse af heldagsbegivenhed:', err);
     res.status(500).json({ error: 'Kunne ikke oprette begivenhed' });
   }
 });
+
+function getNextDate(dateStr) {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+}
 
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
