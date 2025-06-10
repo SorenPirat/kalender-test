@@ -244,6 +244,25 @@ app.post('/add-event', async (req, res) => {
   }
 });
 
+app.get('/public-events', async (req, res) => {
+  try {
+    const calendarEvents = await getAllCalendarEvents();
+
+    const publicEvents = calendarEvents.map(ev => ({
+      id: ev.id,
+      summary: ev.summary,
+      description: ev.description || '',
+      start: ev.start.date || ev.start.dateTime,
+      end: ev.end.date || ev.end.dateTime
+    }));
+
+    res.json(publicEvents);
+  } catch (err) {
+    console.error('Fejl i public-events:', err);
+    res.status(500).json({ error: 'Fejl ved hentning af offentlige events' });
+  }
+});
+
 // ===== Start Server =====
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
