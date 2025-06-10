@@ -233,7 +233,119 @@
       background-color: #333;
       color: #fff;
     }
+
+#event-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 1000;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1rem;
+  overflow: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#event-modal .modal-content {
+  background: white;
+  padding: 1rem;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+#event-modal form input,
+#event-modal form textarea {
+  width: 100%;
+  padding: 0.4rem;
+  font-size: 1rem;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-top: 0.2rem;
+}
+
+#event-modal form label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+#event-modal form button {
+  margin-right: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+#event-modal form button[type="submit"] {
+  background-color: #28a745;
+  color: white;
+}
+
+#event-modal form button[type="button"] {
+  background-color: #ddd;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+@media screen and (max-width: 600px) {
+  #event-modal .modal-content {
+    display: flex;
+    flex-direction: column;
   }
+
+  .form-buttons {
+    position: sticky;
+    bottom: 0;
+    background-color: inherit;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-top: 1px solid #ccc;
+    justify-content: flex-end;
+    z-index: 2;
+  }
+}
+
+/* DARK MODE ALLESAMMEN ÉT STED: */
+@media (prefers-color-scheme: dark) {
+  #event-modal .modal-content {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+  }
+
+  #event-modal form input,
+  #event-modal form textarea {
+    background-color: #2a2a2a;
+    color: #fff;
+    border: 1px solid #555;
+  }
+
+  #event-modal form button[type="submit"] {
+    background-color: #1f883d;
+  }
+
+  #event-modal form button[type="button"] {
+    background-color: #444;
+    color: #eee;
+  }
+
+  .form-buttons {
+    border-top: 1px solid #444;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -242,6 +354,26 @@
   <div id="loading">⏳ Henter data fra server...</div>
   <div id="week-overview" style="margin-bottom: 1rem;"></div>
   <div id="calendar"></div>
+<div id="event-modal">
+  <div class="modal-content">
+    <button onclick="closeModal()" style="position:absolute; top:0.5rem; right:0.5rem;">❌</button>
+    <h3>➕ Opret begivenhed</h3>
+    <form id="event-form">
+      <label>Titel:<br/><input type="text" name="title" required /></label><br/><br/>
+      <label>Kort beskrivelse:<br/><input type="text" name="short" /></label><br/><br/>
+      <label>Lang tekst:<br/><textarea name="desc" rows="4"></textarea></label><br/><br/>
+      <label>Startdato og -tid:<br/><input type="datetime-local" name="start" required /></label><br/><br/>
+      <label>Slutdato og -tid:<br/><input type="datetime-local" name="end" required /></label><br/><br/>
+      <label>Lokation:<br/><input type="text" name="location" /></label><br/><br/>
+      <label>Billede-URL:<br/><input type="url" name="img" /></label><br/><br/>
+      <div class="form-buttons">
+        <button type="submit">✅ Opret</button>
+        <button type="button" onclick="closeModal()">Annuller</button>
+      </div>
+    </form>
+  </div>
+</div>
+
   <script>
   const API_URL = 'https://nglevagter-test.onrender.com';
   const months = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
@@ -563,44 +695,72 @@ tdActions.appendChild(editBtn);
 
       const closeBtn = document.createElement("button");
       closeBtn.textContent = "🔒";
-      closeBtn.onclick = async () => {
-        const reason = prompt("Hvorfor er dagen lukket? (valgfrit)");
-        if (reason !== null) {
-          await updateAssignment(key, "closed::" + reason.trim());
-          location.reload();
-        }
-      };
+closeBtn.onclick = async () => {
+  const reason = prompt("Hvorfor er dagene lukkede? (valgfrit)");
+  if (reason === null) return;
 
-const addEventBtn = document.createElement("button");
-addEventBtn.textContent = "➕";
-addEventBtn.title = "Tilføj begivenhed til Google Kalender";
-addEventBtn.onclick = async () => {
-  const title = prompt("Titel på begivenheden:");
-  if (!title) return;
+  const end = prompt("Sidste dato for lukning? (YYYY-MM-DD):", `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+  if (!end) return;
 
-  const description = prompt("Evt. beskrivelse:");
-  const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const startDate = new Date(year, month, day);
+  const endDate = new Date(end);
 
+  if (isNaN(endDate)) {
+    alert("Ugyldig slutdato");
+    return;
+  }
+
+  const days = [];
+  const cursor = new Date(startDate);
+
+  while (cursor <= endDate) {
+    const m = cursor.getMonth() + 1;
+    const d = cursor.getDate();
+    days.push(`${m}-${d}`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  await fetch(`${API_URL}/assignments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      days,
+      name: "closed::" + reason.trim()
+    })
+  });
+
+  // 2. Opret Google Kalender-begivenhed
   await fetch(`${API_URL}/add-event`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      title,
-      date: isoDate,
-      description
+      title: `Lukket – ${reason || 'uden årsag'}`,
+      startDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      endDate: end,
+      description: ""
     })
-  }).then(async res => {
-    const result = await res.json();
-    if (res.ok) {
-      alert("✅ Begivenhed tilføjet!");
-	  location.reload();
-    } else {
-      alert("❌ Fejl: " + result.error);
-    }
-  }).catch(err => {
-    console.error("Netværksfejl:", err);
-    alert("❌ Netværksfejl");
   });
+
+  location.reload();
+};
+
+const addEventBtn = document.createElement("button");
+addEventBtn.textContent = "➕";
+addEventBtn.title = "Tilføj begivenhed til Google Kalender";
+addEventBtn.onclick = () => {
+  selectedDay = key;
+
+  const form = document.getElementById("event-form");
+  form.reset();
+
+  const [month, day] = key.split("-").map(Number);
+  const isoStart = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T17:00`;
+  const isoEnd = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T19:00`;
+
+  form.start.value = isoStart;
+  form.end.value = isoEnd;
+
+  document.getElementById("event-modal").style.display = "flex";
 };
 
 	  tdActions.appendChild(addEventBtn);
@@ -620,11 +780,77 @@ addEventBtn.onclick = async () => {
   calendarContainer.appendChild(block);
 }
 
-  function reopenDate(key) {
-    if (confirm("Vil du åbne denne lukkede dag?")) {
-      updateAssignment(key, "").then(() => location.reload());
+function reopenDate(key) {
+  if (!confirm("Vil du åbne denne lukkede dag og fjerne lukkedagen i kalenderen?")) return;
+
+  updateAssignment(key, "").then(async () => {
+    const [month, day] = key.split("-");
+    const isoDate = `2025-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+    await fetch(`${API_URL}/remove-closed-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: isoDate })
+    });
+
+    location.reload();
+  });
+}
+
+let selectedDay = null;
+
+function closeModal() {
+  document.getElementById("event-modal").style.display = "none";
+}
+
+document.getElementById("event-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const title = form.title.value.trim();
+  const short = form.short.value.trim();
+  const desc = form.desc.value.trim();
+  const start = form.start.value;
+  const end = form.end.value;
+  const img = form.img.value.trim();
+  const eventLocation = form.location.value.trim();
+
+  if (!title || !start || !end) return alert("Titel og tider er påkrævet");
+
+  const idStr = title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-]/g, "");
+  const idDate = start.slice(2, 10).replace(/-/g, "");
+  const eventId = `event:nkl-${idDate}-${idStr}`;
+
+  let fullDesc = `${eventId}`;
+  if (img) fullDesc += `\nimg: ${img}`;
+  if (desc) fullDesc += `\ndesc: ${desc}`;
+  if (eventLocation) fullDesc += `\nlokation: ${eventLocation}`;
+  fullDesc += `\nstart: ${start.slice(11, 16)}\nend: ${end.slice(11, 16)}`;
+
+  if (short) fullDesc += `\n\n${short}`;
+
+  await fetch(`${API_URL}/add-event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title,
+      startDate: start.split("T")[0],
+      endDate: end.split("T")[0],
+      description: fullDesc
+    })
+  }).then(async res => {
+    const result = await res.json();
+    if (res.ok) {
+      alert("✅ Begivenhed oprettet!");
+      closeModal();
+      location.reload();
+    } else {
+      alert("❌ Fejl: " + result.error);
     }
-  }
+  }).catch(err => {
+    console.error("Netværksfejl:", err);
+    alert("❌ Netværksfejl");
+  });
+});
 
   renderCalendar();
 </script>
