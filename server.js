@@ -266,8 +266,7 @@ app.post('/remove-closed-event', async (req, res) => {
     });
 
     const matching = events.data.items.find(ev =>
-      ev.summary?.toLowerCase().includes('lukket') &&
-      ev.description?.includes('nøglebærer-kalenderen')
+      ev.summary?.toLowerCase().startsWith('lukket')
     );
 
     if (matching) {
