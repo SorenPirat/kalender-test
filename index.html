@@ -820,11 +820,15 @@ document.getElementById("event-form").addEventListener("submit", async (e) => {
   const idDate = start.slice(2, 10).replace(/-/g, "");
   const eventId = `event:nkl-${idDate}-${idStr}`;
 
-  let fullDesc = `${eventId}`;
-  if (img) fullDesc += `\nimg: ${img}`;
-  if (desc) fullDesc += `\ndesc: ${desc}`;
-  if (eventLocation) fullDesc += `\nlokation: ${eventLocation}`;
-  fullDesc += `\nstart: ${start.slice(11, 16)}\nend: ${end.slice(11, 16)}`;
+let fullDesc = "";
+
+if (short) fullDesc += `${short.trim()}\n\n`; 
+fullDesc += `event:${eventId}`;
+if (img) fullDesc += `\nimg: ${img}`;
+if (desc) fullDesc += `\ndesc: ${desc}`;
+if (eventLocation) fullDesc += `\nlokation: ${eventLocation}`;
+fullDesc += `\nstart: ${start.slice(11, 16)}\nend: ${end.slice(11, 16)}`;
+
 
   if (short) fullDesc += `\n\n${short}`;
 
