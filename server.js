@@ -244,6 +244,47 @@ app.post('/add-event', async (req, res) => {
   }
 });
 
+app.post('/remove-closed-event', async (req, res) => {
+  const { date } = req.body;
+
+  if (!date) return res.status(400).json({ error: 'Dato mangler' });
+
+  try {
+    const calendarId = process.env.CLUB_CALENDAR_ID;
+    const authClient = await calendarAuth.getClient();
+
+    const timeMin = new Date(date);
+    const timeMax = new Date(date);
+    timeMax.setDate(timeMax.getDate() + 1);
+
+    const events = await calendar.events.list({
+      calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      auth: authClient
+    });
+
+    const matching = events.data.items.find(ev =>
+      ev.summary?.toLowerCase().includes('lukket') &&
+      ev.description?.includes('nøglebærer-kalenderen')
+    );
+
+    if (matching) {
+      await calendar.events.delete({
+        calendarId,
+        eventId: matching.id,
+        auth: authClient
+      });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Fejl ved sletning af lukket-begivenhed:', err);
+    res.status(500).json({ error: 'Kunne ikke fjerne begivenhed' });
+  }
+});
+
 app.get('/public-events', async (req, res) => {
   try {
     const calendarEvents = await getAllCalendarEvents();
