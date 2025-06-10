@@ -166,14 +166,21 @@ for (const key of allKeys) {
 });
 
 app.post('/assignments', async (req, res) => {
-  const { day, name } = req.body;
+  const { day, days, name } = req.body;
 
-  if (typeof day !== 'string' || typeof name !== 'string') {
+  if (typeof name !== 'string' || (!Array.isArray(days) && typeof day !== 'string')) {
     return res.status(400).json({ error: 'Ugyldige data' });
   }
 
   try {
-    await updateSheetEntry(day, name);
+    if (Array.isArray(days)) {
+      for (const d of days) {
+        await updateSheetEntry(d, name);
+      }
+    } else {
+      await updateSheetEntry(day, name);
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('Fejl ved opdatering:', err);
