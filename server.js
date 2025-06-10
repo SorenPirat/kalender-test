@@ -208,34 +208,33 @@ app.post('/delete-event', async (req, res) => {
 app.post('/add-event', async (req, res) => {
   const { title, startDate, endDate, description } = req.body;
 
-  if (!title || !date) {
+  if (!title || !startDate || !endDate) {
     return res.status(400).json({ error: 'Manglende påkrævede felter' });
   }
 
-try {
-  const authClient = await calendarAuth.getClient();
+  try {
+    const authClient = await calendarAuth.getClient();
 
-  const event = {
-    summary: title,
-    description: description || '',
-    start: { date: startDate },
-    end: { date: getNextDate(endDate) }, // Google kræver "dagen efter" som slutdato
-  };
+    const event = {
+      summary: title,
+      description: description || '',
+      start: { date: startDate },
+      end: { date: getNextDate(endDate) }, // Husk at Google Calendar ikke inkluderer slutdatoen
+    };
 
-  const calendarId = process.env.CLUB_CALENDAR_ID;
+    const calendarId = process.env.CLUB_CALENDAR_ID;
 
-  await calendar.events.insert({
-    calendarId,
-    resource: event,
-    auth: authClient
-  });
+    await calendar.events.insert({
+      calendarId,
+      resource: event,
+      auth: authClient
+    });
 
-  res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
-} catch (err) {
-  console.error('❌ Fejl ved oprettelse af heldagsbegivenhed:', err);
-  res.status(500).json({ error: 'Kunne ikke oprette begivenhed' });
-}
-
+    res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
+  } catch (err) {
+    console.error('❌ Fejl ved oprettelse af heldagsbegivenhed:', err);
+    res.status(500).json({ error: 'Kunne ikke oprette begivenhed' });
+  }
 });
 
 // ===== Start Server =====
