@@ -333,6 +333,37 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+app.post("/unsign", async (req, res) => {
+  const { eventId, names } = req.body;
+  if (!eventId || !names) return res.status(400).json({ error: "eventId og names påkrævet" });
+
+  const authClient = await auth.getClient();
+  const sheets = google.sheets({ version: "v4", auth: authClient });
+
+  const sheet = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "Sheet2!A:B",
+  });
+
+  const rows = sheet.data.values || [];
+  const nameList = names.split("\n").map(n => n.trim().toLowerCase()).filter(Boolean);
+
+  const updated = rows.filter(([id, name]) =>
+    !(id === eventId && nameList.includes((name || "").toLowerCase()))
+  );
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `Sheet2!A1:B`,
+    valueInputOption: "RAW",
+    resource: {
+      values: updated
+    }
+  });
+
+  res.json({ success: true, removed: rows.length - updated.length });
+});
+
 app.get("/signups/:eventId", async (req, res) => {
   const { eventId } = req.params;
   if (!eventId) return res.status(400).json({ error: "eventId mangler" });
