@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Klubbens kalender</title>
+  <style>
+   body {
+  font-family: sans-serif;
+  background-color: #f8f8f8;
+  margin: 1rem;
+  color: #111;
+}
+
+h2 {
+  color: #007bff;
+}
+
+.event {
+  background: white;
+  border-left: 4px solid #007bff;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.event h3 {
+  margin: 0 0 0.5rem;
+}
+
+.event time {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.event-description a {
+  color: #007bff;
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+/* 🧩 FILTRER PANEL */
+#filter-wrapper {
+  margin-bottom: 1.5rem;
+}
+
+#toggle-filter {
+  display: none;
+  background-color: #007bff;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+#filter-panel {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1rem;
+  background-color: #fff;
+}
+
+#filter-panel legend {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+#filter-panel label {
+  display: inline-block;
+  margin-right: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* 🌙 DARK MODE */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #121212;
+    color: #e0e0e0;
+  }
+
+  h2 {
+    color: #81cfff;
+  }
+
+  .event {
+    background: #1e1e1e;
+    border-left-color: #81cfff;
+    box-shadow: none;
+  }
+
+  .event time {
+    color: #bbb;
+  }
+
+  .event-description a {
+    color: #81cfff;
+  }
+
+  #filter-panel {
+    background: #1e1e1e;
+    border-color: #444;
+  }
+
+  #filter-panel legend {
+    color: #eee;
+  }
+
+  #filter-panel label {
+    color: #ccc;
+  }
+
+  #toggle-filter {
+    background-color: #444;
+  }
+}
+
+/* 📱 MOBILVISNING */
+@media screen and (max-width: 600px) {
+  #toggle-filter {
+    display: block;
+  }
+
+#filter-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0 1rem;
+  }
+
+  #filter-panel.open {
+    max-height: 300px; /* nok til at vise alle labels – justér hvis nødvendigt */
+    padding: 1rem;
+  }
+
+  #filter-panel label {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+}
+  </style>
+</head>
+<body>
+  <h2>📅 Klubbens arrangementer</h2>
+
+<div id="filter-wrapper">
+  <button id="toggle-filter">🔽 Filtrér begivenheder</button>
+  <fieldset id="filter-panel">
+    <legend>Filtrér begivenheder</legend>
+    <label><input type="checkbox" value="rutebyg" checked /> 🧗 Rutebygning</label>
+    <label><input type="checkbox" value="konkurrence" checked /> 🏆 Konkurrence</label>
+    <label><input type="checkbox" value="social" checked /> 🎉 Socialt</label>
+    <label><input type="checkbox" value="lukket" checked /> 🚪 Lukkedag</label>
+    <label><input type="checkbox" value="andet" checked /> ❓ Andet</label>
+  </fieldset>
+</div>
+
+  <div id="event-list">⏳ Henter begivenheder...</div>
+
+<script>
+let allEvents = [];
+
+async function loadEvents() {
+  const res = await fetch("https://nglevagter-test.onrender.com/public-events");
+  allEvents = await res.json();
+  renderEvents();
+}
+
+function categorizeEvent(ev) {
+  const text = `${ev.summary} ${ev.description}`.toLowerCase();
+
+  if (text.includes("rutebyg")) return "rutebyg";
+  if (text.includes("konkurrence")) return "konkurrence";
+  if (text.includes("social") || text.includes("arrangement") || text.includes("hygge") || text.includes("hyggelig")) return "social";
+  if (text.includes("lukket") || text.includes("ferie") || text.includes("eksamen")) return "lukket";
+  return "andet";
+}
+
+function getIcon(type) {
+  switch (type) {
+    case "rutebyg": return "🧗";
+    case "konkurrence": return "🏆";
+    case "social": return "🎉";
+    case "lukket": return "🚪";
+    default: return "❓";
+  }
+}
+
+function renderEvents() {
+  const list = document.getElementById("event-list");
+  list.innerHTML = "";
+
+  const activeFilters = Array.from(document.querySelectorAll("#filter-panel input:checked"))
+    .map(cb => cb.value);
+
+  for (const ev of allEvents) {
+    const category = categorizeEvent(ev);
+    if (!activeFilters.includes(category)) continue;
+
+    const box = document.createElement("div");
+    box.className = "event";
+
+    const icon = getIcon(category);
+    const title = document.createElement("h3");
+
+    let idMatch = ev.description?.match(/event:([a-z0-9\-]+)/i);
+    let id = idMatch ? idMatch[1] : null;
+
+    if (id) {
+      const link = document.createElement("a");
+      link.href = `begivenhed.html?id=${id}`;
+      link.textContent = `${icon} ${ev.summary}`;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.style.textDecoration = "none";
+      link.style.color = "#007bff";
+      title.appendChild(link);
+    } else {
+      title.textContent = `${icon} ${ev.summary}`;
+    }
+
+    const time = document.createElement("time");
+    time.textContent = formatDate(ev.start, ev.end);
+
+    const description = document.createElement("div");
+    description.className = "event-description";
+    const desc = ev.description || "";
+    const lines = desc.split("\n");
+    let shortText = "";
+
+    for (const line of lines) {
+      const l = line.trim().toLowerCase();
+      if (
+        l.startsWith("event:") ||
+        l.startsWith("img:") ||
+        l.startsWith("lokation:") ||
+        l.startsWith("start:") ||
+        l.startsWith("end:")
+      ) break;
+      if (line.trim()) {
+        shortText = line.trim();
+        break;
+      }
+    }
+
+    description.innerHTML = linkify(shortText);
+
+    box.appendChild(title);
+    box.appendChild(time);
+    box.appendChild(description);
+    list.appendChild(box);
+  }
+}
+
+function linkify(text) {
+  if (!text) return "";
+  return text
+    .replace(/(https?:\/\/[^\s]+)/g, url =>
+      `<a href="${url}" target="_blank" rel="noopener">${url}</a>`
+    )
+    .replace(/\n/g, "<br>");
+}
+
+function formatDate(start, end) {
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  const s = new Date(start);
+  const e = new Date(end);
+  const sFormatted = s.toLocaleDateString('da-DK', options);
+  e.setDate(e.getDate() - 1);
+  const eFormatted = e.toLocaleDateString('da-DK', options);
+  return sFormatted === eFormatted ? sFormatted : `Fra ${sFormatted} til ${eFormatted}`;
+}
+
+document.getElementById("filter-panel").addEventListener("change", renderEvents);
+loadEvents();
+
+const toggleBtn = document.getElementById("toggle-filter");
+ const filterPanel = document.getElementById("filter-panel");
+
+  toggleBtn.addEventListener("click", () => {
+    filterPanel.classList.toggle("open");
+    toggleBtn.textContent = filterPanel.classList.contains("open")
+      ? "🔼 Skjul filtre"
+      : "🔽 Filtrér begivenheder";
+  });
+  
+</script>
+</body>
+</html>

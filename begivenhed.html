@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <title>Begivenhed</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      color: #111;
+      padding: 1rem;
+      margin: 0;
+    }
+
+    .event-container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-sizing: border-box;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .event-banner {
+      width: 100%;
+      max-height: 320px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 2rem;
+      color: #007bff;
+    }
+
+    .event-meta {
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+      color: #444;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .event-desc {
+      margin: 1.5rem 0;
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+
+    .notfound {
+      color: red;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .signup-section {
+      max-width: 700px;
+      margin: 2rem auto 0;
+      box-sizing: border-box;
+    }
+
+    .signup-block {
+      background: #f4f4f4;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .signup-block h3 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: #007bff;
+    }
+
+    .signup-block label,
+    .signup-block input,
+    .signup-actions {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .signup-block input[type="text"] {
+      padding: 0.6rem;
+      font-size: 1rem;
+      margin-top: 0.3rem;
+      margin-bottom: 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .signup-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .signup-actions button {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #signup-btn {
+      background-color: #28a745;
+      color: white;
+    }
+
+    #unsign-btn {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    .feedback {
+      margin-top: 0.5rem;
+      font-weight: bold;
+      background: #e6f9ea;
+      color: #28a745;
+      padding: 0.5rem;
+      border-radius: 6px;
+    }
+
+    #signup-count {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      background: #f4f4f4;
+      cursor: pointer;
+    }
+
+    #signup-list {
+      display: none;
+      padding-left: 1.2rem;
+    }
+
+    #signup-list ul {
+      margin-top: 0.5rem;
+      padding-left: 1.2rem;
+    }
+
+    #signup-list li {
+      font-size: 0.95rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .signup-summary {
+      margin-bottom: 1rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #111;
+        color: #eee;
+      }
+
+      .event-container,
+      .signup-block,
+      .signup-summary {
+        background: #1e1e1e;
+        color: #eee;
+        border: 1px solid #333;
+      }
+
+      .event-meta {
+        color: #ccc;
+      }
+
+      .signup-block input[type="text"] {
+        background: #2a2a2a;
+        color: white;
+        border: 1px solid #555;
+      }
+
+      .feedback {
+        background: #1f3c25;
+        color: #8fdda7;
+      }
+
+      #signup-count {
+        background: #2a2a2a;
+        border: 1px solid #444;
+      }
+	  @keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+
+.feedback {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.feedback.show {
+  opacity: 1;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.feedback.hide {
+  animation: fadeOut 0.4s ease forwards;
+}
+    }
+  </style>
+</head>
+<body>
+  <div class="event-container" id="container">
+    <h1 id="title">⏳ Indlæser begivenhed...</h1>
+    <p class="event-meta" id="date"></p>
+    <img id="banner" class="event-banner" src="" alt="" style="display:none;" />
+    <p class="event-meta" id="timeplace"></p>
+    <div class="event-desc" id="desc"></div>
+    <!-- <div class="event-short" id="short"></div> -->
+<div class="signup-summary">
+  <div class="event-meta" id="signup-count" style="cursor: pointer;">
+    <span id="signup-text">⏳ Henter tilmeldinger...</span>
+    <span id="toggle-arrow">▼</span>
+  </div>
+  <div id="signup-list" style="display: none;"></div>
+</div>
+  </div>
+
+<div class="signup-section">
+  <div class="signup-block">
+    <h3>Tilmelding / Framelding</h3>
+<form id="signup-form" class="signup-form-group">
+  <label for="signup-names">Navn:</label>
+  <input type="text" id="signup-names" name="names" placeholder="Fx Allan, Trine" required>
+  <div class="signup-actions">
+    <button type="submit" id="signup-btn">✅ Tilmeld</button>
+    <button type="button" id="unsign-btn">🚫 Frameld</button>
+  </div>
+  <p id="signup-feedback" class="feedback"></p>
+</form>
+  </div>
+</div>
+
+  <script>
+    const API_URL = "https://nglevagter-test.onrender.com/public-events";
+
+    function getParam(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
+
+function formatDate(start, end) {
+  if (!start || !end) return "Ukendt dato";
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s) || isNaN(e)) return "Ukendt dato";
+  e.setDate(e.getDate() - 1);
+  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+  return s.toLocaleDateString('da-DK', options) + (s.toDateString() !== e.toDateString()
+    ? ` – ${e.toLocaleDateString('da-DK', options)}` : '');
+}
+
+function linkify(text) {
+  if (!text) return "";
+
+  const lines = text.trim().split('\n');
+  let html = '';
+  let inList = false;
+
+  for (let line of lines) {
+    const isBullet = line.trim().startsWith('-');
+
+    line = line.replace(/(https?:\/\/[^\s]+)/g, url =>
+      `<a href="${url}" target="_blank" rel="noopener">${url}</a>`
+    );
+
+    if (isBullet) {
+      if (!inList) {
+        html += "<ul>\n";
+        inList = true;
+      }
+      html += `<li>${line.trim().substring(1).trim()}</li>\n`;
+    } else {
+      if (inList) {
+        html += "</ul>\n";
+        inList = false;
+      }
+      if (line.trim()) {
+        html += `<p>${line.trim()}</p>\n`;
+      }
+    }
+  }
+
+  if (inList) {
+    html += "</ul>\n";
+  }
+
+  return html;
+}
+
+    async function loadEvent() {
+      const id = getParam("id");
+      if (!id) {
+        document.body.innerHTML = "<p class='notfound'>❌ Ingen ID angivet i URL</p>";
+        return;
+      }
+
+      const res = await fetch(API_URL);
+      const events = await res.json();
+const match = events.find(ev => ev.description?.includes(`event:${id}`));
+if (!match) {
+  document.body.innerHTML = "<p class='notfound'>❌ Begivenhed ikke fundet</p>";
+  return;
+}
+
+
+	const start = match.start || null;
+	const end = match.end || null;
+      document.getElementById("title").textContent = match.summary;
+      document.getElementById("date").textContent = formatDate(start, end);
+
+      const lines = (match.description || "").split("\n");
+      let img = "", desc = "", location = "", timeStart = "", timeEnd = "", short = "";
+
+let collectingDesc = false;
+
+for (const line of lines) {
+  if (line.startsWith("img:")) {
+    img = line.slice(4).trim();
+    collectingDesc = false;
+  }
+  else if (line.startsWith("desc:")) {
+    desc += line.slice(5).trim() + "\n";
+    collectingDesc = true;
+  }
+  else if (line.startsWith("lokation:")) {
+    location = line.slice(9).trim();
+    collectingDesc = false;
+  }
+  else if (line.startsWith("start:")) {
+    timeStart = line.slice(6).trim();
+    collectingDesc = false;
+  }
+  else if (line.startsWith("end:")) {
+    timeEnd = line.slice(4).trim();
+    collectingDesc = false;
+  }
+  else if (line.startsWith("event:")) {
+    collectingDesc = false;
+  }
+  else if (collectingDesc && line.trim() !== "") {
+    desc += line.trim() + "\n";
+  }
+  else if (line.trim()) {
+    short += line.trim() + "\n";
+    collectingDesc = false;
+  }
+}
+
+      if (img) {
+        const imgEl = document.getElementById("banner");
+        imgEl.src = img;
+        imgEl.style.display = "block";
+      }
+
+      if (desc || location || timeStart) {
+        let metaText = "";
+        if (location) metaText += `📍 ${location}`;
+        if (timeStart && timeEnd) metaText += `\n🕓 ${timeStart} – ${timeEnd}`;
+        else if (timeStart) metaText += `\n🕓 ${timeStart}`;
+        document.getElementById("timeplace").textContent = metaText;
+      
+	  if (img || metaText) {
+    document.getElementById("desc").style.marginTop = "1rem";
+  }
+}
+	  
+document.getElementById("desc").innerHTML = linkify(desc.trim());
+// document.getElementById("short").innerHTML = linkify(short.trim());
+
+    }
+
+    loadEvent();
+	loadSignupCount();
+	
+async function loadSignupCount() {
+  const id = getParam("id");
+  if (!id) return;
+
+  const signupCountEl = document.getElementById("signup-count");
+  const signupListEl = document.getElementById("signup-list");
+  const signupTextEl = document.getElementById("signup-text");
+  const toggleArrowEl = document.getElementById("toggle-arrow");
+
+  try {
+    const res = await fetch(`https://nglevagter-test.onrender.com/signups/${id}`);
+    const data = await res.json();
+
+    const countText = data.count > 0
+      ? `👥 ${data.count} tilmeldt${data.count > 1 ? "e" : ""}`
+      : "Ingen tilmeldte endnu";
+
+    signupTextEl.textContent = countText;
+
+    if (data.names && data.names.length > 0) {
+      const listItems = data.names
+        .filter(name => name && name.trim() !== "")
+        .map(name => `<li>${name}</li>`)
+        .join("");
+      signupListEl.innerHTML = `<ul>${listItems}</ul>`;
+    } else {
+      signupListEl.innerHTML = "";
+    }
+
+    if (!signupCountEl.classList.contains("listener-added")) {
+      signupCountEl.addEventListener("click", () => {
+        const isVisible = signupListEl.style.display === "block";
+        signupListEl.style.display = isVisible ? "none" : "block";
+        toggleArrowEl.textContent = isVisible ? "▼" : "▲";
+      });
+      signupCountEl.classList.add("listener-added");
+    }
+
+  } catch (err) {
+    console.error("Fejl ved hentning af tilmeldinger:", err);
+    signupTextEl.textContent = "❌ Tilmeldinger kunne ikke hentes";
+    signupListEl.innerHTML = "";
+  }
+}
+
+document.getElementById("signup-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const id = getParam("id");
+  const names = document.getElementById("signup-names").value.trim();
+  const feedback = document.getElementById("signup-feedback");
+
+  if (!names) return;
+
+  const res = await fetch("https://nglevagter-test.onrender.com/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId: id, names })
+  });
+
+  if (res.ok) {
+    feedback.textContent = "✅ Du er nu tilmeldt!";
+    document.getElementById("signup-names").value = "";
+    loadSignupCount();
+
+feedback.classList.add("show");
+feedback.classList.remove("hide");
+
+setTimeout(() => {
+  feedback.classList.remove("show");
+  feedback.classList.add("hide");
+  setTimeout(() => {
+    feedback.textContent = "";
+    feedback.classList.remove("hide");
+  }, 400);
+}, 3000);
+  } else {
+    feedback.textContent = "❌ Noget gik galt. Prøv igen.";
+
+feedback.classList.add("show");
+feedback.classList.remove("hide");
+
+setTimeout(() => {
+  feedback.classList.remove("show");
+  feedback.classList.add("hide");
+  setTimeout(() => {
+    feedback.textContent = "";
+    feedback.classList.remove("hide");
+  }, 400);
+}, 3000);
+  }
+});
+
+document.getElementById("unsign-btn").addEventListener("click", async () => {
+  const id = getParam("id");
+  const names = document.getElementById("signup-names").value.trim();
+  const feedback = document.getElementById("signup-feedback");
+
+  if (!names) {
+    feedback.textContent = "❗ Indtast et navn før framelding.";
+    return;
+  }
+
+  const res = await fetch("https://nglevagter-test.onrender.com/unsign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId: id, names })
+  });
+
+  const result = await res.json();
+
+  if (res.ok) {
+    let msg = "✅ Framelding registreret.";
+    if (result.notFound && result.notFound.length > 0) {
+      msg += `\n⚠️ Ikke fundet: ${result.notFound.join(", ")}`;
+    }
+    feedback.textContent = msg;
+    document.getElementById("signup-names").value = "";
+    loadSignupCount();
+  } else {
+    feedback.textContent = "❌ Noget gik galt ved framelding.";
+  }
+
+feedback.classList.add("show");
+feedback.classList.remove("hide");
+
+setTimeout(() => {
+  feedback.classList.remove("show");
+  feedback.classList.add("hide");
+  setTimeout(() => {
+    feedback.textContent = "";
+    feedback.classList.remove("hide");
+  }, 400);
+}, 3000);
+});
+
+  </script>
+</body>
+</html>
