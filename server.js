@@ -333,6 +333,29 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+app.get("/signups/:eventId", async (req, res) => {
+  const { eventId } = req.params;
+  if (!eventId) return res.status(400).json({ error: "eventId mangler" });
+
+  try {
+    const sheets = google.sheets({ version: "v4", auth });
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Sheet2!A:B",
+    });
+
+    const rows = result.data.values || [];
+    const names = rows
+      .filter(row => row[0] === eventId)
+      .map(row => row[1]);
+
+    res.json({ eventId, count: names.length, names });
+  } catch (err) {
+    console.error("Fejl ved hentning af tilmeldinger:", err);
+    res.status(500).json({ error: "Serverfejl under hentning af tilmeldinger" });
+  }
+});
+
 app.get('/public-events', async (req, res) => {
   try {
     const calendarEvents = await getAllCalendarEvents();
