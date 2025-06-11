@@ -306,24 +306,30 @@ app.post('/remove-closed-event', async (req, res) => {
 app.post("/signup", async (req, res) => {
   const { eventId, names } = req.body;
 
-  if (!eventId || !Array.isArray(names) || names.length === 0) {
+  if (!eventId || !names || (typeof names === "string" && names.trim() === "")) {
     return res.status(400).json({ error: "eventId og names påkrævet" });
   }
 
+  const nameList = Array.isArray(names) ? names : [names];
+
   try {
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const values = nameList.map(name => [eventId, name]);
+
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: "Sheet2!A:B",
-      valueInputOption: "RAW",
+      valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: names.map(name => [eventId, name])
-      }
+        values: values,
+      },
     });
 
-    res.json({ success: true, updated: response.data.updates });
+    res.json({ success: true, updated: response.data });
   } catch (err) {
-    console.error("Fejl ved signup:", err);
-    res.status(500).json({ error: "Fejl ved tilmelding" });
+    console.error("Fejl i signup:", err);
+    res.status(500).json({ error: "Serverfejl under tilmelding" });
   }
 });
 
