@@ -351,21 +351,17 @@ app.post("/unsign", async (req, res) => {
 
   const inputNames = names
     .split(/\n|,/)
-    .map(n => n.trim())
+    .map(n => n.trim().toLowerCase())
     .filter(Boolean);
 
-  const signedUpNames = rows
-    .filter(([id]) => id === eventId)
-    .map(([, name]) => name.trim().toLowerCase());
+  const signedUp = rows.filter(([id]) => id === eventId);
+  const signedUpNames = signedUp.map(([, name]) => name.trim().toLowerCase());
 
-  const notFound = [];
+  const notFound = inputNames.filter(n => !signedUpNames.includes(n));
+
   const updated = rows.filter(([id, name]) => {
-    const normalized = (name || "").trim().toLowerCase();
-    const shouldRemove = id === eventId && inputNames.some(n => n.trim().toLowerCase() === normalized);
-    if (shouldRemove && !signedUpNames.includes(normalized)) {
-      notFound.push(name);
-    }
-    return !shouldRemove;
+    const norm = (name || "").trim().toLowerCase();
+    return !(id === eventId && inputNames.includes(norm));
   });
 
   while (updated.length < rows.length) {
@@ -381,10 +377,10 @@ app.post("/unsign", async (req, res) => {
     },
   });
 
-  const removed = rows.length - updated.length;
+  const removed = signedUp.length - updated.filter(([id]) => id === eventId).length;
+
   res.json({ success: true, removed, notFound });
 });
-
 
 app.get("/signups/:eventId", async (req, res) => {
   const { eventId } = req.params;
