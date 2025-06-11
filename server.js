@@ -284,6 +284,22 @@ app.post('/remove-closed-event', async (req, res) => {
   }
 });
 
+app.post('/signup', async (req, res) => {
+  const { eventId, names } = req.body;
+  if (!eventId || !Array.isArray(names)) return res.status(400).json({ error: "Ugyldig data" });
+
+  const rows = names.map(name => [new Date().toISOString(), eventId, name]);
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: 'Sheet2!A:C',
+    valueInputOption: 'USER_ENTERED',
+    resource: { values: rows },
+  });
+
+  res.json({ success: true });
+});
+
 app.get('/public-events', async (req, res) => {
   try {
     const calendarEvents = await getAllCalendarEvents();
