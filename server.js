@@ -166,6 +166,24 @@ for (const key of allKeys) {
   }
 });
 
+app.get("/signups", async (req, res) => {
+  try {
+    const sheets = google.sheets({ version: "v4", auth });
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Sheet2!A:B",
+    });
+
+    const rows = result.data.values || [];
+    const signups = rows.slice(1).map(([eventId, name]) => ({ eventId, name }));
+
+    res.json(signups);
+  } catch (err) {
+    console.error("Fejl ved hentning af tilmeldinger:", err);
+    res.status(500).json({ error: "Serverfejl" });
+  }
+});
+
 app.post('/assignments', async (req, res) => {
   const { day, days, name } = req.body;
 
