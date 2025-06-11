@@ -159,6 +159,9 @@ h2 {
     <label><input type="checkbox" value="social" checked /> 🎉 Socialt</label>
     <label><input type="checkbox" value="lukket" checked /> 🚪 Lukkedag</label>
     <label><input type="checkbox" value="andet" checked /> ❓ Andet</label>
+	<label style="margin-top: 0.5rem; display: block;">
+  <input type="checkbox" id="show-past" /> ⏳ Tidligere begivenheder
+</label>
   </fieldset>
 </div>
 
@@ -197,10 +200,20 @@ function renderEvents() {
   const list = document.getElementById("event-list");
   list.innerHTML = "";
 
-  const activeFilters = Array.from(document.querySelectorAll("#filter-panel input:checked"))
+  const activeFilters = Array.from(document.querySelectorAll("#filter-panel input[type=checkbox]:checked"))
     .map(cb => cb.value);
 
+  const showPast = document.getElementById("show-past").checked;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
   for (const ev of allEvents) {
+    const startDate = new Date(ev.start);
+	startDate.setHours(0, 0, 0, 0);
+
+	if (!showPast && startDate < now) continue;
+
+
     const category = categorizeEvent(ev);
     if (!activeFilters.includes(category)) continue;
 
@@ -258,6 +271,7 @@ function renderEvents() {
     list.appendChild(box);
   }
 }
+
 
 function linkify(text) {
   if (!text) return "";
