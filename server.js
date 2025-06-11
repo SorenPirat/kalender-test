@@ -348,19 +348,27 @@ app.post("/unsign", async (req, res) => {
   });
 
   const rows = sheet.data.values || [];
-  const nameList = names
-    .split("\n")
-    .map((n) => n.trim().toLowerCase())
+
+  const inputNames = names
+    .split(/\n|,/)
+    .map(n => n.trim())
     .filter(Boolean);
 
-  const originalLength = rows.length;
+  const signedUpNames = rows
+    .filter(([id]) => id === eventId)
+    .map(([, name]) => name.trim().toLowerCase());
 
+  const notFound = [];
   const updated = rows.filter(([id, name]) => {
-    const match = id === eventId && nameList.includes((name || "").toLowerCase());
-    return !match;
+    const normalized = (name || "").trim().toLowerCase();
+    const shouldRemove = id === eventId && inputNames.some(n => n.trim().toLowerCase() === normalized);
+    if (shouldRemove && !signedUpNames.includes(normalized)) {
+      notFound.push(name);
+    }
+    return !shouldRemove;
   });
 
-  while (updated.length < originalLength) {
+  while (updated.length < rows.length) {
     updated.push(["", ""]);
   }
 
@@ -373,8 +381,10 @@ app.post("/unsign", async (req, res) => {
     },
   });
 
-  res.json({ success: true, removed: originalLength - updated.length });
+  const removed = rows.length - updated.length;
+  res.json({ success: true, removed, notFound });
 });
+
 
 app.get("/signups/:eventId", async (req, res) => {
   const { eventId } = req.params;
