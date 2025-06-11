@@ -17,6 +17,7 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
+const sheets = google.sheets({ version: 'v4', auth });
 const calendar = google.calendar({ version: 'v3', auth: calendarAuth });
 const spreadsheetId = process.env.SPREADSHEET_ID;
 const sheetName = 'Sheet1';
@@ -284,20 +285,28 @@ app.post('/remove-closed-event', async (req, res) => {
   }
 });
 
-app.post('/signup', async (req, res) => {
+app.post("/signup", async (req, res) => {
   const { eventId, names } = req.body;
-  if (!eventId || !Array.isArray(names)) return res.status(400).json({ error: "Ugyldig data" });
 
-  const rows = names.map(name => [new Date().toISOString(), eventId, name]);
+  if (!eventId || !Array.isArray(names) || names.length === 0) {
+    return res.status(400).json({ error: "eventId og names påkrævet" });
+  }
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: 'Sheet2!A:C',
-    valueInputOption: 'USER_ENTERED',
-    resource: { values: rows },
-  });
+  try {
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "Sheet2!A:B",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: names.map(name => [eventId, name])
+      }
+    });
 
-  res.json({ success: true });
+    res.json({ success: true, updated: response.data.updates });
+  } catch (err) {
+    console.error("Fejl ved signup:", err);
+    res.status(500).json({ error: "Fejl ved tilmelding" });
+  }
 });
 
 app.get('/public-events', async (req, res) => {
