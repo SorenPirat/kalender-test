@@ -155,6 +155,34 @@
       margin-bottom: 1rem;
     }
 
+  .signup-block.locked {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+  }
+
+  .signup-block.locked::after {
+    content: "🔒 Tilmelding lukket – begivenheden er afholdt";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    max-width: 80%;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .signup-block.locked::after {
+      background: rgba(20, 20, 20, 0.95);
+      color: #eee;
+    }
+
     @media (prefers-color-scheme: dark) {
       body {
         background: #111;
@@ -233,17 +261,17 @@
   </div>
 
 <div class="signup-section">
-  <div class="signup-block">
+  <div class="signup-block" id="signup-block">
     <h3>Tilmelding / Framelding</h3>
-<form id="signup-form" class="signup-form-group">
-  <label for="signup-names">Navn:</label>
-  <input type="text" id="signup-names" name="names" placeholder="Fx Allan, Trine" required>
-  <div class="signup-actions">
-    <button type="submit" id="signup-btn">✅ Tilmeld</button>
-    <button type="button" id="unsign-btn">🚫 Frameld</button>
-  </div>
-  <p id="signup-feedback" class="feedback"></p>
-</form>
+    <form id="signup-form" class="signup-form-group">
+      <label for="signup-names">Navn:</label>
+      <input type="text" id="signup-names" name="names" placeholder="Fx Allan, Trine" required>
+      <div class="signup-actions">
+        <button type="submit" id="signup-btn">✅ Tilmeld</button>
+        <button type="button" id="unsign-btn">🚫 Frameld</button>
+      </div>
+      <p id="signup-feedback" class="feedback"></p>
+    </form>
   </div>
 </div>
 
@@ -379,12 +407,39 @@ for (const line of lines) {
 	  if (img || metaText) {
     document.getElementById("desc").style.marginTop = "1rem";
   }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const startDate = new Date(start);
+  startDate.setHours(0, 0, 0, 0);
+
+  if (startDate < today) {
+    document.getElementById("signup-block").classList.add("locked");
+  }
 }
 	  
 document.getElementById("desc").innerHTML = linkify(desc.trim());
-// document.getElementById("short").innerHTML = linkify(short.trim());
 
-    }
+// Lås tilmelding/framelding hvis begivenheden er afholdt
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const startDate = new Date(start);
+startDate.setHours(0, 0, 0, 0);
+
+if (startDate < today) {
+  const nameInput = document.getElementById("signup-names");
+  const signupBtn = document.getElementById("signup-btn");
+  const unsignBtn = document.getElementById("unsign-btn");
+  const feedback = document.getElementById("signup-feedback");
+
+  nameInput.disabled = true;
+  signupBtn.disabled = true;
+  unsignBtn.disabled = true;
+
+  feedback.textContent = "🔒 Tilmeldingen er lukket – begivenheden er afholdt";
+  feedback.style.color = "#888";
+}
+}
 
     loadEvent();
 	loadSignupCount();
