@@ -335,7 +335,9 @@ app.post("/signup", async (req, res) => {
 
 app.post("/unsign", async (req, res) => {
   const { eventId, names } = req.body;
-  if (!eventId || !names) return res.status(400).json({ error: "eventId og names påkrævet" });
+  if (!eventId || !names) {
+    return res.status(400).json({ error: "eventId og names påkrævet" });
+  }
 
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: "v4", auth: authClient });
@@ -346,22 +348,32 @@ app.post("/unsign", async (req, res) => {
   });
 
   const rows = sheet.data.values || [];
-  const nameList = names.split("\n").map(n => n.trim().toLowerCase()).filter(Boolean);
+  const nameList = names
+    .split("\n")
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
 
-  const updated = rows.filter(([id, name]) =>
-    !(id === eventId && nameList.includes((name || "").toLowerCase()))
-  );
+  const originalLength = rows.length;
+
+  const updated = rows.filter(([id, name]) => {
+    const match = id === eventId && nameList.includes((name || "").toLowerCase());
+    return !match;
+  });
+
+  while (updated.length < originalLength) {
+    updated.push(["", ""]);
+  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `Sheet2!A1:B`,
     valueInputOption: "RAW",
     resource: {
-      values: updated
-    }
+      values: updated,
+    },
   });
 
-  res.json({ success: true, removed: rows.length - updated.length });
+  res.json({ success: true, removed: originalLength - updated.length });
 });
 
 app.get("/signups/:eventId", async (req, res) => {
