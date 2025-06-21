@@ -5,6 +5,13 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { google } from 'googleapis';
+import { createClient } from '@supabase/supabase-js';
+
+// ===== Supabase database =====
+const supabase = createClient(
+  'https://cianxaxaphvrutmstydr.supabase.co',
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 // ===== Google Auth =====
 const calendarAuth = new google.auth.GoogleAuth({
@@ -421,6 +428,51 @@ app.get('/public-events', async (req, res) => {
   } catch (err) {
     console.error('Fejl i public-events:', err);
     res.status(500).json({ error: 'Fejl ved hentning af offentlige events' });
+  }
+});
+
+// ==== Oprettelse af bruger i adm.panel ====
+app.post('/create-user', async (req, res) => {
+  const { navn, email, rolle } = req.body;
+  if (!navn || !email || !rolle) return res.status(400).json({ error: 'Manglende felter' });
+
+  try {
+    const { data, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      email_confirm: true
+    });
+
+    if (authError) throw authError;
+
+    const brugerId = data.user.id;
+
+    const { error: insertError } = await supabase
+      .from("users")
+      .insert([{ id: brugerId, navn, rolle }]);
+
+    if (insertError) throw insertError;
+
+    res.json({ success: true, userId: brugerId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Ukendt fejl" });
+  }
+});
+
+// ==== Sletning af bruger i adm.panel ====
+app.post('/delete-user', async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: "Mangler bruger-id" });
+
+  try {
+    const { error: authErr } = await supabase.auth.admin.deleteUser(id);
+    if (authErr) throw authErr;
+
+    const { error: dbErr } = await supabase.from("users").delete().eq("id", id);
+    if (dbErr) throw dbErr;
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Ukendt fejl" });
   }
 });
 
