@@ -434,17 +434,15 @@ app.get('/public-events', async (req, res) => {
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
   const { navn, email, rolle } = req.body;
-  if (!navn || !email || !rolle) return res.status(400).json({ error: 'Manglende felter' });
+  if (!navn || !email || !rolle) {
+    return res.status(400).json({ error: 'Manglende felter' });
+  }
 
   try {
-    const { data, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true
-    });
+    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
+    if (inviteError) throw inviteError;
 
-    if (authError) throw authError;
-
-    const brugerId = data.user.id;
+    const brugerId = inviteData.user.id;
 
     const { error: insertError } = await supabase
       .from("users")
@@ -454,6 +452,7 @@ app.post('/create-user', async (req, res) => {
 
     res.json({ success: true, userId: brugerId });
   } catch (err) {
+    console.error("Fejl i oprettelse:", err);
     res.status(500).json({ error: err.message || "Ukendt fejl" });
   }
 });
