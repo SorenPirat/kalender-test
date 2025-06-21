@@ -439,18 +439,38 @@ app.post('/create-user', async (req, res) => {
   }
 
   try {
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
-    if (inviteError) throw inviteError;
+    // Opret brugeren uden at sende e-mail
+    const { data, error: signupError } = await supabase.auth.admin.createUser({
+      email,
+      email_confirm: true
+    });
 
-    const brugerId = inviteData.user.id;
+    if (signupError) throw signupError;
 
-    const { error: insertError } = await supabase
+    const brugerId = data.user.id;
+
+    // Tilføj til users-tabel
+    const { error: dbError } = await supabase
       .from("users")
       .insert([{ id: brugerId, navn, rolle }]);
 
-    if (insertError) throw insertError;
+    if (dbError) throw dbError;
 
-    res.json({ success: true, userId: brugerId });
+    // Generér recovery-link (manuelt sendt link til adgangskode)
+    const { data: recoveryData, error: recoveryError } = await supabase.auth.admin.generateLink({
+      type: "recovery",
+      email
+    });
+
+    if (recoveryError) throw recoveryError;
+
+    // Send recovery-link med tilbage
+    res.json({
+      success: true,
+      userId: brugerId,
+      recoveryLink: recoveryData.action_link
+    });
+
   } catch (err) {
     console.error("Fejl i oprettelse:", err);
     res.status(500).json({ error: err.message || "Ukendt fejl" });
