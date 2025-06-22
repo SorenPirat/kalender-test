@@ -175,39 +175,23 @@ for (const key of allKeys) {
 
 app.get("/signups", async (req, res) => {
   try {
-    await doc.useServiceAccountAuth({
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    const authClient = await auth.getClient();
+    const sheetsClient = google.sheets({ version: "v4", auth: authClient });
+
+    const result = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Sheet2!A:B", // kolonne A: eventId, B: navn
     });
 
-    await doc.loadInfo();
-    const sheet = doc.sheetsByTitle["Signups"];
-    const rows = await sheet.getRows();
-
-    const data = [];
-
-    for (const row of rows) {
-      const { eventId, names, timestamp } = row;
-
-      if (!eventId || !names) continue;
-
-      const nameArray = names
-        .split(",")
-        .map(n => n.trim())
-        .filter(n => n.length > 0);
-
-      nameArray.forEach(name => {
-        data.push({
-          eventId,
-          name,
-          timestamp: timestamp || null
-        });
-      });
-    }
+    const rows = result.data.values || [];
+    const data = rows.map(([eventId, name]) => ({
+      eventId,
+      name,
+    }));
 
     res.json(data);
-  } catch (error) {
-    console.error("Fejl ved hentning af tilmeldinger:", error);
+  } catch (err) {
+    console.error("Fejl ved hentning af tilmeldinger:", err);
     res.status(500).json({ error: "Serverfejl ved hentning af tilmeldinger" });
   }
 });
