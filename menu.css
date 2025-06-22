@@ -1,0 +1,169 @@
+:root {
+  --accent: #007bff;
+  --accent-dark: #81cfff;
+}
+
+body {
+  font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* === STICKY MENU === */
+#menu {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  background-color: rgba(255, 255, 255, 0.15); /* meget gennemsigtig */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 0.4rem 0.75rem;
+  margin: 0.25rem 0.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+#menu:not(.open) {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+#menu:not(.open) .menu-header {
+  padding-bottom: 0.2rem;
+}
+
+#menu:not(.open) #user-name {
+  opacity: 0.9;
+}
+
+/* Toplinje: menu-knap + brugernavn */
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding: 0.25rem 0.5rem;
+  z-index: 999;
+}
+
+/* Hamburger-knap */
+#menu-toggle {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Brugernavn */
+#user-name {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  margin-left: 0.75rem;
+  color: #333;
+}
+
+/* Links */
+#menu-links {
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
+  text-align: left;
+}
+
+#menu-links.show {
+  max-height: 300px;
+  padding: 0.5rem 1rem;
+  opacity: 1;
+  visibility: visible;
+}
+
+#menu-links li {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 0.5rem;
+}
+
+#menu-links li a {
+  display: block;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: transparent;
+  color: #007bff;
+}
+
+/* Når menuen er åben */
+#menu.open {
+  background-color: rgba(255, 255, 255, 0.85); /* frostet stil */
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* === MOBIL === */
+@media screen and (max-width: 600px) {
+  #menu-toggle {
+    background-color: var(--accent);
+    color: white;
+  }
+
+  #user-name {
+    color: #111;
+    font-weight: bold;
+    width: 100%;
+    text-align: right;
+    margin-top: 0.5rem;
+  }
+
+  #menu.open {
+    background-color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  #menu-links li a {
+    color: #007bff;
+  }
+}
+
+/* === DARK MODE === */
+@media (prefers-color-scheme: dark) {
+  #menu {
+    background-color: rgba(30, 30, 30, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
+  #menu-toggle {
+    background-color: #444;
+    color: white;
+  }
+
+  #user-name {
+    color: #eee;
+  }
+
+  #menu.open {
+    background-color: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  #menu-links li a {
+    color: var(--accent-dark);
+  }
+}

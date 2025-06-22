@@ -4,442 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Klubbens kalender</title>
-  <style>
-/* === BASIS === */
-body {
-  font-family: sans-serif;
-  background-color: #f8f8f8;
-  margin: 1rem;
-  color: #111;
-}
-
-h2 {
-  color: #007bff;
-}
-
-.event {
-  background: white;
-  border-left: 4px solid #007bff;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.event h3 {
-  margin: 0 0 0.5rem;
-}
-
-.event time {
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.event-description a {
-  color: #007bff;
-  text-decoration: underline;
-  word-break: break-word;
-}
-
-/* === FILTER PANEL === */
-#filter-wrapper {
-  margin-bottom: 1.5rem;
-}
-
-#toggle-filter {
-  display: none;
-  background-color: #007bff;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  cursor: pointer;
-  margin-bottom: 0.5rem;
-  width: 100%;
-}
-
-#filter-panel {
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: #fff;
-  padding: 1rem;
-}
-
-#filter-panel legend {
-  font-weight: bold;
-  margin-bottom: 0.5rem;
-  color: #333;
-}
-
-#filter-panel label {
-  display: inline-block;
-  margin-right: 1rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-/* === MODAL === */
-#event-modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  z-index: 1000;
-}
-
-.modal-wrapper {
-  background: #fff;
-  max-width: 700px;
-  max-height: 90vh;
-  overflow-y: auto;
-  margin: 5% auto;
-  padding: 1.5rem;
-  border-radius: 12px;
-  position: relative;
-  box-sizing: border-box;
-}
-
-#modal-content {
-  box-sizing: border-box;
-  max-width: 700px;
-  margin: auto;
-  padding: 1.5rem;
-  border-radius: 12px;
-  background: white;
-  overflow-y: auto;
-}
-
-.modal-image-wrapper {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  box-sizing: border-box;
-}
-
-#modal-banner {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: cover;
-  max-height: 320px;
-  box-sizing: border-box;
-}
-
-.event-meta {
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
-  color: #444;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-#modal-desc {
-  margin: 1.5rem 0;
-  font-size: 1.05rem;
-  line-height: 1.6;
-}
-
-/* === TILMELDING === */
-.signup-section {
-  max-width: 700px;
-  margin-top: 2rem;
-  box-sizing: border-box;
-}
-
-.signup-block {
-  background: #f4f4f4;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.signup-block h3 {
-  margin-top: 0;
-  font-size: 1.2rem;
-  color: #007bff;
-}
-
-.signup-block label,
-.signup-block input,
-.signup-actions {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.signup-block input[type="text"] {
-  padding: 0.6rem;
-  font-size: 1rem;
-  margin-top: 0.3rem;
-  margin-bottom: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-.signup-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.signup-actions button {
-  flex: 1;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-}
-
-#modal-signup-btn {
-  background-color: #28a745;
-  color: white;
-}
-
-#modal-unsign-btn {
-  background-color: #dc3545;
-  color: white;
-}
-
-.signup-block.locked {
-  opacity: 0.6;
-  pointer-events: none;
-  position: relative;
-}
-
-.signup-block.locked::after {
-  content: "🔒 Tilmelding lukket – begivenheden er afholdt";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.95);
-  color: #333;
-  padding: 0.8rem 1rem;
-  border-radius: 8px;
-  text-align: center;
-  font-weight: bold;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  max-width: 80%;
-}
-
-.feedback {
-  margin-top: 0.5rem;
-  font-weight: bold;
-  background: #e6f9ea;
-  color: #28a745;
-  padding: 0.5rem;
-  border-radius: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-}
-
-.feedback.show {
-  opacity: 1;
-  animation: fadeIn 0.3s ease forwards;
-}
-
-.feedback.hide {
-  animation: fadeOut 0.4s ease forwards;
-}
-
-#modal-signup-count {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  background: #f4f4f4;
-  cursor: pointer;
-}
-
-#modal-signup-list {
-  display: none;
-  padding-left: 1.2rem;
-}
-
-#modal-signup-list ul {
-  margin-top: 0.5rem;
-  padding-left: 1.2rem;
-}
-
-#modal-signup-list li {
-  font-size: 0.95rem;
-  margin-bottom: 0.3rem;
-}
-
-/* === MOBILVISNING === */
-@media screen and (max-width: 600px) {
-  #toggle-filter {
-    display: block;
-  }
-
-  #filter-panel {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease, padding 0.3s ease;
-    padding: 0 1rem;
-  }
-
-  #filter-panel.open {
-    max-height: 300px;
-    padding: 1rem;
-  }
-
-  #filter-panel label {
-    display: block;
-    margin-bottom: 0.5rem;
-  }
-
-  #event-modal h1 {
-    font-size: 1.4rem;
-  }
-
-#modal-banner {
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  object-fit: cover;
-  border-radius: 8px;
-  display: block;
-  margin-bottom: 1.5rem;
-  box-sizing: border-box;
-}
-
-  #modal-title {
-    font-size: 2rem;
-    color: #007bff;
-    margin-top: 0;
-  }
-
-  #event-modal button[onclick="closeModal()"] {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 9999;
-    font-size: 1.6rem;
-    background: white;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    border: none;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  }
-}
-
-/* === DARK MODE === */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #121212;
-    color: #e0e0e0;
-  }
-
-  h2 {
-    color: #81cfff;
-  }
-
-  .event {
-    background-color: #1e1e1e;
-    border-left-color: #81cfff;
-    color: #eee;
-  }
-
-  .event time,
-  .event-meta,
-  #modal-desc,
-  #filter-panel legend,
-  #filter-panel label {
-    color: #ccc;
-  }
-
-  .event-description a {
-    color: #81cfff;
-  }
-
-  #filter-panel {
-    background-color: #1e1e1e;
-    border-color: #444;
-  }
-
-  #toggle-filter {
-    background-color: #444;
-    color: white;
-  }
-
-  #event-modal {
-    background-color: rgba(0, 0, 0, 0.85);
-  }
-
-  .modal-wrapper,
-  #modal-content,
-  .signup-summary,
-  .signup-block {
-    background-color: #1e1e1e;
-    color: #eee;
-    border: 1px solid #333;
-  }
-
-  #modal-signup-count {
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-  }
-
-  .signup-block input[type="text"] {
-    background-color: #2a2a2a;
-    color: white;
-    border: 1px solid #555;
-  }
-
-  .feedback {
-    background-color: #1f3c25;
-    color: #8fdda7;
-  }
-
-  .signup-block.locked::after {
-    background-color: rgba(20, 20, 20, 0.95);
-    color: #eee;
-  }
-
-  #event-modal button[onclick="closeModal()"] {
-    background: #333;
-    color: #fff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  }
-  .modal-image-wrapper {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  box-sizing: border-box;
-}
-
-#modal-banner {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: cover;
-  max-height: 320px;
-  box-sizing: border-box;
-}
-}
-  </style>
+  <link rel="stylesheet" href="calendar.css" />
+    <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
 </head>
 <body>
-  <h2>📅 Klubbens arrangementer</h2>
+
+  <h2><center>📅 Klubbens arrangementer</center></h2>
 
 <div id="filter-wrapper">
   <button id="toggle-filter">🔽 Filtrér begivenheder</button>
   <fieldset id="filter-panel">
-    <legend>Filtrér begivenheder</legend>
-    <label><input type="checkbox" value="rutebyg" checked /> 🧗 Rutebygning</label>
+    <label><input type="checkbox" value="rutebyg" checked /> 🛠️ Rutebygning</label>
     <label><input type="checkbox" value="konkurrence" checked /> 🏆 Konkurrence</label>
     <label><input type="checkbox" value="social" checked /> 🎉 Socialt</label>
     <label><input type="checkbox" value="lukket" checked /> 🚪 Lukkedag</label>
@@ -453,7 +29,7 @@ h2 {
 <div id="event-list">⏳ Henter begivenheder...</div>
 
 <!-- MODAL: BEGIVENHED MED TILMELDING -->
-<div id="event-modal">
+<div id="event-modal" class="modal">
 	<div class="modal-wrapper">
     <button onclick="closeModal()" style="position:absolute; top:10px; right:10px; font-size:1.2rem;">❌</button>
     <div id="modal-content">
@@ -476,10 +52,7 @@ h2 {
 
       <div class="signup-section">
         <div class="signup-block" id="modal-signup-block">
-          <h3>Tilmelding / Framelding</h3>
           <form id="modal-signup-form">
-            <label for="modal-signup-names">Navn:</label>
-            <input type="text" id="modal-signup-names" name="names" placeholder="Skriv dit navn her" required />
             <div class="signup-actions">
               <button type="submit" id="modal-signup-btn">✅ Tilmeld</button>
               <button type="button" id="modal-unsign-btn">🚫 Frameld</button>
@@ -492,6 +65,19 @@ h2 {
   </div>
 </div>
 
+<script type="module">
+  import { adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "protected.html",
+    efterLogin: (bruger) => {
+      indsætMenu(bruger); 
+      loadEvents();
+    }
+  });
+</script>
+<script type="module" src="modal-handler.js"></script>
 <script>
 let allEvents = [];
 
@@ -512,7 +98,7 @@ function categorizeEvent(ev) {
 
 function getIcon(type) {
   switch (type) {
-    case "rutebyg": return "🧗";
+    case "rutebyg": return "🛠️";
     case "konkurrence": return "🏆";
     case "social": return "🎉";
     case "lukket": return "🚪";
@@ -641,7 +227,6 @@ toggleBtn.addEventListener("click", () => {
   toggleBtn.textContent = filterPanel.classList.contains("open")
     ? "🔼 Skjul filtre" : "🔽 Filtrér begivenheder";
 });
-loadEvents();
 
 async function openModal(id) {
   const res = await fetch("https://nglevagter-test.onrender.com/public-events");
@@ -654,37 +239,23 @@ async function openModal(id) {
   document.getElementById("modal-title").textContent = ev.summary;
   document.getElementById("modal-date").textContent = formatDate(ev.start, ev.end);
 
+  // === Uddrag metadata ===
   const lines = (ev.description || "").split("\n");
   let img = "", desc = "", location = "", timeStart = "", timeEnd = "";
-let collectingDesc = false;
-desc = "";
+  let collectingDesc = false;
+  desc = "";
 
-for (const line of lines) {
-  const trimmed = line.trim();
-
-  if (trimmed.startsWith("img:")) {
-    img = trimmed.slice(4).trim();
-    collectingDesc = false;
-  } else if (trimmed.startsWith("desc:")) {
-    desc += trimmed.slice(5).trim() + "\n";
-    collectingDesc = true;
-  } else if (trimmed.startsWith("lokation:")) {
-    location = trimmed.slice(9).trim();
-    collectingDesc = false;
-  } else if (trimmed.startsWith("start:")) {
-    timeStart = trimmed.slice(6).trim();
-    collectingDesc = false;
-  } else if (trimmed.startsWith("end:")) {
-    timeEnd = trimmed.slice(4).trim();
-    collectingDesc = false;
-  } else if (trimmed.startsWith("event:")) {
-    collectingDesc = false;
-  } else if (collectingDesc && trimmed !== "") {
-    desc += trimmed + "\n";
-  } else if (trimmed !== "") {
-    desc += trimmed + "\n";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("img:")) { img = trimmed.slice(4).trim(); collectingDesc = false; }
+    else if (trimmed.startsWith("desc:")) { desc += trimmed.slice(5).trim() + "\n"; collectingDesc = true; }
+    else if (trimmed.startsWith("lokation:")) { location = trimmed.slice(9).trim(); collectingDesc = false; }
+    else if (trimmed.startsWith("start:")) { timeStart = trimmed.slice(6).trim(); collectingDesc = false; }
+    else if (trimmed.startsWith("end:")) { timeEnd = trimmed.slice(4).trim(); collectingDesc = false; }
+    else if (trimmed.startsWith("event:")) { collectingDesc = false; }
+    else if (collectingDesc && trimmed !== "") { desc += trimmed + "\n"; }
+    else if (trimmed !== "") { desc += trimmed + "\n"; }
   }
-}
 
   const banner = document.getElementById("modal-banner");
   banner.src = img;
@@ -697,50 +268,67 @@ for (const line of lines) {
   document.getElementById("modal-timeplace").textContent = meta;
   document.getElementById("modal-desc").innerHTML = linkify(desc.trim());
 
+  // === Lås hvis begivenheden er forbi ===
   const today = new Date(); today.setHours(0,0,0,0);
   const eventDate = new Date(ev.start); eventDate.setHours(0,0,0,0);
   const block = document.getElementById("modal-signup-block");
-  if (eventDate < today) block.classList.add("locked"); else block.classList.remove("locked");
+  if (eventDate < today) block.classList.add("locked");
+  else block.classList.remove("locked");
 
+  // === Hent tilmeldte og opdater knapper ===
   await loadModalSignups(id);
+  updateSignupUI(id);
 
+  // === Formular og knapper ===
   const form = document.getElementById("modal-signup-form");
   const feedback = document.getElementById("modal-feedback");
-  const nameInput = document.getElementById("modal-signup-names");
 
   form.onsubmit = async (e) => {
     e.preventDefault();
-    const names = nameInput.value.trim();
-    if (!names) return;
+    const bruger = JSON.parse(localStorage.getItem("bruger"));
+if (bruger && bruger.navn) {
+  const userNameEl = document.getElementById("user-name");
+  userNameEl.textContent = `👤 ${bruger.navn} (${bruger.rolle})`;
+}
+
     const res = await fetch("https://nglevagter-test.onrender.com/signup", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: id, names })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: id, names: bruger.navn })
     });
-    if (res.ok) {
-      feedback.textContent = "✅ Du er nu tilmeldt!";
-      nameInput.value = "";
-      await loadModalSignups(id);
-    } else feedback.textContent = "❌ Noget gik galt. Prøv igen.";
+
+   if (res.ok) {
+  await loadModalSignups(id);
+  updateSignupUI(id, `✅ ${bruger.navn} tilmeldt`);
+} else {
+  feedback.textContent = "❌ Der opstod en fejl.";
+}
+
     showModalFeedback();
   };
 
   document.getElementById("modal-unsign-btn").onclick = async () => {
-    const names = nameInput.value.trim();
-    if (!names) {
-      feedback.textContent = "❗ Indtast et navn før framelding.";
+    const bruger = JSON.parse(localStorage.getItem("bruger"));
+    const feedback = document.getElementById("modal-feedback");
+
+    if (!bruger || !bruger.navn) {
+      feedback.textContent = "❌ Du er ikke logget korrekt ind.";
       return showModalFeedback();
     }
+
     const res = await fetch("https://nglevagter-test.onrender.com/unsign", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: id, names })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: id, names: bruger.navn })
     });
-    const result = await res.json();
-    if (res.ok) {
-      feedback.textContent = "✅ Framelding registreret.";
-      if (result.notFound?.length) feedback.textContent += `\n⚠️ Ikke fundet: ${result.notFound.join(", ")}`;
-      nameInput.value = "";
-      await loadModalSignups(id);
-    } else feedback.textContent = "❌ Noget gik galt ved framelding.";
+
+ if (res.ok) {
+  await loadModalSignups(id);
+  updateSignupUI(id, `✅ ${bruger.navn} frameldt`);
+} else {
+  feedback.textContent = "❌ Fejl ved framelding.";
+}
+
     showModalFeedback();
   };
 }
@@ -784,6 +372,8 @@ async function loadModalSignups(id) {
       countContainer.classList.add("listener-added");
     }
 
+window.modalSignupNames = data.names || [];
+
   } catch (err) {
     text.textContent = "❌ Fejl i tilmeldinger";
     list.innerHTML = "";
@@ -803,6 +393,34 @@ function showModalFeedback() {
     }, 400);
   }, 3000);
 }
+
+function updateSignupUI(id, feedbackOverride = null) {
+  const signupBtn = document.getElementById("modal-signup-btn");
+  const feedback = document.getElementById("modal-feedback");
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const erTilmeldt = window.modalSignupNames?.includes(bruger?.navn);
+
+  if (erTilmeldt) {
+    signupBtn.disabled = true;
+    signupBtn.style.opacity = "0.6";
+    signupBtn.textContent = "✅ Allerede tilmeldt";
+    if (!feedbackOverride) {
+      feedback.textContent = `✅ Du er allerede tilmeldt som ${bruger.navn}`;
+    }
+  } else {
+    signupBtn.disabled = false;
+    signupBtn.style.opacity = "1";
+    signupBtn.textContent = "✅ Tilmeld";
+    if (!feedbackOverride) {
+      feedback.textContent = "";
+    }
+  }
+
+  if (feedbackOverride) {
+    feedback.textContent = feedbackOverride;
+  }
+}
 </script>
 </body>
 </html>
+

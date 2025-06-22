@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Medlemsområde</title>
+
+  <link rel="stylesheet" href="base.css" /> 
+  <link rel="stylesheet" href="menu.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module">
+  import { adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "protected.html",
+    efterLogin: (bruger) => {
+      indsætMenu(bruger); 
+    }
+  });
+</script>
+</head>
+<body>
+
+  <h1 id="velkomst">Velkommen!</h1>
+ 
+
+  <script>
+    const client = supabase.createClient(
+      "https://cianxaxaphvrutmstydr.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
+    );
+
+    async function init() {
+      const { data: { user }, error } = await client.auth.getUser();
+
+      if (!user || error) {
+        localStorage.removeItem("bruger");
+        window.location.href = "login.html";
+        return;
+      }
+
+      let bruger = localStorage.getItem("bruger");
+
+      if (!bruger) {
+        const { data: profile, error: profileError } = await client
+          .from("users")
+          .select("navn, rolle")
+          .eq("id", user.id)
+          .single();
+
+        if (!profile || profileError) {
+          window.location.href = "login.html";
+          return;
+        }
+
+        bruger = {
+          id: user.id,
+          navn: profile.navn,
+          rolle: profile.rolle
+        };
+
+        localStorage.setItem("bruger", JSON.stringify(bruger));
+      } else {
+        bruger = JSON.parse(bruger);
+      }
+
+      document.getElementById("velkomst").textContent = `Hej, ${bruger.navn}!`;
+
+    }
+
+    init();
+
+    async function logout() {
+      localStorage.removeItem("bruger");
+      const { error } = await client.auth.signOut();
+      if (!error) {
+        setTimeout(() => {
+          window.location.href = "login.html";
+        }, 300);
+      }
+    }
+  </script>
+</body>
+</html>
