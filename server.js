@@ -175,7 +175,14 @@ for (const key of allKeys) {
 
 app.get("/signups", async (req, res) => {
   try {
-    const rows = await sheet.getRows(); // Google Sheet rækker
+    await doc.useServiceAccountAuth({
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    });
+
+    await doc.loadInfo();
+    const sheet = doc.sheetsByTitle["Signups"];
+    const rows = await sheet.getRows();
 
     const data = [];
 
@@ -184,8 +191,8 @@ app.get("/signups", async (req, res) => {
 
       if (!eventId || !names) continue;
 
-      // Split 'names' ved komma, trim hvert navn, fjern tomme
-      const nameArray = names.split(",")
+      const nameArray = names
+        .split(",")
         .map(n => n.trim())
         .filter(n => n.length > 0);
 
@@ -197,6 +204,13 @@ app.get("/signups", async (req, res) => {
         });
       });
     }
+
+    res.json(data);
+  } catch (error) {
+    console.error("Fejl ved hentning af tilmeldinger:", error);
+    res.status(500).json({ error: "Serverfejl ved hentning af tilmeldinger" });
+  }
+});
 
     res.json(data);
   } catch (error) {
