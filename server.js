@@ -175,19 +175,33 @@ for (const key of allKeys) {
 
 app.get("/signups", async (req, res) => {
   try {
-    const sheets = google.sheets({ version: "v4", auth });
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "Sheet2!A:B",
-    });
+    const rows = await sheet.getRows(); // Google Sheet rækker
 
-    const rows = result.data.values || [];
-    const signups = rows.slice(1).map(([eventId, name]) => ({ eventId, name }));
+    const data = [];
 
-    res.json(signups);
-  } catch (err) {
-    console.error("Fejl ved hentning af tilmeldinger:", err);
-    res.status(500).json({ error: "Serverfejl" });
+    for (const row of rows) {
+      const { eventId, names, timestamp } = row;
+
+      if (!eventId || !names) continue;
+
+      // Split 'names' ved komma, trim hvert navn, fjern tomme
+      const nameArray = names.split(",")
+        .map(n => n.trim())
+        .filter(n => n.length > 0);
+
+      nameArray.forEach(name => {
+        data.push({
+          eventId,
+          name,
+          timestamp: timestamp || null
+        });
+      });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error("Fejl ved hentning af tilmeldinger:", error);
+    res.status(500).json({ error: "Serverfejl ved hentning af tilmeldinger" });
   }
 });
 
