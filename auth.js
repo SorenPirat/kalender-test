@@ -7,7 +7,7 @@ export const client = createClient(
 );
 
 // 🟢 Funktion til adgangskontrol
-export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "login.html", efterLogin = () => {} }) {
+export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "index.html", efterLogin = () => {} }) {
   const { data: { user }, error } = await client.auth.getUser();
 
   if (!user || error) {
@@ -120,7 +120,7 @@ if (menuToggleBtn && menuLinks && menuWrapper) {
         localStorage.removeItem("bruger");
         const { error } = await client.auth.signOut();
         if (!error) {
-          window.location.href = "login.html";
+          window.location.href = "index.html";
         }
       });
     }
