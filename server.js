@@ -212,12 +212,6 @@ app.get("/signups", async (req, res) => {
   }
 });
 
-    res.json(data);
-  } catch (error) {
-    console.error("Fejl ved hentning af tilmeldinger:", error);
-    res.status(500).json({ error: "Serverfejl ved hentning af tilmeldinger" });
-  }
-});
 
 app.post('/assignments', async (req, res) => {
   const { day, days, name } = req.body;
