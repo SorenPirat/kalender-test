@@ -1,883 +1,237 @@
 <!DOCTYPE html>
 <html lang="da">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-/* === STANDARD (LYS) TILSTAND === */
-
-body {
-  font-family: sans-serif;
-  margin: 0;
-  padding: 0.5rem;
-  background-color: #f9f9f9;
-  max-width: 100%;
-  overflow-x: hidden;
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NKL Login</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="base.css" />
+  <style>
+  
+  .login-wrapper {
+  max-width: 400px;
+  margin: 2rem auto;
+  padding: 1.5rem;
 }
 
-table {
+input[type="email"],
+input[type="password"],
+button {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
   margin-bottom: 1rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
-tr.past {
-  background-color: #f0f0f0;
-  color: #888;
-}
-
-tr.today {
-  background-color: #e0f3ff;
-  font-weight: bold;
-  border-left: 4px solid #007bff;
-}
-
-tr.recent-past {
-  background-color: #f0f0f0;
-  color: #666;
-}
-
-td[data-label="Handling"] button {
-  margin-right: 0.5rem;
-  font-size: 1.2rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-td[data-label="Handling"] button:hover {
-  filter: brightness(1.2);
-}
-
-th, td {
-  padding: 0.4rem;
-  font-size: 0.95rem;
-  text-align: left;
-  border-bottom: 1px solid #ddd;
-}
-
-.sticky-buffer {
-  height: 3.5rem;
-  margin-top: -3.5rem;
-  pointer-events: none;
-}
-
-.month-block {
-  margin: 1rem auto;
-  padding-inline: 1rem;
-  border: none;
-  border-radius: 12px;
-  overflow: visible;
-  position: relative;
-  scroll-margin-top: 4rem;
-  padding-top: 0rem;
-  max-width: 100%;
-  background-color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.month-sticky-header {
-  position: sticky;
-  top: 0;
+button {
   background-color: #007bff;
   color: white;
   font-weight: bold;
-  font-size: 1.2rem;
-  text-align: center;
-  padding: 1rem;
-  z-index: 100;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  margin: 0.5rem auto;
-  width: calc(100% - 2rem); 
-  border-radius: 12px;
   cursor: pointer;
+  border: none;
 }
 
-.toggle:hover {
+button:hover {
   background-color: #0056b3;
 }
 
-.month-content {
-  display: none;
-  scroll-margin-top: 4.5rem;
-  padding-top: 0.5rem;
-}
-
-.month-content.active {
-  display: block;
-}
-
-.name {
-  color: #007bff;
+.error {
+  color: red;
   font-weight: bold;
+  margin-top: 0.5rem;
 }
 
-#test-banner {
-  background-color: #ffe08a;
-  color: #333;
-  font-weight: bold;
-  text-align: center;
-  padding: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.event-remove-btn {
-  font-size: 0.7rem;
-  margin-left: 0.3rem;
-  background: none;
-  border: none;
-  color: #f00;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.event-remove-btn:hover {
-  color: #d00;
-}
-
-#week-overview {
-  display: none;
-}
-
-/* === MODAL (LYS TILSTAND DEFAULT) === */
-
-#event-modal {
-  background: rgba(0, 0, 0, 0.8);
-  display: none;
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1rem;
-}
-
-#event-modal.show {
-  visibility: visible;
-  opacity: 1;
-}
-
-#event-modal .modal-content {
-  background-color: #ffffff;
-  color: #000;
-  padding: 1rem;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  position: relative;
-}
-
-#event-modal form input,
-#event-modal form textarea {
-  background-color: #fff;
-  color: #000;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  width: 100%;
-  padding: 0.4rem;
-  font-size: 1rem;
-  box-sizing: border-box;
-  margin-top: 0.2rem;
-}
-
-#event-modal form label {
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-#event-modal form button {
-  margin-right: 0.5rem;
-  padding: 0.4rem 1rem;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-}
-
-#event-modal form button[type="submit"] {
-  background-color: #28a745;
-  color: white;
-}
-
-#event-modal form button[type="button"] {
-  background-color: #ddd;
-  color: #000;
-}
-
-.form-buttons {
-  display: flex;
-  gap: 0.5rem;
+.info-text {
   margin-top: 1rem;
-  border-top: 1px solid #ccc;
-  padding-top: 0.5rem;
+  font-size: 0.95rem;
+  background: #f9f9f9;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.info-text ul {
+  padding-left: 1.2rem;
 }
 
-/* === RESPONSIVT DESIGN === */
-
-@media screen and (max-width: 600px) {
-  #week-overview {
-    display: block;
-  }
-
-  table, th, td, tr {
-    display: block;
-    width: 100%;
-  }
-
-  tr {
-    margin-bottom: 1rem;
-    border: 1px solid #ccc;
-    padding: 0.5rem;
-    border-radius: 6px;
-    background-color: white;
-    box-sizing: border-box;
-  }
-
-  td {
-    font-size: 0.9rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.3rem 0;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  td::before {
-    content: attr(data-label);
-    font-weight: bold;
-    margin-right: 1rem;
-    flex-shrink: 0;
-    min-width: 80px;
-    word-break: normal;
-  }
-
-  th {
-    display: none;
-  }
-
-  #event-modal .modal-content {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .form-buttons {
-    position: sticky;
-    bottom: 0;
-    background-color: inherit;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    justify-content: flex-end;
-    z-index: 2;
-  }
+.input-style {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
-/* === DARK MODE === */
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #121212;
-    color: #e0e0e0;
-  }
-
-  .month-block {
-    background-color: #1e1e1e;
-    box-shadow: none;
-  }
-
-  .month-sticky-header {
-    background-color: #2a2a2a;
-    color: #ffffff;
-    box-shadow: 0 2px 4px rgba(255,255,255,0.1);
-  }
-
-  table {
-    background-color: transparent;
-  }
-
-  tr {
-    background-color: #2c2c2c;
-  }
-
-  tr.today {
-    background-color: #1a3a5a;
-    border-left: 4px solid #81cfff;
-    color: white;
-  }
-
-  tr.past,
-  tr.recent-past {
-    background-color: #1a1a1a;
-    color: #777;
-  }
-
-  td::before {
-    color: #aaa;
-  }
-
-  .name {
-    color: #81cfff;
-  }
-
-  #test-banner {
-    background-color: #333;
-    color: #fff;
-  }
-
-  #event-modal .modal-content {
-    background-color: #1e1e1e;
-    color: #e0e0e0;
-  }
-
-  #event-modal form input,
-  #event-modal form textarea {
-    background-color: #2a2a2a;
-    color: #fff;
-    border: 1px solid #555;
-  }
-
-  #event-modal form button[type="submit"] {
-    background-color: #1f883d;
-  }
-
-  #event-modal form button[type="button"] {
-    background-color: #444;
-    color: #eee;
-  }
-
-  .form-buttons {
-    border-top: 1px solid #444;
-  }
+.hidden {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
 }
-</style>
+
+    </style>
 </head>
 <body>
-  <div id="test-banner">🧪 TESTVERSION – Ændringer her påvirker IKKE den rigtige kalender</div>
-  <h2>Nøglebærer-kalender: Juni–December 2025</h2>
-  <div id="loading">⏳ Henter data fra server...</div>
-  <div id="week-overview" style="margin-bottom: 1rem;"></div>
-  <div id="calendar"></div>
-<div id="event-modal" style="display: none;">
-  <div class="modal-content">
-    <button onclick="closeModal()" style="position:absolute; top:0.5rem; right:0.5rem;">❌</button>
-    <h3>➕ Opret begivenhed</h3>
-    <form id="event-form">
-      <label>Titel:<br/><input type="text" name="title" required /></label><br/><br/>
-      <label>Kort beskrivelse:<br/><input type="text" name="short" /></label><br/><br/>
-      <label>Lang tekst:<br/><textarea name="desc" rows="4"></textarea></label><br/><br/>
-      <label>Startdato og -tid:<br/><input type="datetime-local" name="start" required /></label><br/><br/>
-      <label>Slutdato og -tid:<br/><input type="datetime-local" name="end" /></label><br/><br/>
-      <label>Lokation:<br/><input type="text" name="location" /></label><br/><br/>
-      <label>Billede-URL:<br/><input type="url" name="img" /></label><br/><br/>
-      <div class="form-buttons">
-        <button type="submit">✅ Opret</button>
-        <button type="button" onclick="closeModal()">Annuller</button>
-      </div>
-    </form>
-  </div>
-</div>
+
+  <h2>Login</h2>
+  
+  <input type="email" id="email" placeholder="Din e-mail">
+  <input type="password" id="password" placeholder="Adgangskode">
+  <button onclick="login()">Log ind</button>
+
+  <button id="opret-knap">Opret bruger</button>
+ <div id="opret-info" class="info-text hidden"></div>
+
+  <p id="status"></p>
 
   <script>
-  const API_URL = 'https://nglevagter-test.onrender.com';
-  const months = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
-  const weekdays = ['søn', 'man', 'tirs', 'ons', 'tors', 'fre', 'lør'];
-  const year = 2025;
-  const startMonth = 5;
-  const currentMonth = new Date().getMonth();
-  const calendarContainer = document.getElementById('calendar');
+    const client = supabase.createClient(
+      "https://cianxaxaphvrutmstydr.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
+    );
 
-  async function fetchAssignments() {
-    const res = await fetch(`${API_URL}/assignments-with-events`);
-    return await res.json();
-  }
+    async function checkSessionAndRedirect() {
+      const { data: { session } } = await client.auth.getSession();
+      if (!session || !session.access_token) return;
 
-  async function updateAssignment(key, value) {
-    await fetch(`${API_URL}/assignments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day: key, name: value })
-    });
-  }
+      const { data: { user }, error } = await client.auth.getUser();
+      if (!user || error) return;
 
-  function getGlobalKey(month, day) {
-    return `${month + 1}-${day}`;
-  }
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single();
 
-async function addCalendarEvent(title, date, description = '') {
-  try {
-    const response = await fetch(`${API_URL}/add-event`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: title,
-        date: date,
-        description: description
-      })
-    });
+      if (!profile || profileError) return;
 
-    const result = await response.json();
-
-    if (response.ok) {
-      alert('✅ Begivenhed tilføjet!');
-      location.reload();
-    } else {
-      alert('❌ Fejl: ' + (result.error || 'Ukendt fejl'));
-    }
-  } catch (err) {
-    console.error('Fejl under netværkskald:', err);
-    alert('❌ Netværksfejl');
-  }
-}
-
-function renderWeekOverview(assignments) {
-  const weekContainer = document.getElementById("week-overview");
-  weekContainer.innerHTML = ""; // Rens tidligere indhold
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const weekDays = [];
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    weekDays.push(date);
-  }
-
-  const wrapper = document.createElement("div");
-  wrapper.style.display = "flex";
-  wrapper.style.overflowX = "auto";
-  wrapper.style.gap = "0.5rem";
-  wrapper.style.padding = "0.5rem 0";
-
-  for (const date of weekDays) {
-    const year = date.getFullYear();
-    const month = date.getMonth(); // 0-indekseret
-    const day = date.getDate();
-    const key = `${month + 1}-${day}`;
-    const entry = assignments[key] || {};
-    const name = entry.name || "";
-    const events = entry.events || [];
-
-    const box = document.createElement("div");
-    box.style.flex = "0 0 auto";
-    box.style.minWidth = "110px";
-    box.style.borderRadius = "8px";
-    box.style.padding = "0.5rem";
-    box.style.backgroundColor = "#ffffff";
-    box.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-    box.style.fontSize = "0.85rem";
-    box.style.lineHeight = "1.3";
-    box.style.textAlign = "left";
-
-    // Mørk tilstand
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      box.style.backgroundColor = "#2c2c2c";
-      box.style.color = "#e0e0e0";
+      window.location.href = "protected.html";
     }
 
-    // Marker i dag
-    const todayMarker = new Date();
-    todayMarker.setHours(0, 0, 0, 0);
-    if (date.getTime() === todayMarker.getTime()) {
-      box.style.border = "2px solid #007bff";
-    }
-
-    // Ugedag og dato
-    const weekday = weekdays[date.getDay()];
-    const dateLabel = `${weekday} ${day}.`;
-    const title = document.createElement("div");
-    title.style.fontWeight = "bold";
-    title.style.marginBottom = "0.25rem";
-    title.textContent = dateLabel;
-    box.appendChild(title);
-
-    // Lukket dag
-    if (name.startsWith("closed")) {
-      const reason = name.includes("::") ? name.split("::")[1].trim() : "";
-      const closed = document.createElement("div");
-      closed.textContent = `🔒 ${reason || "Lukket"}`;
-      box.appendChild(closed);
-    } else {
-      if (events.length > 0) {
-        const event = document.createElement("div");
-        event.textContent = `📅 ${events[0].summary}`;
-        box.appendChild(event);
-      }
-      if (name) {
-        const person = document.createElement("div");
-        person.textContent = `🔑 ${name}`;
-        box.appendChild(person);
-      }
-    }
-
-    wrapper.appendChild(box);
-  }
-
-  weekContainer.appendChild(wrapper);
-}
-
-  async function renderCalendar() {
-  const loading = document.getElementById("loading");
-  const calendar = document.getElementById("calendar");
-
-  try {
-    const assignments = await fetchAssignments();
-	renderWeekOverview(assignments);
-    for (let m = startMonth; m <= 11; m++) {
-      renderMonth(m, assignments);
-    }
-    loading.style.display = "none";
-  } catch (err) {
-    console.error("❌ Fejl under hentning af data:", err);
-    loading.textContent = "❌ Kunne ikke hente kalenderdata. Prøv at opdatere siden.";
-  }
-}
-
-function renderMonth(month, assignments) {
-  const block = document.createElement('div');
-  block.className = 'month-block';
-
-  const content = document.createElement('div');
-  content.className = 'month-content';
-  if (month === currentMonth) content.classList.add('active');
-
-  const stickyHeader = document.createElement('div');
-  stickyHeader.className = 'month-sticky-header';
-  stickyHeader.textContent = months[month].charAt(0).toUpperCase() + months[month].slice(1);
-
-  stickyHeader.style.cursor = 'pointer';
-  stickyHeader.addEventListener('click', () => {
-    const wasActive = content.classList.contains('active');
-    document.querySelectorAll('.month-content').forEach(mc => mc.classList.remove('active'));
-    if (!wasActive) {
-      content.classList.add('active');
-
-      // Scroll korrekt så sticky matcher toppen
+    window.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => {
-        const offset = stickyHeader.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({ top: offset, behavior: 'smooth' });
-      }, 10);
-    }
-  });
+        checkSessionAndRedirect();
+      }, 500);
+    });
 
-  block.appendChild(stickyHeader);
-  block.appendChild(content);
-  calendarContainer.appendChild(block);
+    async function login() {
+	
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const status = document.getElementById("status");
 
-  const table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>Dato</th><th>Nøglebærer</th><th>Begivenheder</th><th>Handling</th></tr></thead><tbody></tbody>';
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
 
-  const tbody = table.querySelector('tbody');
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const key = getGlobalKey(month, day);
-    const entryData = assignments[key] || {};
-    const entry = entryData.name || "";
-    const eventList = entryData.events || [];
-
-    const dateObj = new Date(year, month, day);
-    dateObj.setHours(0, 0, 0, 0);
-    const weekday = weekdays[dateObj.getDay()];
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-	const limitDate = new Date(today);
-	limitDate.setDate(today.getDate() - 3);
-	if (dateObj < limitDate) continue;
-
-	let dayClass = '';
-	if (dateObj < today && dateObj >= limitDate) {
-	dayClass = 'recent-past'; 
-	} else if (dateObj.getTime() === today.getTime()) {
-  dayClass = 'today';
-	}
-
-    const tr = document.createElement('tr');
-    if (dayClass) tr.classList.add(dayClass);
-
-    const tdDate = document.createElement('td');
-    tdDate.textContent = `${weekday} d. ${day}. ${months[month]}`;
-    tdDate.setAttribute('data-label', 'Dato');
-
-    const tdName = document.createElement('td');
-    tdName.setAttribute('data-label', 'Nøglebærer');
-
-    const tdEvents = document.createElement('td');
-    tdEvents.setAttribute('data-label', 'Begivenheder');
-
-    const tdActions = document.createElement('td');
-    tdActions.setAttribute('data-label', 'Handling');
-
- tdEvents.innerHTML = '';
-
-if (eventList.length > 0) {
-  for (let i = 0; i < eventList.length; i++) {
-    const ev = eventList[i];
-
-    const wrapper = document.createElement('span');
-    wrapper.style.display = 'inline-flex';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.marginRight = '0.5rem';
-
-    const eventText = document.createElement('span');
-    eventText.textContent = `📅 ${ev.summary}`;
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '✖';
-    deleteBtn.title = `Slet "${ev.summary}"`;
-    deleteBtn.className = 'event-remove-btn';
-    deleteBtn.onclick = async () => {
-      if (confirm(`Vil du slette "${ev.summary}" fra Google Kalender?`)) {
-        const res = await fetch(`${API_URL}/delete-event`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventId: ev.id })
-        });
-
-        const result = await res.json();
-
-        if (res.ok) {
-          alert("🗑️ Begivenhed slettet");
-          location.reload();
-        } else {
-          alert("❌ Fejl: " + (result.error || "Ukendt fejl"));
-        }
+      if (error) {
+        status.textContent = "Login fejlede: " + error.message;
+        status.className = "error";
+        return;
       }
-    };
 
-    wrapper.appendChild(eventText);
-    wrapper.appendChild(deleteBtn);
-    tdEvents.appendChild(wrapper);
-  }
-} else {
-  tdEvents.textContent = '–';
-}
+      const userId = data.user.id;
 
-    if (entry.startsWith("closed")) {
-      const reason = entry.includes("::") ? entry.split("::")[1].trim() : "";
-      tdName.textContent = "🔒 LUKKET" + (reason ? ` – ${reason}` : "");
-      tdName.style.color = "#888";
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("navn, rolle")
+        .eq("id", userId)
+        .single();
 
-      const reopenBtn = document.createElement("button");
-      reopenBtn.textContent = "🔓";
-      reopenBtn.onclick = () => reopenDate(key);
-      tdActions.appendChild(reopenBtn);
-    } else {
-tdName.textContent = entry || "Klik for at tilføje";
-tdName.className = 'name';
-tdName.style.cursor = 'pointer';
-tdName.title = "Klik for at ændre nøglebærer";
+      if (profileError) {
+        status.textContent = "Login lykkedes, men kunne ikke hente profil.";
+        return;
+      }
 
-tdName.onclick = async () => {
-  const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
-  if (newName !== null) {
-    await updateAssignment(key, newName.trim());
-    location.reload();
-  }
-};
+      localStorage.setItem("bruger", JSON.stringify({
+        id: userId,
+        navn: profile.navn,
+        rolle: profile.rolle
+      }));
 
-const editBtn = document.createElement("button");
-editBtn.innerHTML = "🔑";
-editBtn.title = "Rediger nøglebærer";
-editBtn.onclick = tdName.onclick;
+      status.textContent = `Velkommen, ${profile.navn}`;
+      setTimeout(() => {
+        window.location.href = "protected.html";
+      }, 600);
+    }
+  
+ async function signup() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const navn = document.getElementById("navn").value.trim();
+  const status = document.getElementById("status");
 
-tdActions.appendChild(editBtn);
+  const { data, error } = await client.auth.signUp({ email, password });
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "🗑️";
-      deleteBtn.onclick = async () => {
-        if (confirm('Vil du slette nøglebærer for denne dag?')) {
-          await updateAssignment(key, "");
-          location.reload();
-        }
-      };
-
-      const closeBtn = document.createElement("button");
-      closeBtn.textContent = "🔒";
-closeBtn.onclick = async () => {
-  const reason = prompt("Hvorfor er dagene lukkede? (valgfrit)");
-  if (reason === null) return;
-
-  const end = prompt("Sidste dato for lukning? (YYYY-MM-DD):", `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
-  if (!end) return;
-
-  const startDate = new Date(year, month, day);
-  const endDate = new Date(end);
-
-  if (isNaN(endDate)) {
-    alert("Ugyldig slutdato");
+  if (error) {
+    status.textContent = "❌ Fejl ved oprettelse: " + error.message;
+    status.className = "error";
     return;
   }
 
-  const days = [];
-  const cursor = new Date(startDate);
+  const userId = data.user.id;
 
-  while (cursor <= endDate) {
-    const m = cursor.getMonth() + 1;
-    const d = cursor.getDate();
-    days.push(`${m}-${d}`);
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  await fetch(`${API_URL}/assignments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      days,
-      name: "closed::" + reason.trim()
-    })
-  });
-
-  // 2. Opret Google Kalender-begivenhed
-  await fetch(`${API_URL}/add-event`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title: `Lukket – ${reason || 'uden årsag'}`,
-      startDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      endDate: end,
-      description: ""
-    })
-  });
-
-  location.reload();
-};
-
-const addEventBtn = document.createElement("button");
-addEventBtn.textContent = "➕";
-addEventBtn.title = "Tilføj begivenhed til Google Kalender";
-addEventBtn.onclick = () => {
-  selectedDay = key;
-
-  const form = document.getElementById("event-form");
-  form.reset();
-
-  const [month, day] = key.split("-").map(Number);
-  const isoStart = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T17:00`;
-  const isoEnd = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T19:00`;
-
-  form.start.value = isoStart;
-  form.end.value = isoEnd;
-
-openModal();
-};
-
-	  tdActions.appendChild(addEventBtn);
-      tdActions.appendChild(deleteBtn);
-      tdActions.appendChild(closeBtn);
-    }
-
-    tr.appendChild(tdDate);
-    tr.appendChild(tdName);
-    tr.appendChild(tdEvents);
-    tr.appendChild(tdActions);
-    tbody.appendChild(tr);
-  }
-
-  content.appendChild(table);
-  block.appendChild(content);
-  calendarContainer.appendChild(block);
-}
-
-function reopenDate(key) {
-  if (!confirm("Vil du åbne denne lukkede dag og fjerne lukkedagen i kalenderen?")) return;
-
-  updateAssignment(key, "").then(async () => {
-    const [month, day] = key.split("-");
-    const isoDate = `2025-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-    await fetch(`${API_URL}/remove-closed-event`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: isoDate })
+  const { error: insertError } = await client
+    .from("users")
+    .insert({
+      id: userId,
+      navn: navn || "Uden navn",
+      rolle: "klubmedlem"
     });
 
-    location.reload();
-  });
-}
+  if (insertError) {
+    status.textContent = "⚠️ Profil kunne ikke gemmes: " + insertError.message;
+    status.className = "error";
+    return;
+  }
 
-let selectedDay = null;
-
-function openModal() {
-  const modal = document.getElementById("event-modal");
-  modal.style.display = "flex";
+  // Redirect med kort forsinkelse
+  status.textContent = "✅ Bruger oprettet – viderestiller...";
+  status.className = "";
   setTimeout(() => {
-    modal.classList.add("show");
-  }, 10);
+    window.location.href = "protected.html";
+  }, 1500);
 }
 
-function closeModal() {
-  const modal = document.getElementById("event-modal");
-  modal.classList.remove("show");
-  setTimeout(() => {
-    modal.style.display = "none";
-  }, 200);
-}
+document.getElementById("opret-knap").addEventListener("click", () => {
+  const emailFelt = document.getElementById("email");
+  const passwordFelt = document.getElementById("password");
+  const infoBox = document.getElementById("opret-info");
 
-document.getElementById("event-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const form = e.target;
-  const title = form.title.value.trim();
-  const short = form.short.value.trim();
-  const desc = form.desc.value.trim();
-  const start = form.start.value;
-  const end = form.end.value;
-  const img = form.img.value.trim();
-  const eventLocation = form.location.value.trim();
+  // Skjul knappen efter klik
+  document.getElementById("opret-knap").style.display = "none";
 
-  if (!title || !start) return alert("Titel og starttidspunkt er påkrævet");
+  // Tjek om navn allerede findes
+  if (!document.getElementById("navn")) {
+    const navnFelt = document.createElement("input");
+    navnFelt.type = "text";
+    navnFelt.id = "navn";
+    navnFelt.placeholder = "Dit navn";
+    navnFelt.className = "navn-input";
+    navnFelt.style.marginBottom = "0.5rem";
+    navnFelt.style.width = "100%";
+    navnFelt.style.padding = "0.6rem";
+    navnFelt.style.fontSize = "1rem";
+    navnFelt.style.borderRadius = "6px";
+    navnFelt.style.border = "1px solid #ccc";
 
-  const idStr = title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-]/g, "");
-  const idDate = start.slice(2, 10).replace(/-/g, "");
-  const eventId = `nkl-${idDate}-${idStr}`;
+    emailFelt.parentNode.insertBefore(navnFelt, emailFelt);
+  }
 
-  let fullDesc = "";
-  if (short) fullDesc += `${short.trim()}\n\n`;
-  fullDesc += `event:${eventId}`;
-  if (img) fullDesc += `\nimg: ${img}`;
-  if (desc) fullDesc += `\ndesc: ${desc}`;
-  if (eventLocation) fullDesc += `\nlokation: ${eventLocation}`;
-  fullDesc += `\nstart: ${start.slice(11, 16)}`;
-  if (end) fullDesc += `\nend: ${end.slice(11, 16)}`;
-
-  await fetch(`${API_URL}/add-event`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title,
-      startDate: start.split("T")[0],
-      endDate: end ? end.split("T")[0] : start.split("T")[0],
-      description: fullDesc
-    })
-  }).then(async res => {
-    const result = await res.json();
-    if (res.ok) {
-      alert("✅ Begivenhed oprettet!");
-      closeModal();
-      location.reload();
-    } else {
-      alert("❌ Fejl: " + result.error);
-    }
-  }).catch(err => {
-    console.error("Netværksfejl:", err);
-    alert("❌ Netværksfejl");
-  });
+  infoBox.classList.remove("hidden");
+  infoBox.innerHTML = `
+    <ul>
+      <li>🟢 Indtast dit navn</li>
+      <li>🟢 Brug en gyldig e-mailadresse</li>
+      <li>🟢 Adgangskoden skal være mindst 6 tegn lang</li>
+    </ul>
+    <button onclick="signup()">Bekræft og opret</button>
+  `;
 });
 
-  renderCalendar();
-</script>
+
+  </script>
 </body>
 </html>
