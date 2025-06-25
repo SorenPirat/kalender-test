@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <title>Login / Opret bruger</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 400px; margin: 2rem auto; }
+    input, button { display: block; margin-bottom: 1rem; padding: 0.5rem; width: 100%; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+  <h2>Login eller opret bruger</h2>
+
+<input type="text" id="navn" placeholder="Dit navn">
+  <input type="email" id="email" placeholder="Din e-mail">
+  <input type="password" id="password" placeholder="Adgangskode">
+
+  <button onclick="login()">Log ind</button>
+  <button onclick="signup()">Opret bruger</button>
+
+  <p id="status"></p>
+
+  <script>
+    const SUPABASE_URL = "https://cianxaxaphvrutmstydr.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await client.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      const status = document.getElementById("status");
+
+      if (error) {
+        status.textContent = "Login fejlede: " + error.message;
+        status.className = "error";
+        console.error(error);
+        return;
+      }
+
+      const userId = data.user.id;
+      status.textContent = "Login lykkedes. Velkommen!";
+      console.log("Bruger-ID:", userId);
+    }
+
+async function signup() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const navn = document.getElementById("navn").value.trim(); // Hvis du har navnefelt
+
+  const { data, error } = await client.auth.signUp({ email, password });
+
+  if (error) {
+    alert("Fejl ved oprettelse: " + error.message);
+    return;
+  }
+
+  const userId = data.user.id;
+
+  // Opret brugerprofil i din egen users-tabel
+  const { error: insertError } = await client
+    .from("users")
+    .insert({
+      id: userId,
+      navn: navn || "Uden navn",
+      rolle: "Klubmedlem"
+    });
+
+  if (insertError) {
+    alert("Profil kunne ikke gemmes: " + insertError.message);
+    return;
+  }
+
+  alert("Bruger oprettet – du kan nu logge ind!");
+  window.location.href = "login.html";
+}
+  </script>
+
+</body>
+</html>

@@ -37,7 +37,7 @@ function initAdminpanel() {
       document.getElementById(target).classList.remove("hidden");
 
       // 💡 Indlæs data når fanen vælges
-      if (target === "users") loadUsers();
+      if (target === "users") loadRolesOverview();
 	  if (target === "members") loadMembers();
 	  if (target === "stats") loadStats();
 	  if (target === "tools") {
@@ -48,150 +48,33 @@ function initAdminpanel() {
   });
 
   // Kør default
-  loadUsers();
+  loadMembers();
 }
+
 //Roller
-async function loadUsers() {
+async function loadRolesOverview() {
   const { data, error } = await client
     .from("users")
-    .select("id, navn, rolle, oprettet_dato")
-    .in("rolle", ["admin", "eventmaker", "nøglebærer"]) // tilpas om ønsket
+    .select("id, navn, rolle")
     .order("navn", { ascending: true });
 
-  const list = document.getElementById("user-list");
-  const input = document.getElementById("user-search-input");
-
   if (error) {
-    list.textContent = "❌ Fejl ved hentning af brugere.";
-    console.error(error);
+    console.error("Fejl ved hentning af roller:", error);
     return;
   }
 
-  if (!data || data.length === 0) {
-    list.textContent = "Ingen brugere fundet.";
-    return;
-  }
+  const admins = data.filter(u => u.rolle?.includes("admin"));
+  const noeglebaerere = data.filter(u => u.rolle?.includes("nøglebærer"));
+  const eventmakers = data.filter(u => u.rolle?.includes("eventmaker"));
 
-  let sortBy = "navn";
-  let sortAsc = true;
-
-  const renderList = (filtered) => {
-    list.innerHTML = "";
-
-    const table = document.createElement("table");
-    table.innerHTML = `
-  <thead>
-    <tr>
-      <th class="sortable" data-sort="navn">Navn</th>
-      <th class="sortable" data-sort="rolle">Rolle</th>
-      <th class="sortable" data-sort="oprettet_dato">Oprettet</th>
-      <th>Handling</th>
-    </tr>
-  </thead>
-      <tbody>
-        ${filtered.map(user => `
-          <tr>
-            <td>${user.navn}</td>
-            <td>${user.rolle}</td>
-            <td>${new Date(user.oprettet_dato).toLocaleDateString("da-DK")}</td>
-            <td>
-              <div class="role-actions" data-id="${user.id}" data-navn="${user.navn}">
-                <button class="set-role" data-role="klubmedlem" title="Klubmedlem">🧍</button>
-                <button class="set-role" data-role="eventmaker" title="Eventmaker">🎉</button>
-                <button class="set-role" data-role="nøglebærer" title="Nøglebærer">🔑</button>
-                <button class="set-role" data-role="admin" title="Admin">🛠️</button>
-              </div>
-            </td>
-          </tr>
-        `).join("")}
-      </tbody>
-    `;
-    list.appendChild(table);
-
-// Før re-render
-table.querySelectorAll("th[data-sort]").forEach(th => {
-  const kolonne = th.dataset.sort;
-  th.classList.remove("sorted-asc", "sorted-desc");
-  if (kolonne === sortBy) {
-    th.classList.add(sortAsc ? "sorted-asc" : "sorted-desc");
-  }
-});
-
-    // Sortér når man klikker på kolonneoverskrift
-    table.querySelectorAll("th[data-sort]").forEach(th => {
-      th.addEventListener("click", () => {
-        const kolonne = th.dataset.sort;
-        if (kolonne === sortBy) {
-          sortAsc = !sortAsc;
-        } else {
-          sortBy = kolonne;
-          sortAsc = true;
-        }
-        const søg = input.value.toLowerCase().trim();
-        const filtreret = data.filter(user =>
-          user.navn.toLowerCase().includes(søg) ||
-          user.rolle.toLowerCase().includes(søg) ||
-          new Date(user.oprettet_dato).toLocaleDateString("da-DK").includes(søg)
-        );
-        renderList(sortUsers(filtreret));
-      });
-    });
-
-    // Rolleknapper
-    table.querySelectorAll(".set-role").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const wrapper = btn.closest(".role-actions");
-        const id = wrapper.dataset.id;
-        const navn = wrapper.dataset.navn;
-        const nyRolle = btn.dataset.role;
-
-        const confirmChange = confirm(`Vil du ændre ${navn}'s rolle til ${nyRolle}?`);
-        if (!confirmChange) return;
-
-        const { error: updateError } = await client
-          .from("users")
-          .update({ rolle: nyRolle })
-          .eq("id", id);
-
-        if (updateError) {
-          alert("❌ Fejl ved opdatering af rolle.");
-          console.error(updateError);
-        } else {
-          alert(`✅ Rolle opdateret til ${nyRolle}.`);
-          loadUsers(); // genindlæs listen
-        }
-      });
-    });
+  const renderList = (elementId, brugere) => {
+    const ul = document.getElementById(elementId);
+    ul.innerHTML = brugere.map(u => `<li>${u.navn}</li>`).join("");
   };
 
-  const sortUsers = (listToSort) => {
-    return [...listToSort].sort((a, b) => {
-      let aVal = a[sortBy];
-      let bVal = b[sortBy];
-
-      if (sortBy === "oprettet_dato") {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (aVal < bVal) return sortAsc ? -1 : 1;
-      if (aVal > bVal) return sortAsc ? 1 : -1;
-      return 0;
-    });
-  };
-
-  // Søgefelt
-  input.addEventListener("input", () => {
-    const søg = input.value.toLowerCase().trim();
-    const filtreret = data.filter(user =>
-      user.navn.toLowerCase().includes(søg) ||
-      user.rolle.toLowerCase().includes(søg) ||
-      new Date(user.oprettet_dato).toLocaleDateString("da-DK").includes(søg)
-    );
-    renderList(sortUsers(filtreret));
-  });
-
-  renderList(sortUsers(data));
+  renderList("admin-liste", admins);
+  renderList("noeglebaerer-liste", noeglebaerere);
+  renderList("eventmaker-liste", eventmakers);
 }
 
 //Klubmedlemmer
@@ -249,7 +132,7 @@ async function loadMembers() {
         ${sorted.map(user => `
           <tr>
             <td>${user.navn}</td>
-            <td>${user.rolle}</td>
+            <td>${Array.isArray(user.rolle) ? user.rolle.join(", ") : user.rolle}</td>
             <td>${new Date(user.oprettet_dato).toLocaleDateString("da-DK")}</td>
             <td>
               <div class="role-actions" data-id="${user.id}" data-navn="${user.navn}">
@@ -299,18 +182,35 @@ table.querySelectorAll("th[data-sort]").forEach(th => {
         const confirmChange = confirm(`Vil du ændre ${navn}'s rolle til ${nyRolle}?`);
         if (!confirmChange) return;
 
-        const { error: updateError } = await client
-          .from("users")
-          .update({ rolle: nyRolle })
-          .eq("id", id);
+        const bruger = data.find(u => u.id === id);
+let nyeRoller = Array.isArray(bruger.rolle) ? [...bruger.rolle] : [bruger.rolle];
 
-        if (updateError) {
-          alert("❌ Fejl ved opdatering af rolle.");
-          console.error(updateError);
-        } else {
-          alert(`✅ Rolle opdateret til ${nyRolle}.`);
-          loadMembers(); // genindlæs
-        }
+// Hvis rollen allerede findes, fjern den – ellers tilføj den
+if (nyeRoller.includes(nyRolle)) {
+  nyeRoller = nyeRoller.filter(r => r !== nyRolle);
+} else {
+  nyeRoller.push(nyRolle);
+}
+
+// Fjern evt. tomme eller falske værdier
+nyeRoller = nyeRoller.filter(Boolean);
+
+// Send til Supabase
+const { error: updateError } = await client
+  .from("users")
+  .update({ rolle: nyeRoller })
+  .eq("id", id);
+
+
+if (updateError) {
+  alert("❌ Fejl ved opdatering af rolle.");
+  console.error(updateError);
+} else {
+  const handling = nyeRoller.includes(nyRolle) ? "tilføjet" : "fjernet";
+  alert(`✅ Rollen "${nyRolle}" er nu ${handling} for ${navn}.`);
+  loadMembers(); // eller loadMembers()
+}
+
       });
     });
   };
@@ -322,10 +222,9 @@ table.querySelectorAll("th[data-sort]").forEach(th => {
   input.addEventListener("input", () => {
     const søg = input.value.toLowerCase().trim();
     filtreretData = data.filter(user =>
-      user.navn.toLowerCase().includes(søg) ||
-      user.rolle.toLowerCase().includes(søg) ||
-      new Date(user.oprettet_dato).toLocaleDateString("da-DK").includes(søg)
-    );
+  user.navn.toLowerCase().includes(søg)
+   );
+
     renderList();
   });
 }
@@ -361,7 +260,13 @@ async function loadStats() {
   document.getElementById("show-role-chart").addEventListener("click", () => {
     const rolleCounts = {};
     data.forEach(user => {
+      if (Array.isArray(user.rolle)) {
+      user.rolle.forEach(r => {
+        rolleCounts[r] = (rolleCounts[r] || 0) + 1;
+      });
+    } else if (user.rolle) {
       rolleCounts[user.rolle] = (rolleCounts[user.rolle] || 0) + 1;
+    }
     });
 
     popupAktiveret = false;
@@ -955,6 +860,7 @@ function visVærktøj(id) {
 window.visVærktøj = visVærktøj;
 
 
+
 </script>
 
 <h2 style="text-align:center; margin-top: 1rem;">🛠️ Adminpanel</h2>
@@ -969,9 +875,27 @@ window.visVærktøj = visVærktøj;
 
 <div class="tab-content">
  <div id="users" class="tab-panel hidden">
-  <h3>👤 Roller</h3>
-  <input type="text" id="user-search-input" placeholder="Søg på navn, rolle eller dato..." />
-  <div id="user-list">Indlæser brugere...</div>
+
+<h3>👤 Brugere fordelt på roller</h3>
+
+<div id="roller-visning">
+  <section class="rolle-sektion">
+    <h4>🛠️ Admin</h4>
+    <ul id="admin-liste"></ul>
+  </section>
+
+  <section class="rolle-sektion">
+    <h4>🔑 Nøglebærer</h4>
+    <ul id="noeglebaerer-liste"></ul>
+  </section>
+
+  <section class="rolle-sektion">
+    <h4>🎉 Eventmaker</h4>
+    <ul id="eventmaker-liste"></ul>
+  </section>
+</div>
+
+
 </div>
 
 
@@ -1008,7 +932,7 @@ window.visVærktøj = visVærktøj;
 
 <div id="members" class="tab-panel hidden">
   <h3>🧍 Klubmedlemmer</h3>
-  <input type="text" id="member-search-input" placeholder="Søg på navn, rolle eller dato..." />
+  <input type="text" id="member-search-input" placeholder="Søg på navn" />
   <div id="member-list">Indlæser medlemmer...</div>
 </div>
 
@@ -1050,7 +974,7 @@ window.visVærktøj = visVærktøj;
 <!-- REDIGÉR/ADMINISTRÉR BRUGERE -->
 <div id="bruger-tool" class="hidden tool-card">
   <h3>👤 Redigér/slet brugere</h3>
-  <input type="text" id="bruger-søg" placeholder="Søg efter navn..." />
+  <input type="text" id="bruger-søg" placeholder="Søg efter navn" />
   <ul id="bruger-liste">Indlæser...</ul>
 </div>
 

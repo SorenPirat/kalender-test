@@ -14,7 +14,7 @@
   import { adgangskontrol, indsætMenu } from './auth.js';
 
   adgangskontrol({
-    tilladteRoller: ["admin", "nøglebærer"],
+    tilladteRoller: ["admin", "nøglebærer", "eventmaker"],
     redirectVedFejl: "protected.html",
     efterLogin: (bruger) => {
       indsætMenu(bruger); 
@@ -237,6 +237,12 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 
 function renderMonth(month, assignments) {
   const bruger = JSON.parse(localStorage.getItem("bruger"));
+  
+if (bruger.rolle && !bruger.roller) {
+  bruger.roller = Array.isArray(bruger.rolle) ? bruger.rolle : [bruger.rolle];
+}
+
+  if (!bruger.roller && bruger.rolle) bruger.roller = [bruger.rolle];
 
   const block = document.createElement('div');
   block.className = 'month-block';
@@ -315,7 +321,7 @@ if (eventList.length > 0) {
     wrapper.appendChild(eventText);
 
     // Kun admin må slette begivenheder
-    if (bruger.rolle === "admin") {
+    if (bruger.roller.includes("admin") || bruger.roller.includes("eventmaker")) {
       const deleteBtn = document.createElement('button');
       deleteBtn.textContent = '✖';
       deleteBtn.title = `Slet "${ev.summary}"`;
@@ -355,7 +361,7 @@ if (eventList.length > 0) {
       tdName.className = 'name';
       tdName.style.cursor = 'default';
 
-      if (bruger.rolle === "admin") {
+      if (bruger.roller.includes("admin")) {
         const reopenBtn = document.createElement("button");
         reopenBtn.textContent = "🔓";
         reopenBtn.title = "Genåbn dag";
@@ -370,20 +376,21 @@ if (eventList.length > 0) {
 
 // 🔑 Vis kun 'tilføj/ændr' knap hvis admin, eller nøglebærer og dagen er ledig
 if (
-  (bruger.rolle === "admin") ||
-  (bruger.rolle === "nøglebærer" && !entry)
+  bruger.roller.includes("admin") ||
+  (bruger.roller.includes("nøglebærer") && !entry)
 ) {
+
   const editBtn = document.createElement("button");
   editBtn.innerHTML = "🔑";
   editBtn.title = "Tilføj dig selv som nøglebærer";
   editBtn.onclick = async () => {
-    if (bruger.rolle === "nøglebærer") {
+    if (bruger.roller.includes("nøglebærer")) {
       const confirmAssign = confirm(`Vil du tilføje dig selv (${bruger.navn}) som nøglebærer?`);
       if (confirmAssign) {
         await updateAssignment(key, bruger.navn);
         location.reload();
       }
-    } else if (bruger.rolle === "admin") {
+    } else if (bruger.roller.includes("admin")) {
       const newName = prompt(`Nøglebærer for ${day}. ${months[month]}:`, entry || '');
       if (newName !== null) {
         await updateAssignment(key, newName.trim());
@@ -394,15 +401,15 @@ if (
   tdActions.appendChild(editBtn);
 }
 
-    if ((bruger.rolle === "admin") || (bruger.rolle === "nøglebærer" && entry === bruger.navn)) {
+    if ((bruger.roller.includes("admin")) || (bruger.roller.includes("nøglebærer") && entry === bruger.navn)) {
   const deleteBtn = document.createElement("button");
   deleteBtn.textContent = "🗑️";
-  deleteBtn.title = bruger.rolle === "admin" 
+  deleteBtn.title = bruger.roller.includes("admin") 
     ? "Slet nøglebærer"
     : "Frameld dig denne dag";
 
   deleteBtn.onclick = async () => {
-    const confirmMsg = bruger.rolle === "admin"
+    const confirmMsg = bruger.roller.includes("admin")
       ? 'Vil du slette nøglebærer for denne dag?'
       : 'Vil du fjerne dig selv som nøglebærer for denne dag?';
 
@@ -416,7 +423,7 @@ if (
 }
 
 // 🟦 Tjek om admin – luk-knap kun for admin
-if (bruger.rolle === "admin") {
+if (bruger.roller.includes("admin")) {
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "🔒";
   closeBtn.title = "Luk dag(e)";
@@ -468,7 +475,7 @@ if (bruger.rolle === "admin") {
 }
 	// ➕ BEGIVENHEDSKNAP
 
-	if (bruger.rolle === "admin") {
+	if (bruger.roller.includes("admin") || bruger.roller.includes("eventmaker")) {
 	
     const addEventBtn = document.createElement("button");
     addEventBtn.textContent = "➕";

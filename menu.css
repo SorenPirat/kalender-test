@@ -41,6 +41,7 @@ body {
 
 /* Toplinje: menu-knap + brugernavn */
 .menu-header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -63,23 +64,34 @@ body {
 
 /* Brugernavn */
 #user-name {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
   font-size: 0.95rem;
+  font-weight: bold;
   white-space: nowrap;
-  margin-left: 0.75rem;
   color: #333;
+  gap: 0.5rem;
 }
 
 /* Links */
 #menu-links {
+  top: 100%;
+  left: 0;
+  right: 0;
+  width: 100%;
   max-height: 0;
   opacity: 0;
   visibility: hidden;
   overflow: hidden;
   list-style: none;
   margin: 0;
+  padding-top: 0;
   padding: 0;
   transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
   text-align: left;
+  z-index: 999;
 }
 
 #menu-links.show {
@@ -109,8 +121,25 @@ body {
   background-color: rgba(255, 255, 255, 0.85); /* frostet stil */
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
-  border-radius: 12px;
+  border-radius: 12px 12px 12px 12px;
   border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+#user-name a {
+  all: unset;
+  color: inherit;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  display: inline;
+}
+
+#user-name a:hover {
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* === MOBIL === */
@@ -120,13 +149,16 @@ body {
     color: white;
   }
 
-  #user-name {
-    color: #111;
-    font-weight: bold;
-    width: 100%;
-    text-align: right;
-    margin-top: 0.5rem;
-  }
+#user-name {
+  font-weight: bold;
+  margin-left: auto;
+  margin-right: 0;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 
   #menu.open {
     background-color: rgba(255, 255, 255, 0.85);
@@ -138,6 +170,13 @@ body {
   #menu-links li a {
     color: #007bff;
   }
+ 
+ /* === PROFILLINK-STYLING === */
+
+#user-name a:hover {
+    text-decoration: underline;
+  cursor: pointer;
+	}
 }
 
 /* === DARK MODE === */
@@ -166,4 +205,7 @@ body {
   #menu-links li a {
     color: var(--accent-dark);
   }
+  #menu-links {
+  background-color: rgba(30, 30, 30, 0.95);
+}
 }

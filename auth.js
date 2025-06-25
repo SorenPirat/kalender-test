@@ -18,7 +18,19 @@ export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "i
   let bruger = localStorage.getItem("bruger");
 
   if (bruger) {
-    bruger = JSON.parse(bruger);
+bruger = JSON.parse(bruger);
+
+// Backwards compatibility: hvis kun bruger.rolle findes, lav bruger.roller
+if (!bruger.roller && bruger.rolle) {
+  bruger.roller = [bruger.rolle];
+}
+
+// Sikrer at roller ikke er nested (fx [["admin"]])
+if (Array.isArray(bruger.roller) && Array.isArray(bruger.roller[0])) {
+  bruger.roller = bruger.roller.flat();
+}
+
+	
   } else {
     const { data: profile, error: profileError } = await client
       .from("users")
@@ -31,15 +43,20 @@ export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "i
       return;
     }
 
-    bruger = {
-      id: user.id,
-      navn: profile.navn,
-      rolle: profile.rolle
-    };
+bruger = {
+  id: user.id,
+  navn: profile.navn,
+  roller: profile.rolle
+};
+
+
     localStorage.setItem("bruger", JSON.stringify(bruger));
   }
 
-  if (tilladteRoller.length > 0 && !tilladteRoller.includes(bruger.rolle)) {
+  if (
+  tilladteRoller.length > 0 &&
+  !tilladteRoller.some((rolle) => bruger.roller?.includes(rolle))
+) {
     alert("❌ Du har ikke adgang til denne side.");
     window.location.href = redirectVedFejl;
     return;
@@ -47,33 +64,34 @@ export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "i
 
   // Hvis der allerede findes et #user-name i DOM'en, skriv til det (fallback)
   const nameBox = document.getElementById("user-name");
-  if (nameBox) {
-    nameBox.textContent = `👤 ${bruger.navn} (${bruger.rolle})`;
-  }
-
-  efterLogin(bruger);
+if (nameBox) {
+  nameBox.textContent = `👤 ${bruger.navn} (${bruger.roller.join(", ")})`;
 }
 
-// 🟦 Menu-indsætning – export separat
+efterLogin(bruger); 
+}
+
+// 🟦 Menu-indsætning – med klikbar brugernavn
 export function indsætMenu(bruger) {
   const navMarkup = `
   <nav id="menu">
     <div class="menu-header">
       <button id="menu-toggle">☰</button>
-      <div id="user-name">👤 ${bruger.navn} (${bruger.rolle})</div>
+<div id="user-name">
+  <span>${bruger.navn} (${bruger.roller.join(", ")})</span>
+</div>
     </div>
     <ul id="menu-links">
       <li><a href="protected.html">🏠 Hjem</a></li>
       <li><a href="public.html">📅 Kalender</a></li>
       <li><a href="kontakt.html">📞 Kontakt</a></li>
-     ${bruger.rolle === "admin" || bruger.rolle === "nøglebærer"
+${bruger.roller.includes("admin") || bruger.roller.includes("nøglebærer") || bruger.roller.includes("eventmaker")
   ? '<li><a href="noeglevagter.html">🔑 Nøglevagter</a></li>'
   : ''}
 
-${bruger.rolle === "admin"
+${bruger.roller.includes("admin")
   ? '<li><a href="adminpanel.html">🛠️ Adminpanel</a></li>'
   : ''}
-
       <li><a href="#" id="logout-link">🚪 Log ud</a></li>
     </ul>
   </nav>
@@ -87,13 +105,12 @@ ${bruger.rolle === "admin"
     const menuLinks = document.getElementById("menu-links");
     const menuWrapper = document.getElementById("menu");
 
-if (menuToggleBtn && menuLinks && menuWrapper) {
+    if (menuToggleBtn && menuLinks && menuWrapper) {
       menuToggleBtn.addEventListener("click", () => {
         menuLinks.classList.toggle("show");
         menuWrapper.classList.toggle("open");
       });
 
-      // 💡 Klik udenfor lukker menu
       document.addEventListener("click", (e) => {
         if (!menuWrapper.contains(e.target) && menuLinks.classList.contains("show")) {
           menuLinks.classList.remove("show");
@@ -101,7 +118,6 @@ if (menuToggleBtn && menuLinks && menuWrapper) {
         }
       });
 
-      // 💡 Escape-tast lukker menu
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && menuLinks.classList.contains("show")) {
           menuLinks.classList.remove("show");
@@ -110,8 +126,8 @@ if (menuToggleBtn && menuLinks && menuWrapper) {
       });
     }
   }, 0);
-  
-  // Log ud
+
+  // Logout
   setTimeout(() => {
     const logoutBtn = document.getElementById("logout-link");
     if (logoutBtn) {
@@ -126,3 +142,5 @@ if (menuToggleBtn && menuLinks && menuWrapper) {
     }
   }, 0);
 }
+
+
