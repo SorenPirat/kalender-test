@@ -124,48 +124,47 @@ app.get('/assignments-with-events', async (req, res) => {
     const result = {};
 
     function getAllDaysInRange(year, monthStart, monthEnd) {
-  const days = [];
-  for (let m = monthStart; m <= monthEnd; m++) {
-    const daysInMonth = new Date(year, m + 1, 0).getDate();
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key = `${year}-${m + 1}-${d}`;
-      days.push(key);
+      const days = [];
+      for (let m = monthStart; m <= monthEnd; m++) {
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          const key = `${year}-${m + 1}-${d}`;
+          days.push(key);
+        }
+      }
+      return days;
     }
-  }
-  return days;
-}
-    
+
     const allKeys = getAllDaysInRange(2025, 5, 11);
 
-for (const key of allKeys) {
-  for (const key of allKeys) {
-  const [year, month, day] = key.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setHours(0, 0, 0, 0);
+    for (const key of allKeys) {
+      const [year, month, day] = key.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      date.setHours(0, 0, 0, 0);
 
-  const matchingEvents = calendarEvents.filter(event => {
-    if (event.start.date && event.end.date) {
-      const start = new Date(event.start.date);
-      const end = new Date(event.end.date);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(0, 0, 0, 0);
-      return date >= start && date < end;
-    } else if (event.start.dateTime) {
-      const eventDate = new Date(event.start.dateTime);
-      eventDate.setHours(0, 0, 0, 0);
-      return eventDate.getTime() === date.getTime();
+      const matchingEvents = calendarEvents.filter(event => {
+        if (event.start.date && event.end.date) {
+          const start = new Date(event.start.date);
+          const end = new Date(event.end.date);
+          start.setHours(0, 0, 0, 0);
+          end.setHours(0, 0, 0, 0);
+          return date >= start && date < end;
+        } else if (event.start.dateTime) {
+          const eventDate = new Date(event.start.dateTime);
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate.getTime() === date.getTime();
+        }
+        return false;
+      });
+
+      result[key] = {
+        name: assignments[key] || null,
+        events: matchingEvents.map(ev => ({
+          summary: ev.summary,
+          id: ev.id
+        }))
+      };
     }
-    return false;
-  });
-
-  result[key] = {
-  name: assignments[key] || null,
-  events: matchingEvents.map(ev => ({
-    summary: ev.summary,
-    id: ev.id
-  }))
-};
-}
 
     res.json(result);
   } catch (err) {
