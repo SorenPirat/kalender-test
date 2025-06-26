@@ -103,7 +103,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+
 app.use(express.json());
 
 // ===== Routes =====
@@ -572,6 +572,9 @@ app.post("/kontakt", async (req, res) => {
   res.json({ success: true, threadId });
   console.log("🔍 Kropsdata:", req.body);
 });
+
+// Static fallback TIL SIDST
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== Start Server =====
 app.listen(PORT, () => {
