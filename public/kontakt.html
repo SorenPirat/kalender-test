@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kontakt – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="calendar.css" />
+  <style>
+    .kontakt-container {
+      max-width: 700px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+
+    .kontakt-gruppe {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      border-left: 4px solid #007bff;
+      background-color: #f4f9ff;
+      border-radius: 6px;
+    }
+
+    .kontakt-item {
+      margin: 0.3rem 0;
+    }
+
+    .kontakt-item a {
+      color: #007bff;
+      text-decoration: none;
+    }
+
+    .kontakt-item a:hover {
+      text-decoration: underline;
+    }
+	
+.tool-card {
+  background-color: var(--kort-baggrund, #fff);
+  color: var(--tekst, #111);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  margin-top: 2rem;
+}
+
+.form-gruppe {
+  margin-bottom: 1.5rem;
+}
+
+.label {
+  display: block;
+  font-weight: bold;
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+  color: var(--tekst, #111);
+}
+
+.felt {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--kant-farve, #ccc);
+  background-color: var(--input-baggrund, #fff);
+  color: var(--tekst, #111);
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.knap {
+  background-color: var(--primær, #007bff);
+  color: white;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.knap:hover {
+  background-color: var(--primær-mørk, #0056b3);
+}
+
+.knap.sekundær {
+  background-color: var(--grå, #666);
+}
+.knap.sekundær:hover {
+  background-color: var(--grå-mørk, #444);
+}
+
+small {
+  font-size: 0.85rem;
+  color: var(--grå-tekst, #666);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #111;
+    color: #f0f0f0;
+  }
+
+  .kontakt-gruppe {
+    background-color: #1e1e1e;
+    border-left-color: #3399ff;
+  }
+
+  .tool-card {
+    background-color: #1a1a1a;
+    color: #f0f0f0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+
+  .label {
+    color: #e0e0e0;
+  }
+
+  .felt {
+    background-color: #2a2a2a;
+    color: #f0f0f0;
+    border: 1px solid #444;
+  }
+
+  input[type="file"].felt {
+    background-color: #2a2a2a;
+    color: #f0f0f0;
+  }
+
+  .knap {
+    background-color: #007bff;
+    color: #fff;
+  }
+
+  .knap:hover {
+    background-color: #0056b3;
+  }
+
+  .knap.sekundær {
+    background-color: #555;
+  }
+
+  .knap.sekundær:hover {
+    background-color: #777;
+  }
+
+  small {
+    color: #aaa;
+  }
+
+  #feedback-status {
+    color: #ccc;
+  }
+
+  a {
+    color: #66aaff;
+  }
+}
+
+  </style>
+  <script type="module">
+    import { adgangskontrol, indsætMenu } from './auth.js';
+    adgangskontrol({
+      tilladteRoller: [],
+      redirectVedFejl: "protected.html",
+      efterLogin: (bruger) => {
+  indsætMenu(bruger);
+  document.getElementById("bruger-navn").textContent = bruger?.navn || "Ukendt";
+}
+
+    });
+  </script>
+</head>
+<body>
+  <div class="kontakt-container">
+    <h1>📞 Kontakt Næstved Klatreklub</h1>
+		
+<div class="form-gruppe">
+  <label class="label" for="modtager">Vælg modtager:</label>
+  
+  <select id="modtager" class="felt" required>
+    <option value="">-- Vælg --</option>
+    <option value="admin">Bestyrelsen</option>
+    <option value="rutebyggerteamet">Rutebyggerteamet</option>
+    <option value="nøglebærer">Nøglebærere</option>
+	<option value="eventmaker">Eventmaker</option>
+  </select>
+</div>
+
+	<div class="form-gruppe">
+  <label class="label" for="titel">📝 Emne / titel:</label>
+  <input type="text" id="titel" class="felt" placeholder="F.eks. løst greb, økonomi, forslag..." />
+</div>
+
+
+<form id="feedback-form" class="tool-card">
+
+<div class="tool-card">
+  <h2 style="margin-top: 0;">🛠️ Indsend besked til klubben</h2>
+  <p><strong>Navn:</strong> <span id="bruger-navn">–</span></p>
+
+<div class="form-gruppe">
+  <label class="label">Vælg beskedmetode:</label>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <button type="button" class="knap" id="vælg-skriv">📝 Skriv besked</button>
+    <button type="button" class="knap" id="vælg-tale">🎙️ Indtal besked</button>
+  </div>
+</div>
+
+<div class="form-gruppe" id="skriv-gruppe" style="display: none;">
+  <label class="label" for="besked">📝 Din besked:</label>
+  <textarea id="besked" class="felt" rows="4" placeholder="Skriv her..."></textarea>
+  <button type="button" class="knap sekundær" id="annuller-skriv" style="margin-top: 0.5rem;">❌ Fortryd</button>
+</div>
+
+<div class="form-gruppe" id="tale-gruppe" style="display: none;">
+  <label class="label">🎙️ Indtal besked:</label>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <button type="button" class="knap" id="start-recording">Start optagelse</button>
+    <button type="button" class="knap sekundær" id="stop-recording" style="display:none;">Stop</button>
+  </div>
+  <audio id="audio-preview" controls style="display:none; margin-top: 0.5rem; max-width: 100%;"></audio>
+  <button type="button" class="knap sekundær" id="annuller-tale" style="margin-top: 0.5rem;">❌ Fortryd</button>
+</div>
+
+
+  <div class="form-gruppe">
+    <label class="label" for="billede">📎 Vedhæft billede (valgfrit):</label>
+    <input type="file" id="billede" accept="image/*" capture="environment" class="felt" />
+    <div id="preview-wrapper" style="position: relative; display: none; margin-top: 0.5rem;">
+      <img id="preview" style="max-width: 100%; border-radius: 6px;" />
+      <button type="button" id="remove-preview" title="Fjern billede" style="
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #f44336;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 26px;
+        height: 26px;
+        font-size: 14px;
+        cursor: pointer;
+      ">✖</button>
+    </div>
+  </div>
+
+  <button type="submit" class="knap">📤 Send besked</button>
+  <p id="feedback-status" style="margin-top: 0.5rem;"></p>
+</div>
+  </div>
+</form>
+
+  <script type="module">
+    import { client } from './auth.js';
+
+    const billedeInput = document.getElementById("billede");
+    const previewImg = document.getElementById("preview");
+    const previewWrapper = document.getElementById("preview-wrapper");
+    const removePreviewBtn = document.getElementById("remove-preview");
+
+let mediaRecorder = null;
+let audioChunks = [];
+let lydBlob = null;
+
+const startBtn = document.getElementById("start-recording");
+const stopBtn = document.getElementById("stop-recording");
+const audioPreview = document.getElementById("audio-preview");
+
+const skrivGruppe = document.getElementById("skriv-gruppe");
+const taleGruppe = document.getElementById("tale-gruppe");
+const vælgSkriv = document.getElementById("vælg-skriv");
+const vælgTale = document.getElementById("vælg-tale");
+const annullerSkriv = document.getElementById("annuller-skriv");
+const annullerTale = document.getElementById("annuller-tale");
+
+// Vis kun skriv
+vælgSkriv.addEventListener("click", () => {
+  skrivGruppe.style.display = "block";
+  taleGruppe.style.display = "none";
+  vælgSkriv.style.display = "none";
+  vælgTale.style.display = "none";
+});
+
+// Vis kun tale
+vælgTale.addEventListener("click", () => {
+  taleGruppe.style.display = "block";
+  skrivGruppe.style.display = "none";
+  vælgSkriv.style.display = "none";
+  vælgTale.style.display = "none";
+});
+
+// Fortryd skriv
+annullerSkriv.addEventListener("click", () => {
+  skrivGruppe.style.display = "none";
+  vælgSkriv.style.display = "inline-block";
+  vælgTale.style.display = "inline-block";
+  document.getElementById("besked").value = "";
+});
+
+// Fortryd tale
+annullerTale.addEventListener("click", () => {
+  taleGruppe.style.display = "none";
+  vælgSkriv.style.display = "inline-block";
+  vælgTale.style.display = "inline-block";
+  if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+  lydBlob = null;
+  audioPreview.style.display = "none";
+});
+
+
+startBtn.addEventListener("click", async () => {
+  audioPreview.style.display = "none";
+  lydBlob = null;
+  audioChunks = [];
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = (e) => {
+      audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      lydBlob = new Blob(audioChunks, { type: "audio/webm" });
+      audioPreview.src = URL.createObjectURL(lydBlob);
+      audioPreview.style.display = "block";
+    };
+
+    mediaRecorder.start();
+    startBtn.style.display = "none";
+    stopBtn.style.display = "inline-block";
+  } catch (err) {
+    alert("🎤 Mikrofonadgang blev nægtet.");
+    console.error(err);
+  }
+});
+
+stopBtn.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    startBtn.style.display = "inline-block";
+    stopBtn.style.display = "none";
+  }
+});
+
+
+    // BILLEDEPREVIEW + NEDSKALERING
+    billedeInput.addEventListener("change", () => {
+      const fil = billedeInput.files[0];
+      if (!fil || !fil.type.startsWith("image/")) {
+        previewWrapper.style.display = "none";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_WIDTH = 1280;
+          const scale = Math.min(1, MAX_WIDTH / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob((blob) => {
+            billedeInput.resizedBlob = blob;
+            previewImg.src = URL.createObjectURL(blob);
+            previewWrapper.style.display = "block";
+          }, "image/jpeg", 0.75);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(fil);
+    });
+
+    removePreviewBtn.addEventListener("click", () => {
+      billedeInput.value = "";
+      previewImg.src = "";
+      previewWrapper.style.display = "none";
+      billedeInput.resizedBlob = null;
+    });
+
+    // FORM HANDLER
+    const form = document.getElementById("feedback-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const status = document.getElementById("feedback-status");
+      const besked = document.getElementById("besked").value.trim();
+      const billede = billedeInput.files[0];
+      const blob = billedeInput.resizedBlob;
+
+      status.textContent = "⏳ Sender besked...";
+
+      try {
+        let billedeUrl = null;
+
+        if (blob) {
+          const formData = new FormData();
+          formData.append("file", blob);
+          formData.append("upload_preset", "feedback-rutebyg");
+          const cloudName = "ddnx3hviq";
+          const cloudUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+          const uploadRes = await fetch(cloudUrl, {
+            method: "POST",
+            body: formData
+          });
+
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.error?.message || "Fejl ved upload");
+
+          billedeUrl = uploadData.secure_url;
+        }
+
+let lydUrl = null;
+
+if (lydBlob) {
+  const formData = new FormData();
+  formData.append("file", lydBlob);
+  formData.append("upload_preset", "feedback-rutebyg");
+  const cloudName = "ddnx3hviq";
+  const cloudUrl = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+
+  const uploadRes = await fetch(cloudUrl, {
+    method: "POST",
+    body: formData
+  });
+
+  const uploadData = await uploadRes.json();
+  if (!uploadRes.ok) throw new Error(uploadData.error?.message || "Fejl ved lyd-upload");
+
+  lydUrl = uploadData.secure_url;
+}
+
+const harTekst = besked.length > 0;
+const harLyd = !!lydBlob;
+
+if (!harTekst && !harLyd) {
+  status.textContent = "❗ Du skal enten skrive en besked eller optage en lyd.";
+  return;
+}
+
+if (harTekst && harLyd) {
+  status.textContent = "⚠️ Du kan kun sende enten en tekst eller en lyd – ikke begge.";
+  return;
+}
+
+
+        const bruger = JSON.parse(localStorage.getItem("bruger"));
+        const navn = bruger?.navn || "Ukendt";
+
+        const modtager = document.getElementById("modtager").value;
+		const titel = document.getElementById("titel").value.trim();
+
+if (!modtager || !titel || (!harTekst && !harLyd)) {
+  status.textContent = "❗ Udfyld modtager, titel og mindst én beskedform.";
+  return;
+}
+
+const body = {
+  rolle: modtager,
+  titel,
+  afsender: navn,
+  tekst: lydUrl ? null : besked,
+  billede_url: billedeUrl,
+  lyd_url: lydUrl
+};
+
+
+const res = await fetch("/kontakt", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body)
+});
+
+const data = await res.json();
+
+if (!res.ok) {
+  console.error("Fejl:", data.error);
+  status.textContent = "❌ Beskeden kunne ikke sendes.";
+  return;
+}
+
+status.textContent = "✅ Besked sendt! Tak for din henvendelse.";
+form.reset();
+previewWrapper.style.display = "none";
+audioPreview.style.display = "none";
+
+} catch (err) {
+  console.error("Fejl:", err);
+  status.textContent = "❌ Der opstod en fejl under afsendelse.";
+}
+    });
+  </script>
+</body>
+</html>

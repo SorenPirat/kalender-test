@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NKL Login</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="base.css" />
+  <style>
+  
+  .login-wrapper {
+  max-width: 400px;
+  margin: 2rem auto;
+  padding: 1.5rem;
+}
+
+input[type="email"],
+input[type="password"],
+button {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+.error {
+  color: red;
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+
+.info-text {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  background: #f9f9f9;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.info-text ul {
+  padding-left: 1.2rem;
+}
+
+.input-style {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.hidden {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+    </style>
+</head>
+<body>
+
+  <h2>Login</h2>
+  
+  <input type="email" id="email" placeholder="Din e-mail">
+  <input type="password" id="password" placeholder="Adgangskode">
+  <button onclick="login()">Log ind</button>
+
+  <button id="opret-knap">Opret bruger</button>
+ <div id="opret-info" class="info-text hidden"></div>
+
+  <p id="status"></p>
+
+  <script>
+    const client = supabase.createClient(
+      "https://cianxaxaphvrutmstydr.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
+    );
+
+    async function checkSessionAndRedirect() {
+      const { data: { session } } = await client.auth.getSession();
+      if (!session || !session.access_token) return;
+
+      const { data: { user }, error } = await client.auth.getUser();
+      if (!user || error) return;
+
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile || profileError) return;
+
+      window.location.href = "protected.html";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => {
+        checkSessionAndRedirect();
+      }, 500);
+    });
+
+    async function login() {
+	
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const status = document.getElementById("status");
+
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        status.textContent = "Login fejlede: " + error.message;
+        status.className = "error";
+        return;
+      }
+
+      const userId = data.user.id;
+
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("navn, rolle")
+        .eq("id", userId)
+        .single();
+
+      if (profileError) {
+        status.textContent = "Login lykkedes, men kunne ikke hente profil.";
+        return;
+      }
+
+      localStorage.setItem("bruger", JSON.stringify({
+        id: userId,
+        navn: profile.navn,
+        rolle: profile.rolle
+      }));
+
+      status.textContent = `Velkommen, ${profile.navn}`;
+      setTimeout(() => {
+        window.location.href = "protected.html";
+      }, 600);
+    }
+  
+ async function signup() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const navn = document.getElementById("navn").value.trim();
+  const status = document.getElementById("status");
+
+  const { data, error } = await client.auth.signUp({ email, password });
+
+  if (error) {
+    status.textContent = "❌ Fejl ved oprettelse: " + error.message;
+    status.className = "error";
+    return;
+  }
+
+  const userId = data.user.id;
+
+  const { error: insertError } = await client
+    .from("users")
+    .insert({
+      id: userId,
+      navn: navn || "Uden navn",
+      rolle: "klubmedlem"
+    });
+
+  if (insertError) {
+    status.textContent = "⚠️ Profil kunne ikke gemmes: " + insertError.message;
+    status.className = "error";
+    return;
+  }
+
+  // Redirect med kort forsinkelse
+  status.textContent = "✅ Bruger oprettet – viderestiller...";
+  status.className = "";
+  setTimeout(() => {
+    window.location.href = "protected.html";
+  }, 1500);
+}
+
+document.getElementById("opret-knap").addEventListener("click", () => {
+  const emailFelt = document.getElementById("email");
+  const passwordFelt = document.getElementById("password");
+  const infoBox = document.getElementById("opret-info");
+
+  // Skjul knappen efter klik
+  document.getElementById("opret-knap").style.display = "none";
+
+  // Tjek om navn allerede findes
+  if (!document.getElementById("navn")) {
+    const navnFelt = document.createElement("input");
+    navnFelt.type = "text";
+    navnFelt.id = "navn";
+    navnFelt.placeholder = "Dit navn";
+    navnFelt.className = "navn-input";
+    navnFelt.style.marginBottom = "0.5rem";
+    navnFelt.style.width = "100%";
+    navnFelt.style.padding = "0.6rem";
+    navnFelt.style.fontSize = "1rem";
+    navnFelt.style.borderRadius = "6px";
+    navnFelt.style.border = "1px solid #ccc";
+
+    emailFelt.parentNode.insertBefore(navnFelt, emailFelt);
+  }
+
+  infoBox.classList.remove("hidden");
+  infoBox.innerHTML = `
+    <ul>
+      <li>🟢 Indtast dit navn</li>
+      <li>🟢 Brug en gyldig e-mailadresse</li>
+      <li>🟢 Adgangskoden skal være mindst 6 tegn lang</li>
+    </ul>
+    <button onclick="signup()">Bekræft og opret</button>
+  `;
+});
+
+
+  </script>
+</body>
+</html>
