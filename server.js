@@ -124,17 +124,17 @@ app.get('/assignments-with-events', async (req, res) => {
     const result = {};
 
     function getAllDaysInRange(year, monthStart, monthEnd) {
-      const days = [];
-      for (let m = monthStart; m <= monthEnd; m++) {
-        const daysInMonth = new Date(year, m + 1, 0).getDate();
-        for (let d = 1; d <= daysInMonth; d++) {
-          const key = `${m + 1}-${d}`;
-          days.push(key);
-        }
-      }
-      return days;
+  const days = [];
+  for (let m = monthStart; m <= monthEnd; m++) {
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${year}-${m + 1}-${d}`;
+      days.push(key);
     }
-
+  }
+  return days;
+}
+    
     const allKeys = getAllDaysInRange(2025, 5, 11);
 
 for (const key of allKeys) {
@@ -158,12 +158,12 @@ for (const key of allKeys) {
   });
 
   result[key] = {
-    name: assignments[key],
-    events: matchingEvents.map(ev => ({
-      summary: ev.summary,
-      id: ev.id
-    }))
-  };
+  name: assignments[key] || null,
+  events: matchingEvents.map(ev => ({
+    summary: ev.summary,
+    id: ev.id
+  }))
+};
 }
 
     res.json(result);
