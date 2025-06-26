@@ -95,75 +95,6 @@ async function updateSheetEntry(day, name) {
   });
 }
 
-// ==== Kontaktformular + notifikation + threadoprettelse ====
-app.post("/kontakt", async (req, res) => {
-  const { rolle, titel, afsender, tekst, billede_url, lyd_url } = req.body;
-
-  if (!rolle || !titel || !afsender || (!tekst && !billede_url && !lyd_url)) {
-    return res.status(400).json({ error: "Manglende nødvendige felter" });
-  }
-
-  const threadId = uuidv4();
-
-  const { error: threadError } = await supabase
-    .from("threads")
-    .insert({
-      id: threadId,
-      rolle,
-      titel,
-      oprettet_af: afsender
-    });
-
-  if (threadError) {
-    console.error("❌ Trådfejl:", threadError);
-    return res.status(500).json({ error: "Kunne ikke oprette tråd" });
-  }
-
-  const { error: messageError } = await supabase
-    .from("messages")
-    .insert({
-      thread_id: threadId,
-      afsender,
-      tekst,
-      billede_url,
-      lyd_url
-    });
-
-  if (messageError) {
-    console.error("❌ Beskedfejl:", messageError);
-    return res.status(500).json({ error: "Kunne ikke oprette besked" });
-  }
-
-  const { data: brugere, error: userError } = await supabase
-    .from("users")
-    .select("id, rolle");
-
-  if (userError) {
-    console.error("❌ Fejl ved hentning af brugere:", userError);
-    return res.status(500).json({ error: "Kunne ikke hente brugere" });
-  }
-
-  const modtagere = brugere.filter(b => Array.isArray(b.rolle) ? b.rolle.includes(rolle) : b.rolle === rolle);
-
-  const notifikationer = modtagere.map(b => ({
-    id: uuidv4(),
-    bruger_id: b.id,
-    thread_id: threadId
-  }));
-
-  if (notifikationer.length > 0) {
-    const { error: notifError } = await supabase
-      .from("kontakt_notifications")
-      .insert(notifikationer);
-
-    if (notifError) {
-      console.error("❌ Fejl ved notifikationer:", notifError);
-    }
-  }
-
-  res.json({ success: true, threadId });
-});
-
 // ===== Express App Setup =====
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -571,6 +502,74 @@ app.post('/delete-user', async (req, res) => {
   }
 });
 
+// ==== Kontaktformular + notifikation + threadoprettelse ====
+app.post("/kontakt", async (req, res) => {
+  const { rolle, titel, afsender, tekst, billede_url, lyd_url } = req.body;
+
+  if (!rolle || !titel || !afsender || (!tekst && !billede_url && !lyd_url)) {
+    return res.status(400).json({ error: "Manglende nødvendige felter" });
+  }
+
+  const threadId = uuidv4();
+
+  const { error: threadError } = await supabase
+    .from("threads")
+    .insert({
+      id: threadId,
+      rolle,
+      titel,
+      oprettet_af: afsender
+    });
+
+  if (threadError) {
+    console.error("❌ Trådfejl:", threadError);
+    return res.status(500).json({ error: "Kunne ikke oprette tråd" });
+  }
+
+  const { error: messageError } = await supabase
+    .from("messages")
+    .insert({
+      thread_id: threadId,
+      afsender,
+      tekst,
+      billede_url,
+      lyd_url
+    });
+
+  if (messageError) {
+    console.error("❌ Beskedfejl:", messageError);
+    return res.status(500).json({ error: "Kunne ikke oprette besked" });
+  }
+
+  const { data: brugere, error: userError } = await supabase
+    .from("users")
+    .select("id, rolle");
+
+  if (userError) {
+    console.error("❌ Fejl ved hentning af brugere:", userError);
+    return res.status(500).json({ error: "Kunne ikke hente brugere" });
+  }
+
+  const modtagere = brugere.filter(b => Array.isArray(b.rolle) ? b.rolle.includes(rolle) : b.rolle === rolle);
+
+  const notifikationer = modtagere.map(b => ({
+    id: uuidv4(),
+    bruger_id: b.id,
+    thread_id: threadId
+  }));
+
+  if (notifikationer.length > 0) {
+    const { error: notifError } = await supabase
+      .from("kontakt_notifications")
+      .insert(notifikationer);
+
+    if (notifError) {
+      console.error("❌ Fejl ved notifikationer:", notifError);
+    }
+  }
+
+  res.json({ success: true, threadId });
+});
 
 // ===== Start Server =====
 app.listen(PORT, () => {
