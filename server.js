@@ -504,6 +504,7 @@ app.post('/delete-user', async (req, res) => {
 
 // ==== Kontaktformular + notifikation + threadoprettelse ====
 app.post("/kontakt", async (req, res) => {
+  console.log("🔥 /kontakt modtaget");
   const { rolle, titel, afsender, tekst, billede_url, lyd_url } = req.body;
 
   if (!rolle || !titel || !afsender || (!tekst && !billede_url && !lyd_url)) {
@@ -569,6 +570,7 @@ app.post("/kontakt", async (req, res) => {
   }
 
   res.json({ success: true, threadId });
+  console.log("🔍 Kropsdata:", req.body);
 });
 
 // ===== Start Server =====
