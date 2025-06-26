@@ -138,8 +138,9 @@ app.get('/assignments-with-events', async (req, res) => {
     const allKeys = getAllDaysInRange(2025, 5, 11);
 
 for (const key of allKeys) {
-  const [month, day] = key.split('-').map(Number);
-  const date = new Date(2025, month - 1, day);
+  for (const key of allKeys) {
+  const [year, month, day] = key.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
   date.setHours(0, 0, 0, 0);
 
   const matchingEvents = calendarEvents.filter(event => {
