@@ -505,8 +505,6 @@ app.post('/delete-user', async (req, res) => {
 // ==== Kontaktformular + notifikation + threadoprettelse ====
 app.post("/kontakt", async (req, res) => {
   console.log("🔥 Modtog POST /kontakt");
-  res.json({ success: true });
-});
 
   const { rolle, titel, afsender, tekst, billede_url, lyd_url } = req.body;
 
@@ -554,7 +552,9 @@ app.post("/kontakt", async (req, res) => {
     return res.status(500).json({ error: "Kunne ikke hente brugere" });
   }
 
-  const modtagere = brugere.filter(b => Array.isArray(b.rolle) ? b.rolle.includes(rolle) : b.rolle === rolle);
+  const modtagere = brugere.filter(b => 
+    Array.isArray(b.rolle) ? b.rolle.includes(rolle) : b.rolle === rolle
+  );
 
   const notifikationer = modtagere.map(b => ({
     id: uuidv4(),
