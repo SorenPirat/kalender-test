@@ -486,7 +486,7 @@ app.get("/beskeder/:rolle", async (req, res) => {
 });
 
 
-app.get("/mine-tråde", async (req, res) => {
+app.get("/threads", async (req, res) => {
   const brugerId = req.query.brugerId;
 
   if (!brugerId) {
