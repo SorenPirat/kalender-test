@@ -438,6 +438,56 @@ app.get('/public-events', async (req, res) => {
   }
 });
 
+app.get("/mine-tråde", async (req, res) => {
+  const brugerId = req.query.brugerId;
+
+  if (!brugerId) {
+    return res.status(400).json({ error: "brugerId mangler i forespørgslen" });
+  }
+
+  try {
+    // 1. Find alle tråde hvor brugeren er opretter
+    const { data: oprettedeTråde, error: opretFejl } = await supabase
+      .from("threads")
+      .select("*")
+      .eq("oprettet_af", brugerId);
+
+    if (opretFejl) throw opretFejl;
+
+    // 2. Find alle tråde hvor brugeren har en notifikation (er modtager)
+    const { data: notifikationer, error: notifFejl } = await supabase
+      .from("kontakt_notifications")
+      .select("thread_id")
+      .eq("bruger_id", brugerId);
+
+    if (notifFejl) throw notifFejl;
+
+    const notifThreadIds = notifikationer.map(n => n.thread_id);
+
+    // 3. Hent tråde for disse thread_ids (uden at gentage dem)
+    const { data: notifTråde, error: trådFejl } = await supabase
+      .from("threads")
+      .select("*")
+      .in("id", notifThreadIds);
+
+    if (trådFejl) throw trådFejl;
+
+    // 4. Slå dem sammen og fjern dubletter
+    const alleTråde = [...oprettedeTråde, ...notifTråde];
+    const unikkeTråde = Object.values(
+      alleTråde.reduce((acc, t) => {
+        acc[t.id] = t;
+        return acc;
+      }, {})
+    );
+
+    res.json(unikkeTråde);
+  } catch (err) {
+    console.error("❌ Fejl i /mine-tråde:", err);
+    res.status(500).json({ error: "Serverfejl ved hentning af tråde" });
+  }
+});
+
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
   const { navn, email, rolle } = req.body;
@@ -573,56 +623,6 @@ app.post("/kontakt", async (req, res) => {
   }
 
   res.json({ success: true, threadId });
-});
-
-app.get("/mine-tråde", async (req, res) => {
-  const brugerId = req.query.brugerId;
-
-  if (!brugerId) {
-    return res.status(400).json({ error: "brugerId mangler i forespørgslen" });
-  }
-
-  try {
-    // 1. Find alle tråde hvor brugeren er opretter
-    const { data: oprettedeTråde, error: opretFejl } = await supabase
-      .from("threads")
-      .select("*")
-      .eq("oprettet_af", brugerId);
-
-    if (opretFejl) throw opretFejl;
-
-    // 2. Find alle tråde hvor brugeren har en notifikation (er modtager)
-    const { data: notifikationer, error: notifFejl } = await supabase
-      .from("kontakt_notifications")
-      .select("thread_id")
-      .eq("bruger_id", brugerId);
-
-    if (notifFejl) throw notifFejl;
-
-    const notifThreadIds = notifikationer.map(n => n.thread_id);
-
-    // 3. Hent tråde for disse thread_ids (uden at gentage dem)
-    const { data: notifTråde, error: trådFejl } = await supabase
-      .from("threads")
-      .select("*")
-      .in("id", notifThreadIds);
-
-    if (trådFejl) throw trådFejl;
-
-    // 4. Slå dem sammen og fjern dubletter
-    const alleTråde = [...oprettedeTråde, ...notifTråde];
-    const unikkeTråde = Object.values(
-      alleTråde.reduce((acc, t) => {
-        acc[t.id] = t;
-        return acc;
-      }, {})
-    );
-
-    res.json(unikkeTråde);
-  } catch (err) {
-    console.error("❌ Fejl i /mine-tråde:", err);
-    res.status(500).json({ error: "Serverfejl ved hentning af tråde" });
-  }
 });
 
 // ===== Start Server =====
