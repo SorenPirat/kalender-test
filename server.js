@@ -438,6 +438,52 @@ app.get('/public-events', async (req, res) => {
   }
 });
 
+app.get("/beskeder/:rolle", async (req, res) => {
+  const rolle = req.params.rolle;
+
+  if (!rolle) {
+    return res.status(400).json({ error: "Mangler rolle" });
+  }
+
+  try {
+    const { data: tråde, error: trådFejl } = await supabase
+      .from("threads")
+      .select(`
+        *,
+        messages:text(tekst)
+      `)
+      .eq("rolle", rolle)
+      .order("created_at", { ascending: false });
+
+    if (trådFejl) throw trådFejl;
+
+    // Find første besked til hver tråd
+    const alleIds = tråde.map(t => t.id);
+    const { data: beskeder, error: fejlBesked } = await supabase
+      .from("messages")
+      .select("thread_id, tekst")
+      .in("thread_id", alleIds);
+
+    if (fejlBesked) throw fejlBesked;
+
+    const beskedMap = {};
+    for (const b of beskeder) {
+      if (!beskedMap[b.thread_id]) beskedMap[b.thread_id] = b.tekst;
+    }
+
+    const svar = tråde.map(tråd => ({
+      ...tråd,
+      beskedtekst: beskedMap[tråd.id] || null
+    }));
+
+    res.json(svar);
+  } catch (err) {
+    console.error("❌ Fejl i /beskeder/:rolle:", err);
+    res.status(500).json({ error: "Serverfejl ved hentning af beskeder" });
+  }
+});
+
+
 app.get("/mine-tråde", async (req, res) => {
   const brugerId = req.query.brugerId;
 
