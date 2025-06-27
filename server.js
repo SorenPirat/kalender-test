@@ -446,37 +446,39 @@ app.get("/beskeder/:rolle", async (req, res) => {
   }
 
   try {
+    // Hent alle tråde til den givne rolle
     const { data: tråde, error: trådFejl } = await supabase
       .from("threads")
-      .select(`
-        *,
-        messages:text(tekst)
-      `)
+      .select("*")
       .eq("rolle", rolle)
       .order("created_at", { ascending: false });
 
     if (trådFejl) throw trådFejl;
 
-    // Find første besked til hver tråd
-    const alleIds = tråde.map(t => t.id);
+    if (!tråde || tråde.length === 0) return res.json([]);
+
+    // Find første besked i hver tråd
+    const trådIds = tråde.map(t => t.id);
     const { data: beskeder, error: fejlBesked } = await supabase
       .from("messages")
       .select("thread_id, tekst")
-      .in("thread_id", alleIds);
+      .in("thread_id", trådIds);
 
     if (fejlBesked) throw fejlBesked;
 
     const beskedMap = {};
     for (const b of beskeder) {
-      if (!beskedMap[b.thread_id]) beskedMap[b.thread_id] = b.tekst;
+      if (!beskedMap[b.thread_id]) {
+        beskedMap[b.thread_id] = b.tekst;
+      }
     }
 
-    const svar = tråde.map(tråd => ({
+    const resultat = tråde.map(tråd => ({
       ...tråd,
       beskedtekst: beskedMap[tråd.id] || null
     }));
 
-    res.json(svar);
+    res.json(resultat);
   } catch (err) {
     console.error("❌ Fejl i /beskeder/:rolle:", err);
     res.status(500).json({ error: "Serverfejl ved hentning af beskeder" });
