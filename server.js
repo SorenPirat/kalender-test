@@ -438,54 +438,6 @@ app.get('/public-events', async (req, res) => {
   }
 });
 
-app.get("/beskeder/:rolle", async (req, res) => {
-  const rolle = req.params.rolle;
-
-  if (!rolle) {
-    return res.status(400).json({ error: "Mangler rolle" });
-  }
-
-  try {
-    // Hent alle tråde til den givne rolle
-    const { data: tråde, error: trådFejl } = await supabase
-      .from("threads")
-      .select("*")
-      .eq("rolle", rolle)
-      .order("created_at", { ascending: false });
-
-    if (trådFejl) throw trådFejl;
-
-    if (!tråde || tråde.length === 0) return res.json([]);
-
-    // Find første besked i hver tråd
-    const trådIds = tråde.map(t => t.id);
-    const { data: beskeder, error: fejlBesked } = await supabase
-      .from("messages")
-      .select("thread_id, tekst")
-      .in("thread_id", trådIds);
-
-    if (fejlBesked) throw fejlBesked;
-
-    const beskedMap = {};
-    for (const b of beskeder) {
-      if (!beskedMap[b.thread_id]) {
-        beskedMap[b.thread_id] = b.tekst;
-      }
-    }
-
-    const resultat = tråde.map(tråd => ({
-      ...tråd,
-      beskedtekst: beskedMap[tråd.id] || null
-    }));
-
-    res.json(resultat);
-  } catch (err) {
-    console.error("❌ Fejl i /beskeder/:rolle:", err);
-    res.status(500).json({ error: "Serverfejl ved hentning af beskeder" });
-  }
-});
-
-
 app.get("/threads", async (req, res) => {
   const brugerId = req.query.brugerId;
 
@@ -494,33 +446,29 @@ app.get("/threads", async (req, res) => {
   }
 
   try {
-    // 1. Find alle tråde hvor brugeren er opretter
+    // 1. Tråde hvor brugeren er afsender
     const { data: oprettedeTråde, error: opretFejl } = await supabase
       .from("threads")
       .select("*")
       .eq("oprettet_af", brugerId);
-
     if (opretFejl) throw opretFejl;
 
-    // 2. Find alle tråde hvor brugeren har en notifikation (er modtager)
+    // 2. Tråde hvor brugeren er modtager
     const { data: notifikationer, error: notifFejl } = await supabase
       .from("kontakt_notifications")
       .select("thread_id")
       .eq("bruger_id", brugerId);
-
     if (notifFejl) throw notifFejl;
 
     const notifThreadIds = notifikationer.map(n => n.thread_id);
 
-    // 3. Hent tråde for disse thread_ids (uden at gentage dem)
     const { data: notifTråde, error: trådFejl } = await supabase
       .from("threads")
       .select("*")
       .in("id", notifThreadIds);
-
     if (trådFejl) throw trådFejl;
 
-    // 4. Slå dem sammen og fjern dubletter
+    // 3. Slå sammen og fjern dubletter
     const alleTråde = [...oprettedeTråde, ...notifTråde];
     const unikkeTråde = Object.values(
       alleTråde.reduce((acc, t) => {
@@ -529,9 +477,31 @@ app.get("/threads", async (req, res) => {
       }, {})
     );
 
-    res.json(unikkeTråde);
+    // 4. Hent første besked i hver tråd
+    const threadIds = unikkeTråde.map(t => t.id);
+    const { data: beskeder, error: beskedFejl } = await supabase
+      .from("messages")
+      .select("thread_id, tekst")
+      .in("thread_id", threadIds);
+
+    if (beskedFejl) throw beskedFejl;
+
+    const beskedMap = {};
+    for (const b of beskeder) {
+      if (!beskedMap[b.thread_id]) {
+        beskedMap[b.thread_id] = b.tekst;
+      }
+    }
+
+    // 5. Sæt beskedtekst ind
+    const trådeMedBesked = unikkeTråde.map(tråd => ({
+      ...tråd,
+      beskedtekst: beskedMap[tråd.id] || null
+    }));
+
+    res.json(trådeMedBesked);
   } catch (err) {
-    console.error("❌ Fejl i /mine-tråde:", err);
+    console.error("❌ Fejl i /threads:", err);
     res.status(500).json({ error: "Serverfejl ved hentning af tråde" });
   }
 });
