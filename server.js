@@ -519,7 +519,7 @@ app.post("/reply", async (req, res) => {
   }
 
   try {
-    // 1. Gem selve beskeden
+    // 1. Gem beskeden
     const { error: messageError } = await supabase
       .from("messages")
       .insert({
@@ -529,56 +529,49 @@ app.post("/reply", async (req, res) => {
         billede_url,
         lyd_url
       });
-
     if (messageError) throw messageError;
 
-    // 2. Hent tråden for at finde modtageren
+    // 2. Hent tråden
     const { data: tråd, error: trådFejl } = await supabase
       .from("threads")
       .select("oprettet_af")
       .eq("id", thread_id)
       .single();
-
     if (trådFejl) throw trådFejl;
 
+    // 3. Opdatér opdateret-tid
+    const { error: updateError } = await supabase
+      .from("threads")
+      .update({ opdateret: new Date().toISOString() })
+      .eq("id", thread_id);
+    if (updateError) throw updateError;
+
+    // 4. Find modtager (kun hvis afsender ≠ oprettet_af)
     const modtagerId = tråd.oprettet_af === afsender ? null : tråd.oprettet_af;
-    if (!modtagerId) {
-      // Brugeren svarer i egen tråd, ingen notifikation
-      return res.json({ success: true });
+
+    // 5. Hvis der er en modtager → lav notifikation hvis den ikke findes
+    if (modtagerId) {
+      const { data: eksisterende, error: notifTjekFejl } = await supabase
+        .from("kontakt_notifications")
+        .select("id")
+        .eq("thread_id", thread_id)
+        .eq("bruger_id", modtagerId);
+      if (notifTjekFejl) throw notifTjekFejl;
+
+      if (eksisterende.length === 0) {
+        const { error: notifError } = await supabase
+          .from("kontakt_notifications")
+          .insert({
+            id: uuidv4(),
+            bruger_id: modtagerId,
+            thread_id
+          });
+
+        if (notifError) {
+          console.warn("⚠️ Kunne ikke oprette notifikation:", notifError.message);
+        }
+      }
     }
-
-    // 3. Tjek om notifikation allerede findes
-const { error: updateError } = await supabase
-  .from("threads")
-  .update({ opdateret: new Date().toISOString() })
-  .eq("id", thread_id);
-
-if (updateError) throw updateError;
-
-// Tjek om notifikation allerede findes
-const { data: eksisterende, error: notifTjekFejl } = await supabase
-  .from("kontakt_notifications")
-  .select("id")
-  .eq("thread_id", thread_id)
-  .eq("bruger_id", modtagerId);
-
-if (notifTjekFejl) throw notifTjekFejl;
-
-// Hvis ingen eksisterer → opret ny notifikation
-if (eksisterende.length === 0) {
-  const { error: notifError } = await supabase
-    .from("kontakt_notifications")
-    .insert({
-      id: uuidv4(),
-      bruger_id: modtagerId,
-      thread_id
-    });
-
-  if (notifError) {
-    console.warn("⚠️ Kunne ikke oprette notifikation:", notifError.message);
-  }
-}
-
 
     res.json({ success: true });
   } catch (err) {
@@ -586,7 +579,6 @@ if (eksisterende.length === 0) {
     res.status(500).json({ error: "Kunne ikke sende svar" });
   }
 });
-
 
 // ==== Arkivér tråde ====
 app.post("/archive-thread", async (req, res) => {
