@@ -480,10 +480,11 @@ app.get("/threads", async (req, res) => {
     // 4. Hent første besked i hver tråd
     const threadIds = unikkeTråde.map(t => t.id);
     const { data: beskeder, error: beskedFejl } = await supabase
-      .from("messages")
-      .select("thread_id, tekst, billede_url, lyd_url, created_at")
-      .in("thread_id", threadIds)
-      .order("created_at", { ascending: true });
+    .from("messages")
+    .select("thread_id, tekst, billede_url, lyd_url, tidspunkt")
+    .in("thread_id", threadIds)
+    .order("tidspunkt", { ascending: true });
+
 
     if (beskedFejl) throw beskedFejl;
 
