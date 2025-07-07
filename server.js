@@ -449,9 +449,19 @@ app.get("/threads", async (req, res) => {
     // 1. Tråde hvor brugeren er afsender
     const { data: oprettedeTråde, error: opretFejl } = await supabase
       .from("threads")
-      .select("*")
-      .eq("oprettet_af", brugerId)
-      .eq("er_lukket", false);
+      .select(`
+        id,
+        titel,
+        rolle,
+        oprettet_af,
+        created_at,
+        er_lukket,
+        lukket_af,
+        opdateret,
+        sidst_set_af_afsender,
+        sidst_set_af_modtager
+      `)
+      .eq("oprettet_af", brugerId);
 
     if (opretFejl) throw opretFejl;
 
@@ -466,7 +476,18 @@ app.get("/threads", async (req, res) => {
 
     const { data: notifTråde, error: trådFejl } = await supabase
       .from("threads")
-      .select("*")
+      .select(`
+        id,
+        titel,
+        rolle,
+        oprettet_af,
+        created_at,
+        er_lukket,
+        lukket_af,
+        opdateret,
+        sidst_set_af_afsender,
+        sidst_set_af_modtager
+      `)
       .in("id", notifThreadIds);
     if (trådFejl) throw trådFejl;
 
@@ -482,22 +503,21 @@ app.get("/threads", async (req, res) => {
     // 4. Hent første besked i hver tråd
     const threadIds = unikkeTråde.map(t => t.id);
     const { data: beskeder, error: beskedFejl } = await supabase
-    .from("messages")
-    .select("thread_id, tekst, billede_url, lyd_url, tidspunkt")
-    .in("thread_id", threadIds)
-    .order("tidspunkt", { ascending: true });
-
+      .from("messages")
+      .select("thread_id, tekst, billede_url, lyd_url, tidspunkt")
+      .in("thread_id", threadIds)
+      .order("tidspunkt", { ascending: true });
 
     if (beskedFejl) throw beskedFejl;
 
     const beskedMap = {};
     for (const b of beskeder) {
       if (!beskedMap[b.thread_id]) {
-        beskedMap[b.thread_id] = b; // gem hele objektet
+        beskedMap[b.thread_id] = b;
       }
     }
 
-    // 5. Sæt beskedtekst og evt. medier ind
+    // 5. Kombinér alt
     const trådeMedBesked = unikkeTråde.map(tråd => {
       const førsteBesked = beskedMap[tråd.id] || {};
       return {
