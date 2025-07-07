@@ -460,14 +460,36 @@ app.get("/threads", async (req, res) => {
     // 2. Tråde som afsender
     const { data: oprettedeTråde, error: opretFejl } = await supabase
       .from("threads")
-      .select("*")
+      .select(`
+      id,
+      titel,
+      rolle,
+      oprettet_af,
+      created_at,
+      er_lukket,
+      lukket_af,
+      opdateret,
+      sidst_set_af_afsender,
+      sidst_set_af_modtager
+      `)
       .eq("oprettet_af", brugerId);
     if (opretFejl) throw opretFejl;
 
     // 3. Tråde hvor brugerens rolle matcher thread.rolle
     const { data: modtagerTråde, error: rolleFejl } = await supabase
       .from("threads")
-      .select("*")
+      .select(`
+      id,
+      titel,
+      rolle,
+      oprettet_af,
+      created_at,
+      er_lukket,
+      lukket_af,
+      opdateret,
+      sidst_set_af_afsender,
+      sidst_set_af_modtager
+      `)
       .in("rolle", brugerRoller)
       .neq("oprettet_af", brugerId); // undgå dublet hvis brugeren både er afsender og modtager
     if (rolleFejl) throw rolleFejl;
