@@ -543,20 +543,63 @@ app.post("/reply", async (req, res) => {
 
 // ==== Arkivér tråde ====
 app.post("/archive-thread", async (req, res) => {
-  const { thread_id } = req.body;
-  if (!thread_id) return res.status(400).json({ error: "thread_id mangler" });
+  const { thread_id, lukket_af } = req.body;
+
+  if (!thread_id || !lukket_af) {
+    return res.status(400).json({ error: "thread_id og lukket_af påkrævet" });
+  }
 
   try {
-    const { error } = await supabase
+    // 1. Opdater tråd med lukket_af og er_lukket = true
+    const { error: updateError } = await supabase
       .from("threads")
-      .update({ er_lukket: true })
+      .update({ er_lukket: true, lukket_af })
       .eq("id", thread_id);
+    if (updateError) throw updateError;
 
-    if (error) throw error;
+    // 2. Hent navn og info på den der lukker
+    const { data: lukker, error: lukkerFejl } = await supabase
+      .from("users")
+      .select("id, navn")
+      .eq("id", lukket_af)
+      .single();
+    if (lukkerFejl) throw lukkerFejl;
+
+    const lukkerNavn = lukker?.navn || "Ukendt";
+
+    // 3. Hent tråden for at finde afsenderen
+    const { data: tråd, error: trådFejl } = await supabase
+      .from("threads")
+      .select("oprettet_af")
+      .eq("id", thread_id)
+      .single();
+    if (trådFejl) throw trådFejl;
+
+    const afsenderId = tråd.oprettet_af;
+
+    // 4. Opret besked i tråden
+    await supabase.from("messages").insert({
+      thread_id,
+      afsender: lukket_af,
+      tekst: `🔒 Tråden blev lukket af ${lukkerNavn}`
+    });
+
+    // 5. Opret ny notifikation til afsender
+    const { error: notifError } = await supabase
+      .from("kontakt_notifications")
+      .insert({
+        id: uuidv4(),
+        bruger_id: afsenderId,
+        thread_id
+      });
+
+    if (notifError) {
+      console.error("⚠️ Kunne ikke oprette notifikation:", notifError);
+    }
 
     res.json({ success: true });
   } catch (err) {
-    console.error("Fejl i /archive-thread:", err);
+    console.error("❌ Fejl i /archive-thread:", err);
     res.status(500).json({ error: "Kunne ikke arkivere tråd" });
   }
 });
