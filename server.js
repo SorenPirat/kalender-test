@@ -513,6 +513,52 @@ app.get("/threads", async (req, res) => {
   }
 });
 
+// ==== Svar på tråde ====
+app.post("/reply", async (req, res) => {
+  const { thread_id, afsender, tekst, billede_url, lyd_url } = req.body;
+
+  if (!thread_id || !afsender || (!tekst && !billede_url && !lyd_url)) {
+    return res.status(400).json({ error: "Manglende felter" });
+  }
+
+  try {
+    const { error } = await supabase.from("messages").insert({
+      thread_id,
+      afsender,
+      tekst,
+      billede_url,
+      lyd_url
+    });
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Fejl i /reply:", err);
+    res.status(500).json({ error: "Kunne ikke sende svar" });
+  }
+});
+
+// ==== Arkivér tråde ====
+app.post("/archive-thread", async (req, res) => {
+  const { thread_id } = req.body;
+  if (!thread_id) return res.status(400).json({ error: "thread_id mangler" });
+
+  try {
+    const { error } = await supabase
+      .from("threads")
+      .update({ er_lukket: true })
+      .eq("id", thread_id);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Fejl i /archive-thread:", err);
+    res.status(500).json({ error: "Kunne ikke arkivere tråd" });
+  }
+});
+
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
   const { navn, email, rolle } = req.body;
