@@ -481,23 +481,29 @@ app.get("/threads", async (req, res) => {
     const threadIds = unikkeTråde.map(t => t.id);
     const { data: beskeder, error: beskedFejl } = await supabase
       .from("messages")
-      .select("thread_id, tekst")
-      .in("thread_id", threadIds);
+      .select("thread_id, tekst, billede_url, lyd_url, created_at")
+      .in("thread_id", threadIds)
+      .order("created_at", { ascending: true });
 
     if (beskedFejl) throw beskedFejl;
 
     const beskedMap = {};
     for (const b of beskeder) {
       if (!beskedMap[b.thread_id]) {
-        beskedMap[b.thread_id] = b.tekst;
+        beskedMap[b.thread_id] = b; // gem hele objektet
       }
     }
 
-    // 5. Sæt beskedtekst ind
-    const trådeMedBesked = unikkeTråde.map(tråd => ({
-      ...tråd,
-      beskedtekst: beskedMap[tråd.id] || null
-    }));
+    // 5. Sæt beskedtekst og evt. medier ind
+    const trådeMedBesked = unikkeTråde.map(tråd => {
+      const førsteBesked = beskedMap[tråd.id] || {};
+      return {
+        ...tråd,
+        beskedtekst: førsteBesked.tekst || null,
+        billede_url: førsteBesked.billede_url || null,
+        lyd_url: førsteBesked.lyd_url || null
+      };
+    });
 
     res.json(trådeMedBesked);
   } catch (err) {
