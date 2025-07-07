@@ -577,13 +577,6 @@ app.post("/archive-thread", async (req, res) => {
 
     const afsenderId = tråd.oprettet_af;
 
-    // 4. Opret besked i tråden
-    await supabase.from("messages").insert({
-      thread_id,
-      afsender: lukket_af,
-      tekst: `🔒 Tråden blev lukket af ${lukkerNavn}`
-    });
-
     // 5. Opret ny notifikation til afsender
     const { error: notifError } = await supabase
       .from("kontakt_notifications")
