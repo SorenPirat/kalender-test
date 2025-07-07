@@ -440,59 +440,39 @@ app.get('/public-events', async (req, res) => {
 
 app.get("/threads", async (req, res) => {
   const brugerId = req.query.brugerId;
-
   if (!brugerId) {
     return res.status(400).json({ error: "brugerId mangler i forespørgslen" });
   }
 
   try {
-    // 1. Tråde hvor brugeren er afsender
+    // 1. Hent brugerens rolle
+    const { data: brugerdata, error: brugerFejl } = await supabase
+      .from("users")
+      .select("rolle")
+      .eq("id", brugerId)
+      .single();
+    if (brugerFejl || !brugerdata) throw brugerFejl || new Error("Bruger ikke fundet");
+
+    const brugerRoller = Array.isArray(brugerdata.rolle)
+      ? brugerdata.rolle
+      : [brugerdata.rolle];
+
+    // 2. Tråde som afsender
     const { data: oprettedeTråde, error: opretFejl } = await supabase
       .from("threads")
-      .select(`
-        id,
-        titel,
-        rolle,
-        oprettet_af,
-        created_at,
-        er_lukket,
-        lukket_af,
-        opdateret,
-        sidst_set_af_afsender,
-        sidst_set_af_modtager
-      `)
+      .select("*")
       .eq("oprettet_af", brugerId);
-
     if (opretFejl) throw opretFejl;
 
-    // 2. Tråde hvor brugeren er modtager
-    const { data: notifikationer, error: notifFejl } = await supabase
-      .from("kontakt_notifications")
-      .select("thread_id")
-      .eq("bruger_id", brugerId);
-    if (notifFejl) throw notifFejl;
-
-    const notifThreadIds = notifikationer.map(n => n.thread_id);
-
-    const { data: notifTråde, error: trådFejl } = await supabase
+    // 3. Tråde hvor brugerens rolle matcher thread.rolle
+    const { data: modtagerTråde, error: rolleFejl } = await supabase
       .from("threads")
-      .select(`
-        id,
-        titel,
-        rolle,
-        oprettet_af,
-        created_at,
-        er_lukket,
-        lukket_af,
-        opdateret,
-        sidst_set_af_afsender,
-        sidst_set_af_modtager
-      `)
-      .in("id", notifThreadIds);
-    if (trådFejl) throw trådFejl;
+      .select("*")
+      .in("rolle", brugerRoller)
+      .neq("oprettet_af", brugerId); // undgå dublet hvis brugeren både er afsender og modtager
+    if (rolleFejl) throw rolleFejl;
 
-    // 3. Slå sammen og fjern dubletter
-    const alleTråde = [...oprettedeTråde, ...notifTråde];
+    const alleTråde = [...oprettedeTråde, ...modtagerTråde];
     const unikkeTråde = Object.values(
       alleTråde.reduce((acc, t) => {
         acc[t.id] = t;
@@ -500,40 +480,13 @@ app.get("/threads", async (req, res) => {
       }, {})
     );
 
-    // 4. Hent første besked i hver tråd
-    const threadIds = unikkeTråde.map(t => t.id);
-    const { data: beskeder, error: beskedFejl } = await supabase
-      .from("messages")
-      .select("thread_id, tekst, billede_url, lyd_url, tidspunkt")
-      .in("thread_id", threadIds)
-      .order("tidspunkt", { ascending: true });
-
-    if (beskedFejl) throw beskedFejl;
-
-    const beskedMap = {};
-    for (const b of beskeder) {
-      if (!beskedMap[b.thread_id]) {
-        beskedMap[b.thread_id] = b;
-      }
-    }
-
-    // 5. Kombinér alt
-    const trådeMedBesked = unikkeTråde.map(tråd => {
-      const førsteBesked = beskedMap[tråd.id] || {};
-      return {
-        ...tråd,
-        beskedtekst: førsteBesked.tekst || null,
-        billede_url: førsteBesked.billede_url || null,
-        lyd_url: førsteBesked.lyd_url || null
-      };
-    });
-
-    res.json(trådeMedBesked);
+    res.json(unikkeTråde);
   } catch (err) {
     console.error("❌ Fejl i /threads:", err);
     res.status(500).json({ error: "Serverfejl ved hentning af tråde" });
   }
 });
+
 
 // ==== Svar på tråde ====
 app.post("/reply", async (req, res) => {
