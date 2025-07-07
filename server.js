@@ -544,15 +544,57 @@ app.post("/reply", async (req, res) => {
   }
 
   try {
-    const { error } = await supabase.from("messages").insert({
-      thread_id,
-      afsender,
-      tekst,
-      billede_url,
-      lyd_url
-    });
+    // 1. Gem selve beskeden
+    const { error: messageError } = await supabase
+      .from("messages")
+      .insert({
+        thread_id,
+        afsender,
+        tekst,
+        billede_url,
+        lyd_url
+      });
 
-    if (error) throw error;
+    if (messageError) throw messageError;
+
+    // 2. Hent tråden for at finde modtageren
+    const { data: tråd, error: trådFejl } = await supabase
+      .from("threads")
+      .select("oprettet_af")
+      .eq("id", thread_id)
+      .single();
+
+    if (trådFejl) throw trådFejl;
+
+    const modtagerId = tråd.oprettet_af === afsender ? null : tråd.oprettet_af;
+    if (!modtagerId) {
+      // Brugeren svarer i egen tråd, ingen notifikation
+      return res.json({ success: true });
+    }
+
+    // 3. Tjek om notifikation allerede findes
+    const { data: eksisterende, error: notifTjekFejl } = await supabase
+      .from("kontakt_notifications")
+      .select("id")
+      .eq("thread_id", thread_id)
+      .eq("bruger_id", modtagerId);
+
+    if (notifTjekFejl) throw notifTjekFejl;
+
+    if (eksisterende.length === 0) {
+      // 4. Opret ny notifikation til modtageren
+      const { error: notifError } = await supabase
+        .from("kontakt_notifications")
+        .insert({
+          id: uuidv4(),
+          bruger_id: modtagerId,
+          thread_id
+        });
+
+      if (notifError) {
+        console.warn("⚠️ Kunne ikke oprette notifikation:", notifError.message);
+      }
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -560,6 +602,7 @@ app.post("/reply", async (req, res) => {
     res.status(500).json({ error: "Kunne ikke sende svar" });
   }
 });
+
 
 // ==== Arkivér tråde ====
 app.post("/archive-thread", async (req, res) => {
@@ -646,13 +689,19 @@ app.post("/mark-thread-read", async (req, res) => {
 
     if (updateError) throw updateError;
 
+    // 🔔 Fjern notifikationen for denne bruger og tråd
+    await supabase
+      .from("kontakt_notifications")
+      .delete()
+      .eq("thread_id", thread_id)
+      .eq("bruger_id", bruger_id);
+
     res.json({ success: true });
   } catch (err) {
     console.error("❌ Fejl i /mark-thread-read:", err);
     res.status(500).json({ error: "Kunne ikke markere som læst" });
   }
 });
-
 
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
