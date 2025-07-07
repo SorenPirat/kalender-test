@@ -596,6 +596,43 @@ app.post("/archive-thread", async (req, res) => {
     res.status(500).json({ error: "Kunne ikke arkivere tråd" });
   }
 });
+// ==== Notifikation på tråden ====
+app.post("/mark-thread-read", async (req, res) => {
+  const { thread_id, bruger_id } = req.body;
+
+  if (!thread_id || !bruger_id) {
+    return res.status(400).json({ error: "thread_id og bruger_id kræves" });
+  }
+
+  try {
+    // Hent tråden for at afgøre om brugeren er afsender eller modtager
+    const { data: tråd, error } = await supabase
+      .from("threads")
+      .select("oprettet_af")
+      .eq("id", thread_id)
+      .single();
+
+    if (error || !tråd) throw error || new Error("Tråd ikke fundet");
+
+    const felt =
+      tråd.oprettet_af === bruger_id
+        ? "sidst_set_af_afsender"
+        : "sidst_set_af_modtager";
+
+    const { error: updateError } = await supabase
+      .from("threads")
+      .update({ [felt]: new Date().toISOString() })
+      .eq("id", thread_id);
+
+    if (updateError) throw updateError;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Fejl i /mark-thread-read:", err);
+    res.status(500).json({ error: "Kunne ikke markere som læst" });
+  }
+});
+
 
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
