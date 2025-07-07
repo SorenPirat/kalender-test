@@ -531,45 +531,48 @@ app.post("/reply", async (req, res) => {
       });
     if (messageError) throw messageError;
 
-    // 2. Hent tråden
-    const { data: tråd, error: trådFejl } = await supabase
-      .from("threads")
-      .select("oprettet_af")
-      .eq("id", thread_id)
-      .single();
-    if (trådFejl) throw trådFejl;
-
-    // 3. Opdatér opdateret-tid
+    // 2. Opdater opdateret-felt på tråden
     const { error: updateError } = await supabase
       .from("threads")
       .update({ opdateret: new Date().toISOString() })
       .eq("id", thread_id);
     if (updateError) throw updateError;
 
-    // 4. Find modtager (kun hvis afsender ≠ oprettet_af)
-    const modtagerId = tråd.oprettet_af === afsender ? null : tråd.oprettet_af;
+    // 3. Hent trådinfo inkl. rolle og oprettet_af
+    const { data: tråd, error: trådFejl } = await supabase
+      .from("threads")
+      .select("rolle, oprettet_af")
+      .eq("id", thread_id)
+      .single();
+    if (trådFejl || !tråd) throw trådFejl || new Error("Tråd ikke fundet");
 
-    // 5. Hvis der er en modtager → lav notifikation hvis den ikke findes
-    if (modtagerId) {
-      const { data: eksisterende, error: notifTjekFejl } = await supabase
+    const målrolle = tråd.rolle;
+
+    // 4. Hent alle brugere med denne rolle
+    const { data: brugere, error: brugerFejl } = await supabase
+      .from("users")
+      .select("id, rolle");
+    if (brugerFejl) throw brugerFejl;
+
+    const modtagere = brugere.filter(b =>
+      (Array.isArray(b.rolle) ? b.rolle.includes(målrolle) : b.rolle === målrolle)
+      && b.id !== afsender // undgå at afsender får notifikation
+    );
+
+    // 5. Tjek og indsæt notifikationer for modtagere
+    for (const modtager of modtagere) {
+      const { data: eksisterende } = await supabase
         .from("kontakt_notifications")
         .select("id")
         .eq("thread_id", thread_id)
-        .eq("bruger_id", modtagerId);
-      if (notifTjekFejl) throw notifTjekFejl;
+        .eq("bruger_id", modtager.id);
 
-      if (eksisterende.length === 0) {
-        const { error: notifError } = await supabase
-          .from("kontakt_notifications")
-          .insert({
-            id: uuidv4(),
-            bruger_id: modtagerId,
-            thread_id
-          });
-
-        if (notifError) {
-          console.warn("⚠️ Kunne ikke oprette notifikation:", notifError.message);
-        }
+      if (!eksisterende.length) {
+        await supabase.from("kontakt_notifications").insert({
+          id: uuidv4(),
+          bruger_id: modtager.id,
+          thread_id
+        });
       }
     }
 
