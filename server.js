@@ -450,7 +450,9 @@ app.get("/threads", async (req, res) => {
     const { data: oprettedeTråde, error: opretFejl } = await supabase
       .from("threads")
       .select("*")
-      .eq("oprettet_af", brugerId);
+      .eq("oprettet_af", brugerId)
+      .eq("er_lukket", false);
+
     if (opretFejl) throw opretFejl;
 
     // 2. Tråde hvor brugeren er modtager
