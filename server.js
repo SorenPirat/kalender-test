@@ -739,6 +739,31 @@ app.post("/delete-thread", async (req, res) => {
   }
 });
 
+// Genåben en lukket tråd
+app.post("/reopen-thread", async (req, res) => {
+  const { thread_id, bruger_id } = req.body;
+  if (!thread_id || !bruger_id) {
+    return res.status(400).json({ error: "Manglende data" });
+  }
+
+  try {
+    const { error } = await supabase
+      .from("threads")
+      .update({
+        er_lukket: false,
+        lukket_af: null
+      })
+      .eq("id", thread_id);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Fejl i /reopen-thread:", err);
+    res.status(500).json({ error: "Kunne ikke genåbne tråd" });
+  }
+});
+
 // ==== Oprettelse af bruger i adm.panel ====
 app.post('/create-user', async (req, res) => {
   const { navn, email, rolle } = req.body;
