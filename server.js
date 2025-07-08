@@ -559,22 +559,39 @@ app.post("/reply", async (req, res) => {
       && b.id !== afsender // undgå at afsender får notifikation
     );
 
-    // 5. Tjek og indsæt notifikationer for modtagere
-    for (const modtager of modtagere) {
-      const { data: eksisterende } = await supabase
-        .from("kontakt_notifications")
-        .select("id")
-        .eq("thread_id", thread_id)
-        .eq("bruger_id", modtager.id);
+// 5. Tjek og indsæt notifikationer for modtagere
+for (const modtager of modtagere) {
+  const { data: eksisterende } = await supabase
+    .from("kontakt_notifications")
+    .select("id")
+    .eq("thread_id", thread_id)
+    .eq("bruger_id", modtager.id);
 
-      if (!eksisterende.length) {
-        await supabase.from("kontakt_notifications").insert({
-          id: uuidv4(),
-          bruger_id: modtager.id,
-          thread_id
-        });
-      }
-    }
+  if (!eksisterende.length) {
+    await supabase.from("kontakt_notifications").insert({
+      id: uuidv4(),
+      bruger_id: modtager.id,
+      thread_id
+    });
+  }
+}
+
+// 6. Opret notifikation til oprindelig afsender, hvis modtageren svarer tilbage
+if (afsender !== tråd.oprettet_af) {
+  const { data: eksisterende } = await supabase
+    .from("kontakt_notifications")
+    .select("id")
+    .eq("thread_id", thread_id)
+    .eq("bruger_id", tråd.oprettet_af);
+
+  if (!eksisterende.length) {
+    await supabase.from("kontakt_notifications").insert({
+      id: uuidv4(),
+      bruger_id: tråd.oprettet_af,
+      thread_id
+    });
+  }
+}
 
     res.json({ success: true });
   } catch (err) {
