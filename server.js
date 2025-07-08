@@ -747,13 +747,15 @@ app.post("/reopen-thread", async (req, res) => {
   }
 
   try {
-    const { error } = await supabase
-      .from("threads")
-      .update({
-        er_lukket: false,
-        lukket_af: null
-      })
-      .eq("id", thread_id);
+ const { error } = await supabase
+    .from("threads")
+    .update({
+      er_lukket: false,
+      lukket_af: null,
+      genåbnet_af: bruger_id
+    })
+    .eq("id", thread_id);
+
 
     if (error) throw error;
 
