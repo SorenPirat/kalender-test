@@ -655,6 +655,7 @@ app.post("/archive-thread", async (req, res) => {
     res.status(500).json({ error: "Kunne ikke arkivere tråd" });
   }
 });
+
 // ==== Notifikation på tråden ====
 app.post("/mark-thread-read", async (req, res) => {
   const { thread_id, bruger_id } = req.body;
@@ -696,6 +697,45 @@ app.post("/mark-thread-read", async (req, res) => {
   } catch (err) {
     console.error("❌ Fejl i /mark-thread-read:", err);
     res.status(500).json({ error: "Kunne ikke markere som læst" });
+  }
+});
+
+// Slet en tråd
+app.post("/delete-thread", async (req, res) => {
+  const { thread_id, bruger_id } = req.body;
+  if (!thread_id || !bruger_id) {
+    return res.status(400).json({ error: "Mangler thread_id eller bruger_id" });
+  }
+
+  try {
+    // Tjek at brugeren ejer tråden
+    const { data: tråd, error } = await supabase
+      .from("threads")
+      .select("oprettet_af, er_lukket")
+      .eq("id", thread_id)
+      .single();
+
+    if (error || !tråd) throw error || new Error("Tråd ikke fundet");
+
+    if (tråd.oprettet_af !== bruger_id) {
+      return res.status(403).json({ error: "Du må ikke slette denne tråd" });
+    }
+
+    if (!tråd.er_lukket) {
+      return res.status(400).json({ error: "Tråden skal være lukket for at kunne slettes" });
+    }
+
+    // Slet beskeder
+    await supabase.from("messages").delete().eq("thread_id", thread_id);
+    // Slet notifikationer
+    await supabase.from("kontakt_notifications").delete().eq("thread_id", thread_id);
+    // Slet selve tråden
+    await supabase.from("threads").delete().eq("id", thread_id);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Fejl ved sletning:", err);
+    res.status(500).json({ error: "Kunne ikke slette tråden" });
   }
 });
 
