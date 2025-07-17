@@ -7,6 +7,7 @@ import { dirname } from 'path';
 import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from "uuid";
+import jwt from 'jsonwebtoken';
 
 // ===== Supabase database =====
 const supabase = createClient(
@@ -835,78 +836,109 @@ app.post('/delete-user', async (req, res) => {
 });
 
 // ==== Opret brugerdatafil ====
-
 app.get("/export-user/:id", async (req, res) => {
   const brugerId = req.params.id;
+  const authHeader = req.headers.authorization;
 
-  // 1. Hent brugerprofil
-  const { data: profil, error: profilError } = await supabase
-    .from("users")
-    .select("id, navn, rolle, oprettet_dato")
-    .eq("id", brugerId)
-    .single();
-
-  if (profilError || !profil) {
-    return res.status(404).json({ fejl: "Bruger ikke fundet." });
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ fejl: "Manglende token." });
   }
 
-  // 2. Hent tilmeldinger
-  const { data: signups } = await supabase
-    .from("signups")
-    .select("event_id, event_title, event_date, frameldt")
-    .eq("bruger_id", brugerId);
+  const token = authHeader.split(" ")[1];
 
-  const tilmeldinger = (signups || []).map(s => ({
-    begivenhed_id: s.event_id,
-    titel: s.event_title,
-    dato: s.event_date,
-    status: s.frameldt ? "frameldt" : "tilmeldt",
-    frameldt: !!s.frameldt
-  }));
+  try {
+    // Verificér token og få brugerens id
+    const { sub: requesterId } = jwt.decode(token);
 
-  // 3. Hent kontakttråde
-  const { data: threads } = await supabase
-    .from("threads")
-    .select("id, roller, oprettet, lukket")
-    .eq("bruger_id", brugerId);
+    // Hent brugerens roller
+    const { data: requester, error: requesterError } = await supabase
+      .from("users")
+      .select("rolle")
+      .eq("id", requesterId)
+      .single();
 
-  const kontakttråde = [];
+    if (requesterError || !requester) {
+      return res.status(403).json({ fejl: "Ugyldig bruger." });
+    }
 
-  for (const tråd of threads || []) {
-    const { data: beskeder } = await supabase
-      .from("messages")
-      .select("afsender, indhold, sendt, vedhæftning")
-      .eq("thread_id", tråd.id)
-      .order("sendt", { ascending: true });
+    const roller = Array.isArray(requester.rolle) ? requester.rolle : [requester.rolle];
+    const tilladteRoller = ["admin", "bestyrelsesmedlem"];
 
-    kontakttråde.push({
-      tråd_id: tråd.id,
-      modtagere: tråd.roller,
-      startet: tråd.oprettet,
-      lukket: tråd.lukket,
-      beskeder: beskeder || []
-    });
+    const harAdgang = roller.some(r => tilladteRoller.includes(r));
+    if (!harAdgang) {
+      return res.status(403).json({ fejl: "Ingen adgang." });
+    }
+
+    // === Fortsæt med eksporten ===
+
+    const { data: profil, error: profilError } = await supabase
+      .from("users")
+      .select("id, navn, rolle, oprettet_dato")
+      .eq("id", brugerId)
+      .single();
+
+    if (profilError || !profil) {
+      return res.status(404).json({ fejl: "Bruger ikke fundet." });
+    }
+
+    const { data: signups } = await supabase
+      .from("signups")
+      .select("event_id, event_title, event_date, frameldt")
+      .eq("bruger_id", brugerId);
+
+    const tilmeldinger = (signups || []).map(s => ({
+      begivenhed_id: s.event_id,
+      titel: s.event_title,
+      dato: s.event_date,
+      status: s.frameldt ? "frameldt" : "tilmeldt",
+      frameldt: !!s.frameldt
+    }));
+
+    const { data: threads } = await supabase
+      .from("threads")
+      .select("id, roller, oprettet, lukket")
+      .eq("bruger_id", brugerId);
+
+    const kontakttråde = [];
+
+    for (const tråd of threads || []) {
+      const { data: beskeder } = await supabase
+        .from("messages")
+        .select("afsender, indhold, sendt, vedhæftning")
+        .eq("thread_id", tråd.id)
+        .order("sendt", { ascending: true });
+
+      kontakttråde.push({
+        tråd_id: tråd.id,
+        modtagere: tråd.roller,
+        startet: tråd.oprettet,
+        lukket: tråd.lukket,
+        beskeder: beskeder || []
+      });
+    }
+
+    const eksportData = {
+      metadata: {
+        eksport_tidspunkt: new Date().toISOString(),
+        generator: "Næstved Klatreklub adminpanel"
+      },
+      brugerprofil: {
+        ...profil,
+        seneste_login: null
+      },
+      tilmeldinger,
+      kontakttråde
+    };
+
+    res.setHeader("Content-Disposition", `attachment; filename=brugerdata-${brugerId}.json`);
+    res.setHeader("Content-Type", "application/json");
+    res.status(200).send(JSON.stringify(eksportData, null, 2));
+  } catch (err) {
+    console.error("❌ Fejl i beskyttet eksport:", err);
+    res.status(500).json({ fejl: "Intern serverfejl." });
   }
-
-  // 4. Saml alt i JSON
-  const eksportData = {
-    metadata: {
-      eksport_tidspunkt: new Date().toISOString(),
-      generator: "Næstved Klatreklub adminpanel"
-    },
-    brugerprofil: {
-      ...profil,
-      seneste_login: null
-    },
-    tilmeldinger,
-    kontakttråde
-  };
-
-  // 5. Returnér fil
-  res.setHeader("Content-Disposition", `attachment; filename=brugerdata-${brugerId}.json`);
-  res.setHeader("Content-Type", "application/json");
-  res.status(200).send(JSON.stringify(eksportData, null, 2));
 });
+
 
 
 // ==== Kontaktformular + notifikation + threadoprettelse ====
