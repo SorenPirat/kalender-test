@@ -830,6 +830,81 @@ app.post('/delete-user', async (req, res) => {
   }
 });
 
+// ==== Opret brugerdatafil ====
+
+app.get("/export-user/:id", async (req, res) => {
+  const brugerId = req.params.id;
+
+  // 1. Hent brugerprofil
+  const { data: profil, error: profilError } = await supabase
+    .from("users")
+    .select("id, navn, rolle, oprettet")
+    .eq("id", brugerId)
+    .single();
+
+  if (profilError || !profil) {
+    return res.status(404).json({ fejl: "Bruger ikke fundet." });
+  }
+
+  // 2. Hent tilmeldinger
+  const { data: signups } = await supabase
+    .from("signups")
+    .select("event_id, event_title, event_date, frameldt")
+    .eq("bruger_id", brugerId);
+
+  const tilmeldinger = (signups || []).map(s => ({
+    begivenhed_id: s.event_id,
+    titel: s.event_title,
+    dato: s.event_date,
+    status: s.frameldt ? "frameldt" : "tilmeldt",
+    frameldt: !!s.frameldt
+  }));
+
+  // 3. Hent kontakttråde
+  const { data: threads } = await supabase
+    .from("threads")
+    .select("id, roller, oprettet, lukket")
+    .eq("bruger_id", brugerId);
+
+  const kontakttråde = [];
+
+  for (const tråd of threads || []) {
+    const { data: beskeder } = await supabase
+      .from("messages")
+      .select("afsender, indhold, sendt, vedhæftning")
+      .eq("thread_id", tråd.id)
+      .order("sendt", { ascending: true });
+
+    kontakttråde.push({
+      tråd_id: tråd.id,
+      modtagere: tråd.roller,
+      startet: tråd.oprettet,
+      lukket: tråd.lukket,
+      beskeder: beskeder || []
+    });
+  }
+
+  // 4. Saml alt i JSON
+  const eksportData = {
+    metadata: {
+      eksport_tidspunkt: new Date().toISOString(),
+      generator: "Næstved Klatreklub adminpanel"
+    },
+    brugerprofil: {
+      ...profil,
+      seneste_login: null
+    },
+    tilmeldinger,
+    kontakttråde
+  };
+
+  // 5. Returnér fil
+  res.setHeader("Content-Disposition", `attachment; filename=brugerdata-${brugerId}.json`);
+  res.setHeader("Content-Type", "application/json");
+  res.status(200).send(JSON.stringify(eksportData, null, 2));
+});
+
+
 // ==== Kontaktformular + notifikation + threadoprettelse ====
 app.post("/kontakt", async (req, res) => {
   console.log("🔥 Modtog POST /kontakt");
