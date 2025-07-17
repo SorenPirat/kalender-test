@@ -842,7 +842,7 @@ app.get("/export-user/:id", async (req, res) => {
   // 1. Hent brugerprofil
   const { data: profil, error: profilError } = await supabase
     .from("users")
-    .select("id, navn, rolle, oprettet")
+    .select("id, navn, rolle, oprettet_dato")
     .eq("id", brugerId)
     .single();
 
