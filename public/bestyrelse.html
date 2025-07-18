@@ -317,58 +317,54 @@ document.getElementById("upload-knap").addEventListener("click", async () => {
   }
 });
 
-async function åbnDokumentEditor(filsti, filnavn) {
+function åbnDokumentEditor(filsti, filnavn) {
   const bruger = JSON.parse(localStorage.getItem("bruger")) || { id: "ukendt", navn: "Anonym" };
-  console.log("🔐 Brugerinfo:", bruger);
 
-  // 🔁 Hent signed URL fra backend-proxy
-  const res = await fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
+  fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filsti })
-  });
+  })
+    .then(res => res.json())
+    .then(result => {
+      const signedUrl = result.signedUrl;
+      if (!signedUrl) return alert("Kunne ikke hente dokument-link.");
 
-  const result = await res.json();
-  console.log("🧪 Backend-respons:", result);
+      const fileType = filnavn.split('.').pop().toLowerCase();
+      const docKey = filsti.replace(/[^\w]/g, "");
+      const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
+                        : fileType.match(/ppt|pptx/) ? "presentation"
+                        : "text";
 
-  const signedUrl = result.signedUrl;
-  if (!signedUrl) {
-    alert("Kunne ikke hente dokument-link fra serveren.");
-    return;
-  }
+      const config = {
+        document: {
+          fileType,
+          key: docKey,
+          title: filnavn,
+          url: signedUrl
+        },
+        documentType,
+        editorConfig: {
+          mode: "edit",
+          user: {
+            id: bruger.id,
+            name: bruger.navn
+          }
+        }
+      };
 
-  console.log("✅ Signed URL:", signedUrl);
+      const editorUrl = `https://onlyoffice-docs-xt5g.onrender.com/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
 
-  const fileType = filnavn.split('.').pop().toLowerCase();
-  const docKey = filsti.replace(/[^\w]/g, "");  // unik nøgle uden specialtegn
+      // 💥 Åbn i ny fane
+      window.open(editorUrl, "_blank");
 
-  const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
-                    : fileType.match(/ppt|pptx/) ? "presentation"
-                    : "text";
-
-  const config = {
-    document: {
-      fileType,
-      key: docKey,
-      title: filnavn,
-      url: signedUrl  // 👈 direkte signed URL
-    },
-    documentType,
-    editorConfig: {
-      mode: "edit",
-      user: {
-        id: bruger.id,
-        name: bruger.navn
-      }
-    }
-  };
-
-  console.log("📄 OnlyOffice config:", config);
-
-  const iframe = document.getElementById("onlyoffice-editor");
-  iframe.src = `https://onlyoffice-docs-xt5g.onrender.com/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
-  document.getElementById("onlyoffice-modal").classList.remove("skjult");
+    })
+    .catch(err => {
+      console.error("OnlyOffice fejl:", err);
+      alert("Der opstod en fejl ved indlæsning af dokumenteditoren.");
+    });
 }
+
 
 
 // slet enkelte filer
