@@ -179,6 +179,37 @@ app.get('/assignments-with-events', async (req, res) => {
   }
 });
 
+// OnlyOffice proxy-endpoint
+app.post("/onlyoffice-url", async (req, res) => {
+  const { filsti } = req.body;
+
+  if (!filsti) return res.status(400).json({ error: "filsti mangler" });
+
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY // eller adgang med JWT backend
+    );
+
+    const { data, error } = await supabase
+      .storage
+      .from("bestyrelse")
+      .createSignedUrl(filsti, 3600);
+
+    if (error || !data) {
+      console.error("Fejl i signed URL:", error);
+      return res.status(500).json({ error: "Kunne ikke generere signed URL" });
+    }
+
+    res.json({ signedUrl: data.signedUrl });
+  } catch (err) {
+    console.error("Serverfejl:", err);
+    res.status(500).json({ error: "Intern serverfejl" });
+  }
+});
+
 app.get("/signups", async (req, res) => {
   try {
     const authClient = await auth.getClient();
