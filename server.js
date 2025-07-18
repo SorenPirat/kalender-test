@@ -222,9 +222,9 @@ app.post("/onlyoffice-url", async (req, res) => {
 
 // iframe loader til OnlyOffice
 app.get("/proxy-doc", async (req, res) => {
-  const filsti = req.query.filsti;
-  if (!filsti) return res.status(400).send("filsti mangler");
-
+  const filsti = decodeURIComponent(req.query.filsti || "");
+  if (!filsti) return res.status(400).send("❌ Mangler filsti");
+  
   try {
     const { data, error } = await supabase
       .storage
