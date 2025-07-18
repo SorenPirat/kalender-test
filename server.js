@@ -10,6 +10,8 @@ import { v4 as uuidv4 } from "uuid";
 import jwt from 'jsonwebtoken';
 import { pipeline } from "stream";
 import { promisify } from "util";
+import mime from "mime-types";
+
 
 const streamPipeline = promisify(pipeline);
 // ===== Supabase database =====
@@ -243,7 +245,8 @@ app.get("/proxy-doc", async (req, res) => {
     }
 
     // Videresend headers
-    res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+    const contentType = response.headers.get("content-type") || mime.lookup(filsti) || "application/octet-stream";
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Length", response.headers.get("content-length") || "0");
     res.setHeader("Content-Disposition", "inline"); // <- vigtigt for iframe!
 
