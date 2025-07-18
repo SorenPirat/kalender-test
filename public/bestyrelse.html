@@ -344,13 +344,15 @@ const signedUrl = result.signedUrl;
   const fileType = filnavn.split('.').pop().toLowerCase();
   const documentType = "text"; // du kan justere dette dynamisk hvis ønsket
   const docKey = filsti.replace(/[^\w]/g, "");
-
+  const encodedPath = encodeURIComponent(filsti);
+  const proxyUrl = `https://nglevagter-test.onrender.com/proxy-doc?filsti=${encodedPath}`;
+  
   const config = {
   document: {
   fileType,
     key: docKey,
     title: filnavn,
-    url: signedUrl
+    url: proxyUrl
   },
   documentType,
   editorConfig: {
