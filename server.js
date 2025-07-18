@@ -11,9 +11,11 @@ import jwt from 'jsonwebtoken';
 import { pipeline } from "stream";
 import { promisify } from "util";
 import mime from "mime-types";
+import { Readable } from 'stream/web';
 
 
 const streamPipeline = promisify(pipeline);
+
 // ===== Supabase database =====
 const supabase = createClient(
   'https://cianxaxaphvrutmstydr.supabase.co',
@@ -248,28 +250,30 @@ app.post("/onlyoffice-url", async (req, res) => {
 });
 
 // Henter filsti til at redigere OnlyOffice
-app.get("/download/*", async (req, res) => {
-  const filsti = req.params[0];
-  if (!filsti) return res.status(400).json({ error: "Manglende filsti" });
+app.get('/download/:filsti(*)', async (req, res) => {
+  const filsti = req.params.filsti;
+  console.log("📥 Forsøger at hente fra Supabase:", filsti);
 
   try {
     const { data, error } = await supabase
       .storage
       .from("bestyrelse")
-      .createSignedUrl(filsti, 60); // kort tid – vi henter den straks
+      .download(filsti);
 
-    if (error || !data?.signedUrl) throw error;
+    if (error || !data) {
+      console.error("❌ Fejl i download-proxy:", error);
+      return res.status(404).send("Filen blev ikke fundet");
+    }
 
-    const response = await fetch(data.signedUrl);
-    if (!response.ok) throw new Error("Kunne ikke hente fil");
+    const contentType = mime.lookup(filsti) || 'application/octet-stream';
+    res.setHeader("Content-Type", contentType);
 
-    res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
-    res.setHeader("Content-Disposition", `inline; filename="${path.basename(filsti)}"`);
-
-    response.body.pipe(res);
+    // Konverter Blob til Node stream og send
+    const readable = Readable.fromWeb(data.stream());
+    readable.pipe(res);
   } catch (err) {
     console.error("❌ Fejl i download-proxy:", err);
-    res.status(500).json({ error: "Fejl ved hentning af dokument" });
+    res.status(500).send("Serverfejl");
   }
 });
 
