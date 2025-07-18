@@ -341,7 +341,7 @@ const signedUrl = result.signedUrl;
 
   console.log("✅ Signed URL fra backend:", signedUrl);
 
-  const fileType = filnavn.split('.').pop();
+  const fileType = filnavn.split('.').pop().toLowerCase();
   const docKey = filsti.replace(/[^\w]/g, "");
 
   const config = {
