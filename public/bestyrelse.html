@@ -323,48 +323,22 @@ function åbnDokumentEditor(filsti, filnavn) {
   fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filsti })
+    body: JSON.stringify({ filsti, filnavn, bruger })
   })
     .then(res => res.json())
     .then(result => {
-      const signedUrl = result.signedUrl;
-      if (!signedUrl) return alert("Kunne ikke hente dokument-link.");
+      if (!result.config) return alert("❌ Kunne ikke hente dokument-konfiguration.");
 
-      const fileType = filnavn.split('.').pop().toLowerCase();
-      const docKey = filsti.replace(/[^\w]/g, "");
-      const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
-                        : fileType.match(/ppt|pptx/) ? "presentation"
-                        : "text";
-
-      const config = {
-        document: {
-          fileType,
-          key: docKey,
-          title: filnavn,
-          url: signedUrl
-        },
-        documentType,
-        editorConfig: {
-          mode: "edit",
-          user: {
-            id: bruger.id,
-            name: bruger.navn
-          }
-        }
-      };
-
-      const editorUrl = `https://documentserver-onlyoffice.up.railway.app/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
+      const editorUrl = `https://documentserver-onlyoffice.up.railway.app/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(result.config))}`;
 
       // 💥 Åbn i ny fane
       window.open(editorUrl, "_blank");
-
     })
     .catch(err => {
       console.error("OnlyOffice fejl:", err);
       alert("Der opstod en fejl ved indlæsning af dokumenteditoren.");
     });
 }
-
 
 
 // slet enkelte filer
