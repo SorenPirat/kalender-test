@@ -8,7 +8,10 @@ import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from "uuid";
 import jwt from 'jsonwebtoken';
+import { pipeline } from "stream";
+import { promisify } from "util";
 
+const streamPipeline = promisify(pipeline);
 // ===== Supabase database =====
 const supabase = createClient(
   'https://cianxaxaphvrutmstydr.supabase.co',
@@ -233,13 +236,21 @@ app.get("/proxy-doc", async (req, res) => {
       return res.status(500).send("Fejl i hentning");
     }
 
-    const fetchRes = await fetch(data.signedUrl);
+    const response = await fetch(data.signedUrl);
 
-    res.setHeader("Content-Type", fetchRes.headers.get("content-type"));
-    fetchRes.body.pipe(res);
+    if (!response.ok) {
+      throw new Error(`Fejl ved fetch af fil: ${response.status}`);
+    }
+
+    // Videresend headers
+    res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+    res.setHeader("Content-Length", response.headers.get("content-length") || "0");
+    res.setHeader("Content-Disposition", "inline"); // <- vigtigt for iframe!
+
+    await streamPipeline(response.body, res);
   } catch (err) {
-    console.error("Fejl i /proxy-doc:", err);
-    res.status(500).send("Intern serverfejl");
+    console.error("❌ Fejl i /proxy-doc:", err);
+    res.status(500).send("Fejl ved hentning af fil");
   }
 });
 
