@@ -342,11 +342,12 @@ const signedUrl = result.signedUrl;
   console.log("✅ Signed URL fra backend:", signedUrl);
 
   const fileType = filnavn.split('.').pop().toLowerCase();
+  const documentType = "text"; // du kan justere dette dynamisk hvis ønsket
   const docKey = filsti.replace(/[^\w]/g, "");
 
   const config = {
   document: {
-    fileType: ext,
+  fileType,
     key: docKey,
     title: filnavn,
     url: signedUrl
