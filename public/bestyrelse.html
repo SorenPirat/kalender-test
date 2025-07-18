@@ -323,16 +323,15 @@ async function åbnDokumentEditor(filsti, filnavn) {
 
   // 🔁 Hent signed URL fra backend-proxy
   const res = await fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ filsti })
-});
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filsti })
+  });
 
-const result = await res.json();
-console.log("🧪 Backend-respons:", result);
+  const result = await res.json();
+  console.log("🧪 Backend-respons:", result);
 
-const signedUrl = result.signedUrl;
-
+  const signedUrl = result.signedUrl;
 
   if (!signedUrl) {
     alert("Kunne ikke hente dokument-link fra serveren.");
@@ -342,28 +341,30 @@ const signedUrl = result.signedUrl;
   console.log("✅ Signed URL fra backend:", signedUrl);
 
   const fileType = filnavn.split('.').pop().toLowerCase();
-  const documentType = "text"; // du kan justere dette dynamisk hvis ønsket
   const docKey = filsti.replace(/[^\w]/g, "");
-  const encodedPath = encodeURIComponent(filsti);
-  const proxyUrl = `https://nglevagter-test.onrender.com/proxy-doc?filsti=${encodedPath}`;
-  
-  const config = {
-  document: {
-  fileType,
-    key: docKey,
-    title: filnavn,
-    url: proxyUrl
-  },
-  documentType,
-  editorConfig: {
-    mode: "edit",
-    user: {
-      id: bruger.id,
-      name: bruger.navn
-    }
-  }
-};
+  const proxyUrl = `https://nglevagter-test.onrender.com/proxy-doc?filsti=${encodeURIComponent(filsti)}`;
 
+  // ⬇️ Automatisk bestemmelse af documentType
+  const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
+                    : fileType.match(/ppt|pptx/) ? "presentation"
+                    : "text";
+
+  const config = {
+    document: {
+      fileType,
+      key: docKey,
+      title: filnavn,
+      url: proxyUrl
+    },
+    documentType,
+    editorConfig: {
+      mode: "edit",
+      user: {
+        id: bruger.id,
+        name: bruger.navn
+      }
+    }
+  };
 
   console.log("📄 OnlyOffice config:", config);
 
@@ -371,9 +372,6 @@ const signedUrl = result.signedUrl;
   iframe.src = `https://onlyoffice-docs-xt5g.onrender.com/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
   document.getElementById("onlyoffice-modal").classList.remove("skjult");
 }
-
-
-
 
 // slet enkelte filer
 window.sletFil = async function(bucket, sti) {
