@@ -226,7 +226,7 @@ app.post("/onlyoffice-url", async (req, res) => {
 app.get("/proxy-doc", async (req, res) => {
   const filsti = decodeURIComponent(req.query.filsti || "");
   if (!filsti) return res.status(400).send("❌ Mangler filsti");
-  
+
   try {
     const { data, error } = await supabase
       .storage
@@ -244,11 +244,23 @@ app.get("/proxy-doc", async (req, res) => {
       throw new Error(`Fejl ved fetch af fil: ${response.status}`);
     }
 
-    // Videresend headers
-    const contentType = response.headers.get("content-type") || mime.lookup(filsti) || "application/octet-stream";
+    // MIME-type + header fix
+    const extension = path.extname(filsti).toLowerCase();
+
+    const mimeTypes = {
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xls": "application/vnd.ms-excel",
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".ppt": "application/vnd.ms-powerpoint",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".txt": "text/plain"
+    };
+
+    const contentType = mimeTypes[extension] || "application/octet-stream";
+
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Length", response.headers.get("content-length") || "0");
-    res.setHeader("Content-Disposition", "inline"); // <- vigtigt for iframe!
+    res.setHeader("Content-Disposition", `inline; filename="${path.basename(filsti)}"`);
 
     await streamPipeline(response.body, res);
   } catch (err) {
@@ -256,6 +268,7 @@ app.get("/proxy-doc", async (req, res) => {
     res.status(500).send("Fejl ved hentning af fil");
   }
 });
+
 
 
 app.get("/signups", async (req, res) => {
