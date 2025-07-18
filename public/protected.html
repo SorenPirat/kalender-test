@@ -39,63 +39,63 @@
   <h1 id="velkomst">Velkommen!</h1>
  
 
-  <script>
-  
-    const client = supabase.createClient(
-      "https://cianxaxaphvrutmstydr.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
-    );
+<script>
+  const client = supabase.createClient(
+    "https://cianxaxaphvrutmstydr.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
+  );
 
-    async function init() {
-      const { data: { user }, error } = await client.auth.getUser();
+  async function init() {
+    const { data: { user }, error } = await client.auth.getUser();
 
-      if (!user || error) {
-        localStorage.removeItem("bruger");
-        window.location.href = "login.html";
+    if (!user || error) {
+      localStorage.removeItem("bruger");
+      window.location.href = "index.html"; // Brug index som login
+      return;
+    }
+
+    let bruger = localStorage.getItem("bruger");
+
+    if (!bruger) {
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("navn, rolle")
+        .eq("id", user.id)
+        .single();
+
+      if (error || profileError || !profile) {
+        console.error("Fejl ved hentning af profil:", error || profileError);
+        window.location.href = "404.html";
         return;
       }
 
-      let bruger = localStorage.getItem("bruger");
+      bruger = {
+        id: user.id,
+        navn: profile.navn,
+        rolle: profile.rolle
+      };
 
-      if (!bruger) {
-        const { data: profile, error: profileError } = await client
-          .from("users")
-          .select("navn, rolle")
-          .eq("id", user.id)
-          .single();
-
-        if (!profile || profileError) {
-          window.location.href = "login.html";
-          return;
-        }
-
-        bruger = {
-          id: user.id,
-          navn: profile.navn,
-          rolle: profile.rolle
-        };
-
-        localStorage.setItem("bruger", JSON.stringify(bruger));
-      } else {
-        bruger = JSON.parse(bruger);
-      }
-
-      document.getElementById("velkomst").textContent = `Hej, ${bruger.navn}!`;
-
+      localStorage.setItem("bruger", JSON.stringify(bruger));
+    } else {
+      bruger = JSON.parse(bruger);
     }
 
-    init();
+    document.getElementById("velkomst").textContent = `Hej, ${bruger.navn}!`;
+  }
 
-    async function logout() {
-      localStorage.removeItem("bruger");
-      const { error } = await client.auth.signOut();
-      if (!error) {
-        setTimeout(() => {
-          window.location.href = "login.html";
-        }, 300);
-      }
+  init();
+
+  async function logout() {
+    localStorage.removeItem("bruger");
+    const { error } = await client.auth.signOut();
+    if (!error) {
+      setTimeout(() => {
+        window.location.href = "index.html"; // Tilbage til login
+      }, 300);
     }
-  </script>
+  }
+</script>
+
 
 <script>
 const klatreCitater = [

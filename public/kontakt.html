@@ -174,7 +174,7 @@ small {
 <body>
   <div class="kontakt-container">
     <h1>📞 Kontakt Næstved Klatreklub</h1>
-		
+	
 <div class="form-gruppe">
   <label class="label" for="modtager">Vælg modtager:</label>
   
@@ -466,14 +466,14 @@ if (!modtager || !titel || (!harTekst && !harLyd)) {
 const body = {
   rolle: modtager,
   titel,
-  afsender: navn,
+  afsender: bruger.id,
   tekst: lydUrl ? null : besked,
   billede_url: billedeUrl,
   lyd_url: lydUrl
 };
 
 
-const res = await fetch("/kontakt", {
+const res = await fetch("https://nglevagter-test.onrender.com/kontakt", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body)

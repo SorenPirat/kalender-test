@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bestyrelsesdokumenter – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="bestyrelse.css" /> 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<h1>📁 Bestyrelsens dokumenter</h1>
+<div id="upload-sektion" style="margin-bottom: 2rem;">
+  <label for="sti-felt">📁 Upload til mappe:</label><br>
+  <input type="text" id="sti-felt" list="sti-forslag" placeholder="fx bestyrelsesmøder/2025/Dagsordner" />
+  <datalist id="sti-forslag"></datalist>
+  <input type="file" id="upload-fil" />
+  <button id="upload-knap">⬆️ Upload</button>
+  <p id="upload-status" style="margin-top: 0.5rem;"></p>
+</div>
+<div id="bruger-navn" style="margin-bottom: 1rem;"></div>
+
+<div id="dokument-sektioner"></div>
+
+<script type="module">
+  import { adgangskontrol, indsætMenu, client } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: ["bestyrelsesmedlem", "admin"],
+    redirectVedFejl: "protected.html",
+    efterLogin: (bruger) => {
+      indsætMenu(bruger);
+      visMapper(bucketNavn);
+    }
+  });
+
+  const bucketNavn = "bestyrelse";
+  const mapper = ["referater", "dagsordener"];
+  const dokumentSektioner = document.getElementById("dokument-sektioner");
+
+function filtypeIkon(filnavn) {
+  const ext = filnavn.toLowerCase().split('.').pop();
+
+  switch (ext) {
+    case "pdf": return "📕";
+    case "doc":
+    case "docx": return "📄";
+    case "xls":
+    case "xlsx": return "📊";
+    case "ppt":
+    case "pptx": return "📽️";
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "gif":
+    case "webp": return "🖼️";
+    case "zip":
+    case "rar": return "🗜️";
+    case "txt": return "📃";
+    default: return "📁";
+  }
+}
+
+
+function visModal(url, path) {
+  const modal = document.getElementById("preview-modal");
+  const img = document.getElementById("preview-billede");
+  const downloadBtn = document.getElementById("download-knap");
+
+  img.src = url;
+
+  downloadBtn.onclick = () => tvungenDownload(path, path.split("/").pop());
+
+  modal.classList.remove("skjult");
+}
+
+
+async function tvungenDownload(path, filnavn = "fil") {
+  const { data, error } = await client.storage
+    .from(bucketNavn)
+    .download(path);
+
+  if (error) {
+    alert("❌ Kunne ikke hente filen");
+    console.error(error);
+    return;
+  }
+
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filnavn;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+
+window.visModal = visModal;
+
+// Luk-funktion
+const modal = document.getElementById("preview-modal");
+const img = document.getElementById("preview-billede");
+const lukKnappen = document.getElementById("luk-modal");
+
+function lukModal() {
+  modal.classList.add("skjult");
+  img.src = "";
+}
+
+// Luk på klik på kryds
+lukKnappen.addEventListener("click", lukModal);
+
+// Luk ved klik udenfor billedet (baggrunden)
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) {
+    lukModal();
+  }
+});
+
+// Luk med Escape-tast
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !modal.classList.contains("skjult")) {
+    lukModal();
+  }
+});
+
+// Hent mapper i bucket (bestyrelse)
+async function hentMapper(bucket) {
+  const { data, error } = await client.storage.from(bucket).list("", {
+    limit: 100,
+  });
+
+  if (error) {
+    console.error("❌ Fejl ved hentning af mapper:", error);
+    return [];
+  }
+
+  // Supabase returnerer mapper som items hvor metadata er null og de IKKE har en punktum-type (fil)
+  return data.filter(item =>
+    !item.name.includes('.') && item.metadata === null
+  );
+}
+
+// Vis mapper i bucket (bestyrelse)
+async function visMapper(bucket) {
+  const container = document.getElementById("dokument-sektioner");
+  container.innerHTML = "";
+
+  const mapper = await hentMapper(bucket);
+
+  for (const mappe of mapper) {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("mappe");
+
+    const header = document.createElement("div");
+    header.classList.add("mappe-header");
+    header.innerHTML = `📁 ${mappe.name}`;
+    header.onclick = () => toggleMappe(mappe.name, wrapper);
+
+    wrapper.appendChild(header);
+    container.appendChild(wrapper);
+  }
+}
+
+// Toggle funktion til vores mapper
+async function toggleMappe(sti, wrapperEl) {
+  let indhold = wrapperEl.querySelector(".mappe-indhold");
+
+  if (indhold) {
+    indhold.remove(); // skjul hvis allerede åbnet
+    return;
+  }
+
+  const { data, error } = await client.storage.from(bucketNavn).list(sti, {
+    limit: 100,
+  });
+
+  if (error) {
+    console.error("❌ Fejl ved hentning af filer i:", sti, error);
+    return;
+  }
+
+  indhold = document.createElement("div");
+  indhold.className = "mappe-indhold";
+
+  for (const item of data) {
+    const fuldSti = `${sti}/${item.name}`.replace(/\/+/g, "/");
+	const skjulteFiler = [".emptyFolderPlaceholder", ".DS_Store", "thumbs.db"];
+	
+    if (!item.name || skjulteFiler.includes(item.name)) continue;
+
+    if (item.metadata === null && !item.name.includes('.')) {
+      // 🟨 Undermappe
+      const undermappeDiv = document.createElement("div");
+      undermappeDiv.classList.add("mappe");
+
+      const header = document.createElement("div");
+      header.classList.add("mappe-header");
+      header.innerHTML = `
+  📁 ${item.name}
+  <button style="float: right;" onclick="event.stopPropagation(); sletMappe('${fuldSti}', this)">🗑️</button>
+`;
+      header.onclick = () => toggleMappe(fuldSti, undermappeDiv);
+
+      undermappeDiv.appendChild(header);
+      indhold.appendChild(undermappeDiv);
+    } else {
+      // 📄 Almindelig fil
+      const { data: signed } = await client.storage
+        .from(bucketNavn)
+        .createSignedUrl(fuldSti, 3600);
+
+      const erBillede = item.name.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+const ikon = filtypeIkon(item.name);
+
+const filWrapper = document.createElement("div");
+filWrapper.className = "fil-linje";
+filWrapper.style.display = "flex";
+filWrapper.style.alignItems = "center";
+filWrapper.style.justifyContent = "space-between";
+filWrapper.style.gap = "0.5rem";
+filWrapper.style.padding = "0.25rem 0";
+
+const filLabel = document.createElement("span");
+filLabel.style.cursor = "pointer";
+filLabel.textContent = `${ikon} ${item.name}`;
+
+const erOnlyOfficeFil = item.name.match(/\.(docx?|xlsx?|pptx?|txt)$/i);
+
+if (erBillede) {
+  filLabel.onclick = () => visModal(signed.signedUrl, fuldSti);
+} else if (erOnlyOfficeFil) {
+  filLabel.onclick = () => åbnDokumentEditor(fuldSti, item.name);
+} else {
+  filLabel.onclick = () => window.open(signed?.signedUrl || "#", "_blank");
+}
+
+
+const sletFilKnap = document.createElement("button");
+sletFilKnap.textContent = "🗑️";
+sletFilKnap.title = `Slet ${item.name}`;
+sletFilKnap.className = "slet-knap";
+sletFilKnap.onclick = (e) => {
+  e.stopPropagation(); // forhindrer åbning
+  sletFil(bucketNavn, fuldSti);
+};
+
+filWrapper.appendChild(filLabel);
+filWrapper.appendChild(sletFilKnap);
+indhold.appendChild(filWrapper);
+
+    }
+  }
+
+  wrapperEl.appendChild(indhold);  
+}
+
+// 🔄 Hent alle mappestier rekursivt (helper)
+async function hentAlleMapper(prefix = "", resultater = []) {
+  const { data, error } = await client.storage.from(bucketNavn).list(prefix, { limit: 100 });
+
+  if (error) return [];
+
+  for (const item of data) {
+    if (item.name.endsWith(".emptyFolderPlaceholder")) continue;
+    if (item.name && item.id === null) { // mappe
+      const sti = prefix ? `${prefix}/${item.name}` : item.name;
+      resultater.push(sti);
+      await hentAlleMapper(sti, resultater);
+    }
+  }
+  return resultater;
+}
+
+// 💾 Udfyld autocomplete-liste
+async function visMapperSomAutocomplete() {
+  const liste = document.getElementById("sti-forslag");
+  const mapper = await hentAlleMapper();
+  liste.innerHTML = "";
+  for (const sti of mapper) {
+    const option = document.createElement("option");
+    option.value = sti;
+    liste.appendChild(option);
+  }
+}
+
+// 🟦 Initialiser autocomplete
+visMapperSomAutocomplete();
+
+// 📤 Upload-håndtering
+document.getElementById("upload-knap").addEventListener("click", async () => {
+  const sti = document.getElementById("sti-felt").value.trim();
+  const fil = document.getElementById("upload-fil").files[0];
+  const status = document.getElementById("upload-status");
+
+  if (!sti || !fil) {
+    status.textContent = "❗ Vælg både mappe og fil.";
+    return;
+  }
+
+  const uploadSti = `${sti}/${fil.name}`;
+
+  const { error } = await client.storage.from(bucketNavn).upload(uploadSti, fil, {
+    upsert: true,
+  });
+
+  if (error) {
+    status.textContent = "❌ Upload-fejl: " + error.message;
+  } else {
+    status.textContent = `✅ Fil uploadet til "${sti}"`;
+    await visMapperSomAutocomplete();  // ← opdater autocomplete
+    await visMapper(bucketNavn);       // ← opdater dynamisk mapper
+  }
+});
+
+async function åbnDokumentEditor(filsti, filnavn) {
+  const bruger = JSON.parse(localStorage.getItem("bruger")) || { id: "ukendt", navn: "Anonym" };
+  console.log("🔐 Brugerinfo:", bruger);
+
+  const { data, error } = await client.storage
+    .from("bestyrelse")
+    .createSignedUrl(filsti, 3600);
+
+  if (error || !data) {
+    console.error("❌ Fejl ved hentning af signed URL:", error);
+    alert("Kunne ikke hente dokument-link.");
+    return;
+  }
+
+  const signedUrl = data.signedUrl;
+  console.log("✅ Signed URL oprettet:", signedUrl);
+
+  // Test: virker URL’en selvstændigt?
+  window.open(signedUrl, "_blank");
+
+  const fileType = filnavn.split('.').pop();
+  const docKey = filsti.replace(/[^\w]/g, ""); // onlyoffice kræver unik nøgle
+
+  const config = {
+    document: {
+      fileType,
+      key: docKey,
+      title: filnavn,
+      url: signedUrl
+    },
+    documentType: "text", // text, spreadsheet, presentation
+    editorConfig: {
+      mode: "edit",
+      user: {
+        id: bruger.id,
+        name: bruger.navn
+      }
+    }
+  };
+
+  console.log("📄 OnlyOffice config:", config);
+
+  const iframe = document.getElementById("onlyoffice-editor");
+  iframe.src = `https://onlyoffice-docs-xt5g.onrender.com/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
+  document.getElementById("onlyoffice-modal").classList.remove("skjult");
+}
+
+
+
+// slet enkelte filer
+window.sletFil = async function(bucket, sti) {
+  if (!confirm(`Slet filen "${sti}"?`)) return;
+  const { error } = await client.storage.from(bucket).remove([sti]);
+  if (error) {
+    alert("❌ Fejl ved sletning af fil");
+    console.error(error);
+  } else {
+    alert("🗑️ Fil slettet");
+    await visMapper(bucketNavn);
+  }
+};
+
+// Slet hele mappen plus indhold
+window.sletMappe = async function(sti, knapEl) {
+  if (!confirm(`Slet mappen "${sti}" og alt indhold?`)) return;
+
+  // Hent alle filer i mappen rekursivt
+  async function hentFiler(path, acc = []) {
+    const { data } = await client.storage.from(bucketNavn).list(path, { limit: 100 });
+    for (const item of data) {
+      const fuldSti = `${path}/${item.name}`;
+      if (item.metadata === null && !item.name.includes(".")) {
+        await hentFiler(fuldSti, acc); // undermappe
+      } else {
+        acc.push(fuldSti);
+      }
+    }
+    return acc;
+  }
+
+  const filerDerSkalSlettes = await hentFiler(sti);
+  if (filerDerSkalSlettes.length === 0) {
+    filerDerSkalSlettes.push(`${sti}/.emptyFolderPlaceholder`); // slet "tom" mappe
+  }
+
+  const { error } = await client.storage.from(bucketNavn).remove(filerDerSkalSlettes);
+  if (error) {
+    alert("❌ Kunne ikke slette mappen");
+    console.error(error);
+  } else {
+    alert(`🗑️ Mappen "${sti}" er slettet`);
+    await visMapper(bucketNavn);
+  }
+};
+
+
+</script>
+
+<!-- modal-preview-billeder -->
+<div id="preview-modal" class="modal skjult">
+  <div class="modal-indhold">
+    <span id="luk-modal" class="luk" title="Luk">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
+       viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" 
+       stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+</span>
+    <img id="preview-billede" src="" alt="Preview" />
+    <button id="download-knap" class="knap-vis">⬇️ Download billede</button>
+  </div>
+</div>
+
+<div id="onlyoffice-modal" class="modal skjult">
+  <div class="modal-indhold" style="width:95%; height:90vh;">
+    <span class="luk" onclick="document.getElementById('onlyoffice-modal').classList.add('skjult')">✖</span>
+    <iframe id="onlyoffice-editor" style="width:100%; height:100%; border:none;"></iframe>
+  </div>
+</div>
+
+
+</body>
+</html>

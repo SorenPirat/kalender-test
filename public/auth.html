@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Min profil – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="calendar.css" />
+</head>
+
+<body>
+  <div class="container">
+    <h1>👤<span id="bruger-navn">–</span></h1>
+
+    <div id="mine-tråde" class="tool-card">
+<h2>📬 Dine beskedtråde</h2>
+
+<div id="tråd-tabs" style="margin-bottom: 1rem;">
+  <button onclick="skiftVisning('aktive')" id="faneknap-aktive" class="aktiv-fane">📂 Aktive</button>
+  <button onclick="skiftVisning('lukkede')" id="faneknap-lukkede">📁 Arkiverede</button>
+</div>
+
+<div id="tråde-liste"></div>
+
+  </div>
+
+
+
+<script type="module">
+  import { adgangskontrol, indsætMenu, client } from './auth.js';
+
+  const BASE_URL = "https://nglevagter-test.onrender.com";
+  let brugerId = null;
+  let visning = "aktive";  // aktuel visning: 'aktive' eller 'lukkede'
+  let alleTråde = [];      // gem alle tråde til fane-skift
+  
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "protected.html",
+    efterLogin: async (bruger) => {
+	brugerId = bruger.id;
+	document.getElementById("bruger-navn").textContent = bruger?.navn || "Ukendt";
+  
+	indsætMenu(bruger);
+
+	// Vent lidt, så menuen og badge er sat ind i DOM
+	setTimeout(() => {
+		lytTilNotifikationer(bruger.id);
+		opdaterNotifikationsBadge(); 
+	}, 200);
+
+	hentMineTråde(bruger.id);
+	}
+	});
+
+
+async function hentMineTråde(id) {
+  try {  
+    const res = await fetch(`${BASE_URL}/threads?brugerId=${id}`);
+    const tråde = await res.json();
+    alleTråde = tråde;
+
+    // Hent notifikationer
+    const { data: notifData, error: notifError } = await client
+      .from("kontakt_notifications")
+      .select("thread_id")
+      .eq("bruger_id", id);
+    if (notifError) throw notifError;
+
+    const notifikationsTråde = new Set(notifData.map(n => n.thread_id));
+
+    // Hent brugernavne
+    const { data: brugere, error } = await client.from("users").select("id, navn");
+    if (error) throw error;
+
+    const navnOpslag = {};
+    for (const b of brugere) navnOpslag[b.id] = b.navn;
+
+    for (const tråd of alleTråde) {
+      if (tråd.lukket_af) {
+        tråd.lukket_af_navn = navnOpslag[tråd.lukket_af] || tråd.lukket_af;
+      }
+	  
+	  if (tråd.genåbnet_af) {
+  tråd.genåbnet_af_navn = navnOpslag[tråd.genåbnet_af] || tråd.genåbnet_af;
+}
+
+      tråd.oprettet_af_navn = navnOpslag[tråd.oprettet_af] || tråd.oprettet_af;
+
+      // Markér om der er notifikation
+      tråd.har_notifikation = notifikationsTråde.has(tråd.id);
+    }
+
+    visTråde(); // vis fane
+  } catch (err) {
+    console.error("❌ Fejl:", err);
+  }
+}
+
+
+function visTråde() {
+  const container = document.getElementById("tråde-liste");
+  container.innerHTML = "";
+
+  const filtrerede = alleTråde.filter(tråd =>
+    visning === "aktive" ? !tråd.er_lukket : tråd.er_lukket
+  );
+
+  for (const tråd of filtrerede) {
+    const erAfsender = tråd.oprettet_af === brugerId;
+	const sidsteSet = erAfsender ? tråd.sidst_set_af_afsender : tråd.sidst_set_af_modtager;
+
+	const nyeBeskeder = tråd.opdateret &&
+		(!sidsteSet || new Date(tråd.opdateret) > new Date(sidsteSet));
+
+	const ikon = tråd.har_notifikation || nyeBeskeder ? "🔔 " : "";
+
+    const div = document.createElement("div");
+    div.className = "tråd-preview";
+div.innerHTML = `
+  <p><strong>${ikon}${tråd.titel}</strong></p>
+  <small>Fra: ${tråd.oprettet_af_navn} · ${new Date(tråd.created_at).toLocaleDateString()}</small>
+  <button onclick="toggleTrådVisning('${tråd.id}')">📂 Vis tråd</button>
+  <div id="beskeder-${tråd.id}" class="besked-visning skjult"></div>` +
+  (tråd.er_lukket && tråd.oprettet_af === brugerId
+    ? `<button onclick="sletTråd('${tråd.id}')" style="margin-top:0.4rem; background:red; color:white;">🗑️ Slet tråd</button>`
+    : "") +
+`  `;
+    container.appendChild(div);
+  }
+}
+
+function skiftVisning(ny) {
+  visning = ny;
+  document.getElementById("faneknap-aktive").classList.toggle("aktiv-fane", ny === "aktive");
+  document.getElementById("faneknap-lukkede").classList.toggle("aktiv-fane", ny === "lukkede");
+  visTråde();
+}
+
+
+function toggleTrådVisning(trådId) {
+  const container = document.getElementById(`beskeder-${trådId}`);
+  const alleredeÅben = !container.classList.contains("skjult");
+
+  if (alleredeÅben) {
+    container.classList.add("skjult");
+    container.innerHTML = "";
+    return;
+  }
+
+  container.classList.remove("skjult");
+  hentOgVisBeskeder(trådId);
+
+  // 🔔 Markér som læst uden at køre visTråde()
+  fetch(`${BASE_URL}/mark-thread-read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: trådId, bruger_id: brugerId })
+  }).then(() => {
+    const tråd = alleTråde.find(t => t.id === trådId);
+    if (tråd) {
+      const nu = new Date().toISOString();
+      if (tråd.oprettet_af === brugerId) {
+        tråd.sidst_set_af_afsender = nu;
+      } else {
+        tråd.sidst_set_af_modtager = nu;
+      }
+	
+	tråd.har_notifikation = false;
+	
+      // Find og opdatér overskriften med 🔔
+      const preview = container.closest(".tråd-preview");
+      if (preview) {
+        const overskrift = preview.querySelector("p strong");
+        if (overskrift) {
+          overskrift.textContent = tråd.titel;
+        }
+      }
+    }
+	
+	// 🔁 Opdater badge (nyt)
+opdaterNotifikationsBadge();
+	
+  });
+}
+
+
+ async function hentOgVisBeskeder(trådId) {
+  const container = document.getElementById(`beskeder-${trådId}`);
+  
+  const { data: beskeder, error } = await client
+    .from("messages")
+    .select("*")
+    .eq("thread_id", trådId)
+    .order("tidspunkt", { ascending: true });
+
+  if (error) {
+    container.innerHTML = "<p>❌ Kunne ikke hente beskeder</p>";
+    return;
+  }
+
+  const { data: brugere } = await client.from("users").select("id, navn");
+  const navnOpslag = {}; brugere.forEach(b => navnOpslag[b.id] = b.navn);
+
+const beskedHTML = beskeder.map(b => {
+  const navn = navnOpslag[b.afsender] || b.afsender;
+  const tekst = b.tekst || "";
+  const lyd = b.lyd_url ? `<audio controls src="${b.lyd_url}"></audio>` : "";
+  const billede = b.billede_url
+    ? `<img src="${b.billede_url}" onclick="åbnFullscreen(this.src)" />`
+    : "";
+  return `<div class="besked">
+    <strong>${navn}</strong>
+    ${tekst}
+    ${lyd}
+    ${billede}
+  </div>`;
+}).join("");
+
+
+  // 👇 Her skal tråden defineres igen
+  const tråd = alleTråde.find(t => t.id === trådId);
+
+  let ekstraHTML = "";
+  if (tråd) {
+  if (tråd.er_lukket && tråd.lukket_af_navn) {
+    ekstraHTML += `<p style="margin-top:1rem; color:#999;">🔒 Tråden blev lukket af <strong>${tråd.lukket_af_navn}</strong></p>`;
+  }
+  if (!tråd.er_lukket && tråd.genåbnet_af_navn) {
+    ekstraHTML += `<p style="margin-top:1rem; color:#999;">📂 Tråden blev genåbnet af <strong>${tråd.genåbnet_af_navn}</strong></p>`;
+  }
+}
+  const svarFelt = tråd.er_lukket ? "" : `
+    <textarea id="svar-${trådId}" rows="2" style="width:100%; margin-top:0.5rem;" placeholder="Skriv et svar..."></textarea>
+    <button onclick="sendSvar('${trådId}')">📤 Send svar</button>
+  `;
+
+let lukKnap = "";
+if (!tråd.er_lukket) {
+  lukKnap = `<button onclick="lukTråd('${trådId}')" style="margin-top:0.5rem;">🗃️ Luk tråd</button>`;
+} else {
+  lukKnap = `<button onclick="genåbnTråd('${trådId}')" style="margin-top:0.5rem;">📂 Genåbn tråd</button>`;
+}
+
+  container.innerHTML = beskedHTML + ekstraHTML + svarFelt + lukKnap;
+  
+  // Scroll container til bund – nyeste besked
+setTimeout(() => {
+  container.scrollTop = container.scrollHeight;
+
+  // Scroll også hele siden ned til tråden
+  container.scrollIntoView({ behavior: "smooth", block: "end" });
+}, 0);
+
+}
+
+async function sendSvar(threadId) {
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const felt = document.getElementById(`svar-${threadId}`);
+  if (!felt) return alert("❌ Tekstfelt ikke fundet");
+
+  const tekst = felt.value.trim();
+  if (!tekst) return alert("❗ Du skal skrive noget for at sende");
+
+  const body = {
+    thread_id: threadId,
+    afsender: bruger.id,
+    tekst
+  };
+
+  try {
+    const res = await fetch(`${BASE_URL}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      felt.value = "";
+
+      const tråd = alleTråde.find(t => t.id === threadId);
+      if (tråd) {
+        tråd.opdateret = new Date().toISOString();
+
+        if (bruger.id === tråd.oprettet_af) {
+          tråd.sidst_set_af_modtager = null;
+          tråd.sidst_set_af_afsender = new Date().toISOString();
+        } else {
+          tråd.sidst_set_af_afsender = null;
+          tråd.sidst_set_af_modtager = new Date().toISOString();
+        }
+
+        tråd.har_notifikation = false;
+      }
+
+      await hentOgVisBeskeder(threadId);
+
+      // ✅ Markér som læst i databasen (så 🔔 ikke vises)
+      await fetch(`${BASE_URL}/mark-thread-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          bruger_id: bruger.id
+        })
+      });
+
+    } else {
+      alert("❌ Kunne ikke sende svar");
+      console.error(data.error);
+    }
+  } catch (err) {
+    console.error("Fejl i sendSvar:", err);
+    alert("❌ Der opstod en fejl ved afsendelse");
+  }
+}
+
+  async function lukTråd(trådId) {
+  if (!confirm("Er du sikker på, at du vil lukke denne tråd?")) return;
+
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+
+  const res = await fetch(`${BASE_URL}/archive-thread`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: trådId, lukket_af: bruger.id })
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    alert("✅ Tråden er nu lukket og arkiveret");
+    hentMineTråde(bruger.id); // behold fane og reload
+  } else {
+    alert("❌ Kunne ikke lukke tråd");
+    console.error(data.error);
+  }
+}
+
+async function opdaterNotifikationsBadge() {
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  if (!bruger) return;
+
+  const { count, error } = await client
+    .from("kontakt_notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("bruger_id", bruger.id);
+
+  // Find badge eller prøv at oprette en ny
+  let badgeEl = document.getElementById("notifikations-badge");
+
+  // Hvis den ikke findes, prøv at finde hvor den burde indsættes
+  if (!badgeEl) {
+    const userNameEl = document.querySelector("#user-name");
+    if (userNameEl) {
+      badgeEl = document.createElement("span");
+      badgeEl.id = "notifikations-badge";
+      userNameEl.appendChild(badgeEl);
+    } else {
+      // Hvis slet ingen bruger-UI endnu → prøv igen senere
+      return setTimeout(opdaterNotifikationsBadge, 200);
+    }
+  }
+
+  // Nu hvor badge findes, vis eller fjern det
+  if (error || !count || count === 0) {
+    badgeEl.remove();
+  } else {
+    badgeEl.textContent = count;
+  }
+}
+
+
+function lytTilNotifikationer(brugerId) {
+  client.channel('notifikations-lyt')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'kontakt_notifications' },
+      payload => {
+        const notifikation = payload.new || payload.old;
+        if (notifikation?.bruger_id === brugerId) {
+          opdaterNotifikationsBadge();
+        }
+      }
+    )
+    .subscribe();
+}
+
+async function sletTråd(trådId) {
+  if (!confirm("Er du sikker på, at du vil slette denne tråd permanent?")) return;
+
+  try {
+    const res = await fetch(`${BASE_URL}/delete-thread`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        thread_id: trådId,
+        bruger_id: brugerId
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert("✅ Tråden er slettet");
+      hentMineTråde(brugerId); // genindlæs tråde
+    } else {
+      alert("❌ Kunne ikke slette tråd: " + data.error);
+    }
+  } catch (err) {
+    console.error("Fejl ved sletning:", err);
+    alert("❌ Der opstod en fejl");
+  }
+}
+
+async function genåbnTråd(trådId) {
+  if (!confirm("Vil du genåbne denne tråd?")) return;
+
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+
+  const res = await fetch(`${BASE_URL}/reopen-thread`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: trådId, bruger_id: bruger.id })
+  });
+
+  const data = await res.json();
+  if (res.ok) {
+    alert("✅ Tråden er genåbnet");
+    hentMineTråde(bruger.id);
+  } else {
+    alert("❌ Kunne ikke genåbne tråd");
+    console.error(data.error);
+  }
+}
+
+
+  window.toggleTrådVisning = toggleTrådVisning;
+  window.sendSvar = sendSvar;
+  window.lukTråd = lukTråd;
+  window.skiftVisning = skiftVisning;
+  window.client = client;
+  window.sletTråd = sletTråd;
+  window.genåbnTråd = genåbnTråd;
+
+
+</script>
+
+<script>
+  function åbnFullscreen(src) {
+    const overlay = document.createElement("div");
+    overlay.className = "fullscreen-overlay";
+    overlay.innerHTML = `<img src="${src}" alt="Fuld visning">`;
+
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+  }
+  window.åbnFullscreen = åbnFullscreen;
+</script>
+
+</body>
+</html>

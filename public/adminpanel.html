@@ -66,6 +66,9 @@ async function loadRolesOverview() {
   const admins = data.filter(u => u.rolle?.includes("admin"));
   const noeglebaerere = data.filter(u => u.rolle?.includes("nøglebærer"));
   const eventmakers = data.filter(u => u.rolle?.includes("eventmaker"));
+  const rutebyggere = data.filter(u => u.rolle?.includes("rutebygger"));
+  const bestyrelsesmedlemmer = data.filter(u => u.rolle?.includes("bestyrelsesmedlem"));
+
 
   const renderList = (elementId, brugere) => {
     const ul = document.getElementById(elementId);
@@ -75,6 +78,8 @@ async function loadRolesOverview() {
   renderList("admin-liste", admins);
   renderList("noeglebaerer-liste", noeglebaerere);
   renderList("eventmaker-liste", eventmakers);
+  renderList("rutebygger-liste", rutebyggere);
+  renderList("bestyrelsesmedlem-liste", bestyrelsesmedlemmer);
 }
 
 //Klubmedlemmer
@@ -135,18 +140,109 @@ async function loadMembers() {
             <td>${Array.isArray(user.rolle) ? user.rolle.join(", ") : user.rolle}</td>
             <td>${new Date(user.oprettet_dato).toLocaleDateString("da-DK")}</td>
             <td>
-              <div class="role-actions" data-id="${user.id}" data-navn="${user.navn}">
-                <button class="set-role" data-role="klubmedlem">🧍</button>
-                <button class="set-role" data-role="eventmaker">🎉</button>
-                <button class="set-role" data-role="nøglebærer">🔑</button>
-                <button class="set-role" data-role="admin">🛠️</button>
-              </div>
-            </td>
-          </tr>
+  <button class="roller-knap" data-id="${user.id}" data-navn="${user.navn}" data-roller='${JSON.stringify(user.rolle)}'>
+    👥 Roller
+  </button>
+  <button class="eksport-knap" data-id="${user.id}" data-navn="${user.navn}" style="margin-top: 0.5rem;">
+    📄 Eksportér
+  </button>
+</td>
+
         `).join("")}
       </tbody>
     `;
     list.appendChild(table);
+
+setTimeout(() => {
+  list.querySelectorAll(".roller-knap").forEach(knap => {
+    knap.addEventListener("click", () => {
+      const id = knap.dataset.id;
+      const navn = knap.dataset.navn;
+      const eksisterendeRoller = JSON.parse(knap.dataset.roller || "[]");
+
+      const popup = document.getElementById("rolle-popup");
+      popup.classList.remove("skjult");
+
+      document.getElementById("rolle-popup-navn").textContent = `Roller for ${navn}`;
+      const form = document.getElementById("rolle-form");
+
+      // Sæt tjekbokse ud fra eksisterende roller
+      form.querySelectorAll("input[name='roller']").forEach(cb => {
+        cb.checked = eksisterendeRoller.includes(cb.value);
+      });
+
+      // Gem roller
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const valgte = Array.from(form.querySelectorAll("input[name='roller']:checked"))
+          .map(cb => cb.value);
+
+        const { error } = await client
+          .from("users")
+          .update({ rolle: valgte })
+          .eq("id", id);
+
+        if (error) {
+          alert("❌ Fejl ved opdatering");
+          console.error(error);
+        } else {
+          alert("✅ Roller opdateret");
+          popup.classList.add("skjult");
+          loadMembers(); // genindlæs
+        }
+      };
+
+      // Luk popup
+      document.getElementById("rolle-popup-annuller").onclick = () => {
+        popup.classList.add("skjult");
+      };
+    });
+  });
+}, 50);
+
+	setTimeout(() => {
+	document.querySelectorAll(".eksport-knap").forEach(knap => {
+    knap.addEventListener("click", async () => {
+      const brugerId = knap.dataset.id;
+      const navn = knap.dataset.navn || "bruger";
+
+      try {
+        const { data: { session } } = await client.auth.getSession();
+        if (!session?.access_token) {
+          alert("❌ Du er ikke logget ind.");
+          return;
+        }
+
+        const res = await fetch(`https://nglevagter-test.onrender.com/export-user/${brugerId}`, {
+
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        });
+
+        if (!res.ok) {
+          const fejl = await res.json();
+          alert(`❌ Fejl: ${fejl.fejl || "Kunne ikke hente data."}`);
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `brugerdata_${navn}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error(err);
+        alert("❌ Teknisk fejl ved eksport.");
+      }
+    });
+  });
+}, 100);
+
 
 // Før re-render
 table.querySelectorAll("th[data-sort]").forEach(th => {
@@ -208,8 +304,30 @@ if (updateError) {
 } else {
   const handling = nyeRoller.includes(nyRolle) ? "tilføjet" : "fjernet";
   alert(`✅ Rollen "${nyRolle}" er nu ${handling} for ${navn}.`);
-  loadMembers(); // eller loadMembers()
+
+  const lokalBruger = JSON.parse(localStorage.getItem("bruger"));
+  if (lokalBruger && lokalBruger.id === id) {
+    const { data: updatedProfile } = await client
+      .from("users")
+      .select("navn, rolle")
+      .eq("id", id)
+      .single();
+
+    if (updatedProfile) {
+      localStorage.setItem("bruger", JSON.stringify({
+        id,
+        navn: updatedProfile.navn,
+        roller: Array.isArray(updatedProfile.rolle) ? updatedProfile.rolle : [updatedProfile.rolle || "klubmedlem"]
+      }));
+
+      window.location.reload();
+      return;
+    }
+  }
+
+  loadMembers();
 }
+
 
       });
     });
@@ -226,7 +344,7 @@ if (updateError) {
    );
 
     renderList();
-  });
+  }); 
 }
 
 //Statistik [CHART]
@@ -955,6 +1073,16 @@ window.visVærktøj = visVærktøj;
     <h4>🎉 Eventmaker</h4>
     <ul id="eventmaker-liste"></ul>
   </section>
+  
+    <section class="rolle-sektion">
+    <h4>🧗 Rutebyggere</h4>
+    <ul id="rutebygger-liste"></ul>
+  </section>
+
+  <section class="rolle-sektion">
+    <h4>📋 Bestyrelsesmedlem</h4>
+    <ul id="bestyrelsesmedlem-liste"></ul>
+  </section>
 </div>
 
 
@@ -1042,9 +1170,26 @@ window.visVærktøj = visVærktøj;
   <ul id="bruger-liste">Indlæser...</ul>
 </div>
 
-
-
-
   </div>
+  
+<!-- Roller popup -->
+<div id="rolle-popup" class="rolle-popup skjult">
+  <div class="rolle-popup-indhold">
+    <h3 id="rolle-popup-navn">Roller for ...</h3>
+    <form id="rolle-form">
+      <label><input type="checkbox" name="roller" value="klubmedlem"> klubmedlem</label>
+      <label><input type="checkbox" name="roller" value="eventmaker"> eventmaker</label>
+      <label><input type="checkbox" name="roller" value="nøglebærer"> nøglebærer</label>
+      <label><input type="checkbox" name="roller" value="admin"> admin</label>
+      <label><input type="checkbox" name="roller" value="bestyrelsesmedlem"> bestyrelsesmedlem</label>
+      <label><input type="checkbox" name="roller" value="rutebygger"> rutebygger</label>
+      <div class="rolle-popup-knapper">
+        <button type="submit">💾 Gem</button>
+        <button type="button" id="rolle-popup-annuller">Annullér</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </body>
 </html>

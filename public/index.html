@@ -44,18 +44,6 @@ button:hover {
   margin-top: 0.5rem;
 }
 
-.info-text {
-  margin-top: 1rem;
-  font-size: 0.95rem;
-  background: #f9f9f9;
-  padding: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-}
-.info-text ul {
-  padding-left: 1.2rem;
-}
-
 .input-style {
   display: block;
   width: 100%;
@@ -151,17 +139,60 @@ button:hover {
         rolle: profile.rolle
       }));
 
-      status.textContent = `Velkommen, ${profile.navn}`;
       setTimeout(() => {
         window.location.href = "protected.html";
       }, 600);
     }
   
- async function signup() {
-  const email = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value;
-  const navn = document.getElementById("navn").value.trim();
+async function signup() {
+  const emailEl = document.getElementById("email");
+  const passwordEl = document.getElementById("password");
+  const navnEl = document.getElementById("navn");
   const status = document.getElementById("status");
+  const samtykke = document.getElementById("samtykke");
+
+  const email = emailEl.value.trim();
+  const password = passwordEl.value;
+  const navn = navnEl.value.trim();
+
+  [emailEl, passwordEl, navnEl].forEach(el => el.classList.remove("input-fejl"));
+  status.textContent = "";
+  status.className = "";
+
+  let fejl = false;
+
+  if (!navn) {
+    navnEl.classList.add("input-fejl");
+    fejl = true;
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(email)) {
+    emailEl.classList.add("input-fejl");
+    fejl = true;
+  }
+
+  if (password.length < 6) {
+    passwordEl.classList.add("input-fejl");
+    fejl = true;
+  }
+
+  if (!samtykke.checked) {
+    status.textContent = "❗ Du skal acceptere vores persondatapolitik for at oprette dig.";
+    status.className = "error";
+    return;
+  }
+
+if (fejl) {
+  const mangler = [];
+  if (!navn) mangler.push("navn");
+  if (!emailPattern.test(email)) mangler.push("e-mail");
+  if (password.length < 6) mangler.push("adgangskode");
+
+  status.textContent = `❌ Mangler eller ugyldig: ${mangler.join(", ")}`;
+  status.className = "error";
+  return;
+}
 
   const { data, error } = await client.auth.signUp({ email, password });
 
@@ -177,8 +208,8 @@ button:hover {
     .from("users")
     .insert({
       id: userId,
-      navn: navn || "Uden navn",
-      rolle: "klubmedlem"
+      navn: navn,
+      rolle: ["klubmedlem"]
     });
 
   if (insertError) {
@@ -187,7 +218,6 @@ button:hover {
     return;
   }
 
-  // Redirect med kort forsinkelse
   status.textContent = "✅ Bruger oprettet – viderestiller...";
   status.className = "";
   setTimeout(() => {
@@ -195,15 +225,15 @@ button:hover {
   }, 1500);
 }
 
+
 document.getElementById("opret-knap").addEventListener("click", () => {
   const emailFelt = document.getElementById("email");
-  const passwordFelt = document.getElementById("password");
   const infoBox = document.getElementById("opret-info");
 
   // Skjul knappen efter klik
   document.getElementById("opret-knap").style.display = "none";
 
-  // Tjek om navn allerede findes
+  // Tilføj navn-felt hvis det ikke allerede findes
   if (!document.getElementById("navn")) {
     const navnFelt = document.createElement("input");
     navnFelt.type = "text";
@@ -215,20 +245,61 @@ document.getElementById("opret-knap").addEventListener("click", () => {
     navnFelt.style.padding = "0.6rem";
     navnFelt.style.fontSize = "1rem";
     navnFelt.style.borderRadius = "6px";
-    navnFelt.style.border = "1px solid #ccc";
+    navnFelt.classList.add("input-style");
+
 
     emailFelt.parentNode.insertBefore(navnFelt, emailFelt);
   }
 
+  // Vis info-boksen med tjekliste, checkbox og opret-knap
   infoBox.classList.remove("hidden");
   infoBox.innerHTML = `
-    <ul>
-      <li>🟢 Indtast dit navn</li>
-      <li>🟢 Brug en gyldig e-mailadresse</li>
-      <li>🟢 Adgangskoden skal være mindst 6 tegn lang</li>
-    </ul>
+<ul style="list-style: none; padding-left: 0;">
+  <li id="check-navn">🧗 Indtast dit navn</li>
+  <li id="check-email">🧗 Brug en gyldig e-mailadresse</li>
+  <li id="check-kode">🧗 Adgangskoden skal være mindst 6 tegn lang</li>
+</ul>
+
+
+    <div class="samtykke-tekst">
+      <label>
+        <input type="checkbox" id="samtykke" />
+        Jeg accepterer <a href="persondatapolitik.html" target="_blank" rel="noopener">persondatapolitikken</a>
+      </label>
+    </div>
+
     <button onclick="signup()">Bekræft og opret</button>
   `;
+
+    // Real-time validering
+  const navnEl = document.getElementById("navn");
+  const emailEl = document.getElementById("email");
+  const kodeEl = document.getElementById("password");
+
+  const checkNavn = document.getElementById("check-navn");
+  const checkEmail = document.getElementById("check-email");
+  const checkKode = document.getElementById("check-kode");
+
+  function opdaterTjekliste() {
+    checkNavn.textContent = navnEl.value.trim() ? "✅ Indtast dit navn" : "🧗 Indtast dit navn";
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    checkEmail.textContent = emailRegex.test(emailEl.value.trim()) 
+      ? "✅ Brug en gyldig e-mailadresse" 
+      : "🧗 Brug en gyldig e-mailadresse";
+
+    checkKode.textContent = kodeEl.value.length >= 6
+      ? "✅ Adgangskoden skal være mindst 6 tegn lang"
+      : "🧗 Adgangskoden skal være mindst 6 tegn lang";
+  }
+
+  navnEl.addEventListener("input", opdaterTjekliste);
+  emailEl.addEventListener("input", opdaterTjekliste);
+  kodeEl.addEventListener("input", opdaterTjekliste);
+
+  opdaterTjekliste(); // initialt kald
+
+  
 });
 
 

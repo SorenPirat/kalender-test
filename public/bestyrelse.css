@@ -1,0 +1,158 @@
+.modal {
+    position: fixed;
+    z-index: 9999;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-indhold {
+  position: relative;
+  background-color: #fff;
+  padding: 2.5rem 1rem 1rem;
+  border-radius: 12px;
+  max-width: 90%;
+  max-height: 90%;
+  text-align: center;
+}
+
+  .modal-indhold img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 8px;
+  }
+
+  .knap-vis {
+    margin-top: 1rem;
+    display: inline-block;
+    background: #007bff;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  .luk {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.luk:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.luk svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: white;
+}
+
+.mappe {
+  border: 1px solid #ccc;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mappe-header {
+  background: #f5f5f5;
+  padding: 0.6rem 1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.mappe-indhold {
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  border-top: 1px solid #ddd;
+}
+
+.fil-link {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.fil-link:hover {
+  text-decoration: underline;
+}
+
+#upload-sektion {
+  padding: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(0, 123, 255, 0.05);
+}
+
+#upload-sektion input[type="text"] {
+  width: 300px;
+  padding: 0.4rem;
+  margin-right: 0.5rem;
+}
+
+#sti-felt {
+  width: 100%;
+  max-width: 500px;
+  font-family: monospace;
+}
+
+.slet-knap {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: crimson;
+}
+.slet-knap:hover {
+  transform: scale(1.1);
+}
+
+
+@media (prefers-color-scheme: dark) {
+  .modal-indhold {
+    background-color: #1e1e1e;
+    color: #eee;
+  }
+
+  .modal-indhold img {
+    border: 2px solid #333;
+  }
+
+  #download-knap {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+  }
+
+  #download-knap:hover {
+    background-color: #444;
+  }
+
+  .luk {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .luk:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .luk svg {
+    stroke: white;
+  }
+}

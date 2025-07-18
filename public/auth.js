@@ -6,6 +6,55 @@ export const client = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
 );
 
+// hentAntalNotifikationer
+export async function hentAntalNotifikationer(brugerId) {
+  const { count, error } = await client
+    .from("kontakt_notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("bruger_id", brugerId);
+
+  if (error) {
+    console.error("❌ Fejl ved hentning af notifikationer:", error);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+export async function opdaterNotifikationsBadge() {
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  if (!bruger) return;
+
+  const { count, error } = await client
+    .from("kontakt_notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("bruger_id", bruger.id);
+
+  let badgeEl = document.getElementById("notifikations-badge");
+
+  if (!badgeEl) {
+    const profilLink = document.querySelector("#profil-link");
+    if (profilLink) {
+      badgeEl = document.createElement("span");
+      badgeEl.id = "notifikations-badge";
+      profilLink.appendChild(badgeEl);
+    } else {
+      // prøv igen lidt senere hvis linket ikke er klar endnu
+      return setTimeout(opdaterNotifikationsBadge, 200);
+    }
+  }
+
+if (error || !count || count === 0) {
+  badgeEl.classList.add("skjult");
+  badgeEl.textContent = "";
+} else {
+  badgeEl.textContent = count;
+  badgeEl.classList.remove("skjult");
+}
+}
+
+
+
 // 🟢 Funktion til adgangskontrol
 export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "index.html", efterLogin = () => {} }) {
   const { data: { user }, error } = await client.auth.getUser();
@@ -15,89 +64,95 @@ export async function adgangskontrol({ tilladteRoller = [], redirectVedFejl = "i
     return;
   }
 
-  let bruger = localStorage.getItem("bruger");
+  // 🎯 Altid hent opdateret brugerprofil fra Supabase
+  const { data: profile, error: profileError } = await client
+    .from("users")
+    .select("navn, rolle")
+    .eq("id", user.id)
+    .single();
 
-  if (bruger) {
-bruger = JSON.parse(bruger);
-
-// Backwards compatibility: hvis kun bruger.rolle findes, lav bruger.roller
-if (!bruger.roller && bruger.rolle) {
-  bruger.roller = [bruger.rolle];
-}
-
-// Sikrer at roller ikke er nested (fx [["admin"]])
-if (Array.isArray(bruger.roller) && Array.isArray(bruger.roller[0])) {
-  bruger.roller = bruger.roller.flat();
-}
-
-	
-  } else {
-    const { data: profile, error: profileError } = await client
-      .from("users")
-      .select("navn, rolle")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profileError) {
-      window.location.href = redirectVedFejl;
-      return;
-    }
-
-bruger = {
-  id: user.id,
-  navn: profile.navn,
-  roller: profile.rolle
-};
-
-
-    localStorage.setItem("bruger", JSON.stringify(bruger));
-  }
-
-  if (
-  tilladteRoller.length > 0 &&
-  !tilladteRoller.some((rolle) => bruger.roller?.includes(rolle))
-) {
-    alert("❌ Du har ikke adgang til denne side.");
+  if (!profile || profileError) {
     window.location.href = redirectVedFejl;
     return;
   }
 
-  // Hvis der allerede findes et #user-name i DOM'en, skriv til det (fallback)
+  const bruger = {
+    id: user.id,
+    navn: profile.navn,
+    roller: Array.isArray(profile.rolle) ? profile.rolle : [profile.rolle || "klubmedlem"]
+  };
+
+  // 🔁 Opdater localStorage med nyeste data
+  localStorage.setItem("bruger", JSON.stringify(bruger));
+
+  // 🔒 Tjek roller
+  if (
+    tilladteRoller.length > 0 &&
+    !tilladteRoller.some((rolle) => bruger.roller?.includes(rolle))
+  ) {
+    document.body.innerHTML = `
+  <h2>🚫 Adgang nægtet</h2>
+  <p>Bruger: ${bruger.navn}</p>
+  <p>Dine roller: ${bruger.roller.join(", ")}</p>
+  <p>Krævede roller: ${tilladteRoller.join(", ")}</p>
+  <p><a href="index.html">↩️ Gå tilbage</a></p>
+`;
+return;
+
+  }
+
+  // 🖊️ Opdater fallback visning i DOM'en
   const nameBox = document.getElementById("user-name");
-if (nameBox) {
-  nameBox.textContent = `👤 ${bruger.navn} (${bruger.roller.join(", ")})`;
+  if (nameBox) {
+    nameBox.textContent = `👤 ${bruger.navn} (${bruger.roller.join(", ")})`;
+  }
+
+  efterLogin(bruger);
 }
 
-efterLogin(bruger); 
-}
 
 // 🟦 Menu-indsætning – med klikbar brugernavn
-export function indsætMenu(bruger) {
-  const navMarkup = `
-  <nav id="menu">
-    <div class="menu-header">
-      <button id="menu-toggle">☰</button>
-<div id="user-name">
-  <span>${bruger.navn} (${bruger.roller.join(", ")})</span>
-</div>
-    </div>
-    <ul id="menu-links">
-      <li><a href="protected.html">🏠 Hjem</a></li>
-      <li><a href="public.html">📅 Kalender</a></li>
-      <li><a href="kontakt.html">📞 Kontakt</a></li>
-${bruger.roller.includes("admin") || bruger.roller.includes("nøglebærer") || bruger.roller.includes("eventmaker")
-  ? '<li><a href="noeglevagter.html">🔑 Nøglevagter</a></li>'
-  : ''}
+export async function indsætMenu(bruger) {
+  const antalNotifikationer = await hentAntalNotifikationer(bruger.id);
 
-${bruger.roller.includes("admin")
-  ? '<li><a href="adminpanel.html">🛠️ Adminpanel</a></li>'
-  : ''}
-      <li><a href="#" id="logout-link">🚪 Log ud</a></li>
-    </ul>
-  </nav>
-  `;
+  const navMarkup = `
+<nav id="menu">
+  <div class="menu-header">
+    <button id="menu-toggle">☰</button>
+    <div id="user-name">
+      <a href="auth.html" title="Gå til din profil" id="profil-link">
+        <span class="badge-wrapper">
+          <span id="notifikations-badge" class="skjult"></span>
+          <span class="profiltekst">
+            <div class="navn-linje">👤 ${bruger.navn}</div>
+            <div class="rolle-linje">(${bruger.roller.join(", ")})</div>
+          </span>
+        </span>
+      </a>
+    </div>
+  </div>
+  <ul id="menu-links">
+    <li><a href="protected.html">🏠 Hjem</a></li>
+    <li><a href="public.html">📅 Kalender</a></li>
+    <li><a href="kontakt.html">📞 Kontakt</a></li>
+    ${bruger.roller.includes("bestyrelsesmedlem") || bruger.roller.includes("admin")
+      ? '<li><a href="bestyrelse.html">📁 Bestyrelse</a></li>' : ''}
+    ${bruger.roller.includes("admin") || bruger.roller.includes("nøglebærer") || bruger.roller.includes("eventmaker")
+      ? '<li><a href="noeglevagter.html">🔑 Nøglevagter</a></li>' : ''}
+    ${bruger.roller.includes("admin")
+      ? '<li><a href="adminpanel.html">🛠️ Adminpanel</a></li>' : ''}
+    <li><a href="#" id="logout-link">🚪 Log ud</a></li>
+  </ul>
+</nav>
+`;
 
   document.body.insertAdjacentHTML("afterbegin", navMarkup);
+
+  // Real-time badge-lytning
+  setTimeout(() => {
+    lytTilNotifikationer(bruger.id);
+    opdaterNotifikationsBadge();
+  }, 300);
 
   // Toggle-effekt
   setTimeout(() => {
@@ -142,5 +197,26 @@ ${bruger.roller.includes("admin")
     }
   }, 0);
 }
+
+
+
+export function lytTilNotifikationer(brugerId) {
+  client.channel('notifikations-lyt')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'kontakt_notifications' },
+      payload => {
+        const notifikation = payload.new || payload.old;
+        if (notifikation?.bruger_id === brugerId) {
+          opdaterNotifikationsBadge();
+        }
+      }
+    )
+    .subscribe();
+}
+
+
+
+
 
 

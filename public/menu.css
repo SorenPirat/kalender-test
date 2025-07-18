@@ -65,6 +65,7 @@ body {
 /* Brugernavn */
 #user-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   margin-left: auto;
@@ -73,6 +74,25 @@ body {
   white-space: nowrap;
   color: #333;
   gap: 0.5rem;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+#user-name .navn-linje {
+  line-height: 1.2;
+  font-size: 1rem;
+}
+
+#user-name .rolle-linje {
+  font-size: 0.8rem;
+  color: #666;
+  line-height: 1.1;
+}
+
+#user-name #profil-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
 }
 
 /* Links */
@@ -95,7 +115,7 @@ body {
 }
 
 #menu-links.show {
-  max-height: 300px;
+  max-height: 800px;
   padding: 0.5rem 1rem;
   opacity: 1;
   visibility: visible;
@@ -142,6 +162,190 @@ body {
   cursor: pointer;
 }
 
+#notifikations-badge {
+  position: absolute;
+  top: -0.5rem;
+  left: -0.6rem;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: bold;
+  min-width: 1.2rem;
+  text-align: center;
+  box-shadow: 0 0 0 2px white;
+  display: inline-block;
+  line-height: 1.4;
+  z-index: 2;
+}
+
+#notifikations-badge:hover {
+  transform: scale(1.1);
+  cursor: pointer;
+}
+#tråd-tabs button {
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  background: #ddd;
+  font-weight: bold;
+  cursor: pointer;
+}
+#tråd-tabs .aktiv-fane {
+  background: #007bff;
+  color: white;
+}
+
+.besked-visning {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+.skjult {
+  display: none;
+}
+.besked-visning div {
+  margin-bottom: 0.5rem;
+}
+.besked-visning textarea {
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+.billede-preview {
+  max-width: 200px;
+  max-height: 150px;
+  cursor: pointer;
+  border: 1px solid #555;
+  margin-top: 0.5rem;
+}
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.fullscreen-overlay img {
+  max-width: 95%;
+  max-height: 95%;
+  border: 3px solid white;
+}
+.fullscreen-overlay:hover {
+  cursor: zoom-out;
+}
+#tråd-søg {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.5rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.tråd-preview {
+  background: #f0f4f8;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  transition: transform 0.2s ease;
+}
+
+.tråd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.tråd-info {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#mine-tråde {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#tråde-liste {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
+.teaser {
+  font-style: italic;
+  color: #666;
+  margin: 0.5rem 0;
+}
+
+.knap-vis {
+  background: #333;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.besked-visning {
+  max-height: calc(100vh - 300px); /* Justér alt efter top-menu, knapper osv. */
+  overflow-y: auto;
+  padding-bottom: 1rem;
+}
+
+
+.besked {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background-color: #ffffff;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 0.95rem;
+}
+
+.besked strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #007bff;
+}
+
+.besked audio {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.besked img {
+  max-width: 120px;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+  box-shadow: 0 0 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.skjult {
+  display: none !important;
+}
+
+
 /* === MOBIL === */
 @media screen and (max-width: 600px) {
   #menu-toggle {
@@ -157,8 +361,15 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  max-width: 100%;
+  word-break: break-word;
 }
 
+#user-name #profil-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
 
   #menu.open {
     background-color: rgba(255, 255, 255, 0.85);
@@ -187,6 +398,12 @@ body {
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
   }
+  
+    #notifikations-badge {
+    background-color: #ff5555;
+    color: white;
+    box-shadow: 0 0 0 2px #1e1e1e;
+  }
 
   #menu-toggle {
     background-color: #444;
@@ -195,6 +412,10 @@ body {
 
   #user-name {
     color: #eee;
+  }
+
+  #user-name .rolle-linje {
+    color: #aaa;
   }
 
   #menu.open {
@@ -207,5 +428,54 @@ body {
   }
   #menu-links {
   background-color: rgba(30, 30, 30, 0.95);
-}
+  }
+  
+  .tråd-preview {
+    background: #1e1e1e;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .tråd-info {
+    color: #aaa;
+  }
+  .teaser {
+    color: #bbb;
+  }
+
+  .besked {
+    background-color: #222;
+    box-shadow: 0 1px 3px rgba(255,255,255,0.05);
+  }
+  .besked strong {
+    color: #81cfff;
+  }
+
+  .besked-visning {
+    background: #1e1e1e;
+    border: 1px solid #444;
+  }
+  .besked-visning div {
+    border-color: #333;
+    color: #ddd;
+  }
+  .besked-visning textarea {
+    background-color: #2a2a2a;
+    color: #eee;
+    border: 1px solid #555;
+  }
+  .besked-visning button {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+  }
+  .besked-visning button:hover {
+    background-color: #444;
+  }
+    #tråd-tabs button {
+    background: #333;
+    color: #ccc;
+  }
+  #tråd-tabs .aktiv-fane {
+    background: #007bff;
+    color: white;
+  }
 }

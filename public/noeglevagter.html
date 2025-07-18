@@ -276,7 +276,7 @@ if (month === currentDate.getMonth() && year === currentDate.getFullYear()) {
   const tbody = table.querySelector('tbody');
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const limitDate = new Date(today); limitDate.setDate(today.getDate() - 3);
+  const limitDate = new Date(today); limitDate.setDate(today.getDate() - 1);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -389,10 +389,10 @@ if (
 
   const editBtn = document.createElement("button");
   editBtn.innerHTML = "🔑";
-  editBtn.title = "Tilføj dig selv som nøglebærer";
+  editBtn.title = "Tilføj dig selv som nøglevagt";
   editBtn.onclick = async () => {
     if (bruger.roller.includes("nøglebærer")) {
-      const confirmAssign = confirm(`Vil du tilføje dig selv (${bruger.navn}) som nøglebærer?`);
+      const confirmAssign = confirm(`Vil du tilføje dig selv ${bruger.navn} som nøglevagt?`);
       if (confirmAssign) {
         await updateAssignment(key, bruger.navn);
         location.reload();
@@ -412,13 +412,13 @@ if (
   const deleteBtn = document.createElement("button");
   deleteBtn.textContent = "🗑️";
   deleteBtn.title = bruger.roller.includes("admin") 
-    ? "Slet nøglebærer"
+    ? "Slet nøglevagt"
     : "Frameld dig denne dag";
 
   deleteBtn.onclick = async () => {
     const confirmMsg = bruger.roller.includes("admin")
-      ? 'Vil du slette nøglebærer for denne dag?'
-      : 'Vil du fjerne dig selv som nøglebærer for denne dag?';
+      ? 'Vil du slette nøglevagt for denne dag?'
+      : 'Vil du fjerne dig selv som nøglevagt for denne dag?';
 
     if (confirm(confirmMsg)) {
       await updateAssignment(key, "");

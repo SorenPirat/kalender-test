@@ -287,8 +287,8 @@ async function openModal(id) {
     e.preventDefault();
     const bruger = JSON.parse(localStorage.getItem("bruger"));
 if (bruger && bruger.navn) {
-  const userNameEl = document.getElementById("user-name");
-  userNameEl.textContent = `👤 ${bruger.navn} (${bruger.rolle})`;
+
+
 }
 
     const res = await fetch("https://nglevagter-test.onrender.com/signup", {
