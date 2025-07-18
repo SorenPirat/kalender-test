@@ -217,6 +217,32 @@ app.post("/onlyoffice-url", async (req, res) => {
   }
 });
 
+// iframe loader til OnlyOffice
+app.get("/proxy-doc", async (req, res) => {
+  const filsti = req.query.filsti;
+  if (!filsti) return res.status(400).send("filsti mangler");
+
+  try {
+    const { data, error } = await supabase
+      .storage
+      .from("bestyrelse")
+      .createSignedUrl(filsti, 60);
+
+    if (error || !data) {
+      console.error("Fejl i signed URL:", error);
+      return res.status(500).send("Fejl i hentning");
+    }
+
+    const fetchRes = await fetch(data.signedUrl);
+
+    res.setHeader("Content-Type", fetchRes.headers.get("content-type"));
+    fetchRes.body.pipe(res);
+  } catch (err) {
+    console.error("Fejl i /proxy-doc:", err);
+    res.status(500).send("Intern serverfejl");
+  }
+});
+
 
 app.get("/signups", async (req, res) => {
   try {
