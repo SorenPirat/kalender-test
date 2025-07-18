@@ -103,13 +103,29 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const cors = require("cors");
+
+const tilladteOrigins = [
+  "http://localhost:8080",
+  "https://nglevagter-test.netlify.app"
+];
+
 app.use(cors({
-  origin: "http://localhost:8080",
-  methods: ["GET", "POST"],
+  origin: function (origin, callback) {
+    // Tillad requests uden origin (fx mobile apps eller curl)
+    if (!origin || tilladteOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Ikke tilladt af CORS: " + origin));
+    }
+  },
+  methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
 
 // ===== Routes =====
 app.get('/assignments', async (req, res) => {
