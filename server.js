@@ -103,8 +103,6 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const cors = require("cors");
-
 const tilladteOrigins = [
   "http://localhost:8080",
   "https://nglevagter-test.netlify.app"
