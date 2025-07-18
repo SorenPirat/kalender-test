@@ -200,9 +200,11 @@ app.get('/assignments-with-events', async (req, res) => {
 
 // OnlyOffice proxy-endpoint
 app.post("/onlyoffice-url", async (req, res) => {
-  const { filsti } = req.body;
+  const { filsti, filnavn, bruger } = req.body;
 
-  if (!filsti) return res.status(400).json({ error: "filsti mangler" });
+  if (!filsti || !filnavn || !bruger) {
+    return res.status(400).json({ error: "Manglende data" });
+  }
 
   try {
     const { data, error } = await supabase
@@ -215,7 +217,30 @@ app.post("/onlyoffice-url", async (req, res) => {
       return res.status(500).json({ error: "Kunne ikke generere signed URL" });
     }
 
-    res.json({ signedUrl: data.signedUrl });
+    const fileType = filnavn.split('.').pop().toLowerCase();
+    const docKey = filsti.replace(/[^\w]/g, "");
+    const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
+                          : fileType.match(/ppt|pptx/) ? "presentation"
+                          : "text";
+
+    const config = {
+      document: {
+        fileType,
+        key: docKey,
+        title: filnavn,
+        url: data.signedUrl
+      },
+      documentType,
+      editorConfig: {
+        mode: "edit",
+        user: {
+          id: bruger.id,
+          name: bruger.navn
+        }
+      }
+    };
+
+    res.json({ config });
   } catch (err) {
     console.error("Serverfejl:", err);
     res.status(500).json({ error: "Intern serverfejl" });
