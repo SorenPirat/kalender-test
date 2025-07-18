@@ -200,13 +200,6 @@ app.post("/onlyoffice-url", async (req, res) => {
   if (!filsti) return res.status(400).json({ error: "filsti mangler" });
 
   try {
-    const { createClient } = require("@supabase/supabase-js");
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY // eller adgang med JWT backend
-    );
-
     const { data, error } = await supabase
       .storage
       .from("bestyrelse")
@@ -223,6 +216,7 @@ app.post("/onlyoffice-url", async (req, res) => {
     res.status(500).json({ error: "Intern serverfejl" });
   }
 });
+
 
 app.get("/signups", async (req, res) => {
   try {
