@@ -228,7 +228,7 @@ app.post("/onlyoffice-url", async (req, res) => {
         fileType,
         key: docKey,
         title: filnavn,
-        url: data.signedUrl
+        url: `https://nglevagter-test.onrender.com/download/${encodeURIComponent(filsti)}`
       },
       documentType,
       editorConfig: {
