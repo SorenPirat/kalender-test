@@ -222,55 +222,6 @@ app.post("/onlyoffice-url", async (req, res) => {
   }
 });
 
-// iframe loader til OnlyOffice
-app.get("/proxy-doc", async (req, res) => {
-  const filsti = decodeURIComponent(req.query.filsti || "");
-  if (!filsti) return res.status(400).send("❌ Mangler filsti");
-
-  try {
-    const { data, error } = await supabase
-      .storage
-      .from("bestyrelse")
-      .createSignedUrl(filsti, 60);
-
-    if (error || !data) {
-      console.error("Fejl i signed URL:", error);
-      return res.status(500).send("Fejl i hentning");
-    }
-
-    const response = await fetch(data.signedUrl);
-
-    if (!response.ok) {
-      throw new Error(`Fejl ved fetch af fil: ${response.status}`);
-    }
-
-    // MIME-type + header fix
-    const extension = path.extname(filsti).toLowerCase();
-
-    const mimeTypes = {
-      ".doc": "application/msword",
-      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ".xls": "application/vnd.ms-excel",
-      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ".ppt": "application/vnd.ms-powerpoint",
-      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      ".txt": "text/plain"
-    };
-
-    const contentType = mimeTypes[extension] || "application/octet-stream";
-
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `inline; filename="${path.basename(filsti)}"`);
-
-    await streamPipeline(response.body, res);
-  } catch (err) {
-    console.error("❌ Fejl i /proxy-doc:", err);
-    res.status(500).send("Fejl ved hentning af fil");
-  }
-});
-
-
-
 app.get("/signups", async (req, res) => {
   try {
     const authClient = await auth.getClient();
