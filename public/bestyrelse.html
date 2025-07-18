@@ -321,41 +321,46 @@ async function åbnDokumentEditor(filsti, filnavn) {
   const bruger = JSON.parse(localStorage.getItem("bruger")) || { id: "ukendt", navn: "Anonym" };
   console.log("🔐 Brugerinfo:", bruger);
 
-  const { data, error } = await client.storage
-    .from("bestyrelse")
-    .createSignedUrl(filsti, 3600);
+  // 🔁 Hent signed URL fra backend-proxy
+  const res = await fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ filsti })
+});
 
-  if (error || !data) {
-    console.error("❌ Fejl ved hentning af signed URL:", error);
-    alert("Kunne ikke hente dokument-link.");
+const result = await res.json();
+console.log("🧪 Backend-respons:", result);
+
+const signedUrl = result.signedUrl;
+
+
+  if (!signedUrl) {
+    alert("Kunne ikke hente dokument-link fra serveren.");
     return;
   }
 
-  const signedUrl = data.signedUrl;
-  console.log("✅ Signed URL oprettet:", signedUrl);
-
-  // Test: virker URL’en selvstændigt?
-  window.open(signedUrl, "_blank");
+  console.log("✅ Signed URL fra backend:", signedUrl);
 
   const fileType = filnavn.split('.').pop();
-  const docKey = filsti.replace(/[^\w]/g, ""); // onlyoffice kræver unik nøgle
+  const docKey = filsti.replace(/[^\w]/g, "");
 
   const config = {
-    document: {
-      fileType,
-      key: docKey,
-      title: filnavn,
-      url: signedUrl
-    },
-    documentType: "text", // text, spreadsheet, presentation
-    editorConfig: {
-      mode: "edit",
-      user: {
-        id: bruger.id,
-        name: bruger.navn
-      }
+  document: {
+    fileType: ext,
+    key: docKey,
+    title: filnavn,
+    url: signedUrl
+  },
+  documentType,
+  editorConfig: {
+    mode: "edit",
+    user: {
+      id: bruger.id,
+      name: bruger.navn
     }
-  };
+  }
+};
+
 
   console.log("📄 OnlyOffice config:", config);
 
@@ -363,6 +368,7 @@ async function åbnDokumentEditor(filsti, filnavn) {
   iframe.src = `https://onlyoffice-docs-xt5g.onrender.com/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(config))}`;
   document.getElementById("onlyoffice-modal").classList.remove("skjult");
 }
+
 
 
 
