@@ -11,7 +11,6 @@ import jwt from 'jsonwebtoken';
 import { pipeline } from "stream";
 import { promisify } from "util";
 import mime from "mime-types";
-import { Readable } from 'stream/web';
 
 
 const streamPipeline = promisify(pipeline);
@@ -268,9 +267,8 @@ app.get('/download/:filsti(*)', async (req, res) => {
     const contentType = mime.lookup(filsti) || 'application/octet-stream';
     res.setHeader("Content-Type", contentType);
 
-    // Konverter Blob til Node stream og send
-    const readable = Readable.fromWeb(data.stream());
-    readable.pipe(res);
+    const arrayBuffer = await data.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
   } catch (err) {
     console.error("❌ Fejl i download-proxy:", err);
     res.status(500).send("Serverfejl");
