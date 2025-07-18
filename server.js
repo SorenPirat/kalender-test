@@ -247,6 +247,32 @@ app.post("/onlyoffice-url", async (req, res) => {
   }
 });
 
+// Henter filsti til at redigere OnlyOffice
+app.get("/download/*", async (req, res) => {
+  const filsti = req.params[0];
+  if (!filsti) return res.status(400).json({ error: "Manglende filsti" });
+
+  try {
+    const { data, error } = await supabase
+      .storage
+      .from("bestyrelse")
+      .createSignedUrl(filsti, 60); // kort tid – vi henter den straks
+
+    if (error || !data?.signedUrl) throw error;
+
+    const response = await fetch(data.signedUrl);
+    if (!response.ok) throw new Error("Kunne ikke hente fil");
+
+    res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${path.basename(filsti)}"`);
+
+    response.body.pipe(res);
+  } catch (err) {
+    console.error("❌ Fejl i download-proxy:", err);
+    res.status(500).json({ error: "Fejl ved hentning af dokument" });
+  }
+});
+
 app.get("/signups", async (req, res) => {
   try {
     const authClient = await auth.getClient();
