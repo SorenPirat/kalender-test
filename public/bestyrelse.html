@@ -8,21 +8,81 @@
   <link rel="stylesheet" href="menu.css" />
   <link rel="stylesheet" href="bestyrelse.css" /> 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<h1>📁 Bestyrelsens dokumenter</h1>
-<div id="upload-sektion" style="margin-bottom: 2rem;">
-  <label for="sti-felt">📁 Upload til mappe:</label><br>
-  <input type="text" id="sti-felt" list="sti-forslag" placeholder="fx bestyrelsesmøder/2025/Dagsordner" />
-  <datalist id="sti-forslag"></datalist>
-  <input type="file" id="upload-fil" />
-  <button id="upload-knap">⬆️ Upload</button>
-  <p id="upload-status" style="margin-top: 0.5rem;"></p>
-</div>
-<div id="bruger-navn" style="margin-bottom: 1rem;"></div>
+<!-- Højrekliksmenu - mapper -->
+<ul id="context-menu" class="skjult">
+  <li id="ny-mappe-valg">➕ Opret ny mappe</li>
+  <li id="slet-mappe-valg">🗑️ Slet mappe</li>
+  <li id="omdoeb-mappe-valg">✏️ Omdøb mappe</li>
+</ul>
 
+<!-- Højrekliksmenu - filer -->
+<ul id="file-context-menu" class="skjult">
+  <li id="slet-fil-valg">🗑️ Slet fil</li>
+  <li id="omdoeb-fil-valg">✏️ Omdøb fil</li>
+  <li id="download-fil-valg">⬇️ Download</li>
+</ul>
+
+<!-- modal-preview-billeder -->
+<div id="preview-modal" class="modal skjult">
+  <div class="modal-indhold">
+    <span id="luk-modal" class="luk" title="Luk">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
+       viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" 
+       stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+</span>
+    <img id="preview-billede" src="" alt="Preview" />
+    <div class="modal-knap-wrapper">
+  <button id="download-knap" class="knap-vis">⬇️ Download billede</button>
+</div>
+</div>
+</div>
+
+<!-- modal-preview-google-docs -->
+<div id="gdocs-modal" class="modal skjult">
+  <div class="modal-indhold">
+    <span class="luk" onclick="lukGdocsModal()" title="Luk">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+           viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </span>
+    <iframe id="gdocs-frame"></iframe>
+	<div class="modal-knap-wrapper">
+  <button id="gdocs-download-knap" class="knap-vis">⬇️ Download dokument</button>
+</div>
+
+</div>
+</div>
+
+<!-- modal-preview-excel-filer -->
+<div id="excel-modal" class="modal skjult">
+  <div class="modal-indhold" style="overflow: auto; max-height: 90vh;">
+    <span class="luk" onclick="lukExcelModal()" title="Luk">
+	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+			viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+			stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg></span>
+	<select id="arkvælger" style="margin: 1rem 0; padding: 0.4rem;"></select>
+    <div id="excel-output"></div>
+  </div>
+</div>
+
+<h1>📁 Bestyrelsens dokumenter</h1>
+
+<div id="bruger-navn" style="margin-bottom: 1rem;"></div>
 <div id="dokument-sektioner"></div>
+
 
 <script type="module">
   import { adgangskontrol, indsætMenu, client } from './auth.js';
@@ -39,7 +99,14 @@
   const bucketNavn = "bestyrelse";
   const mapper = ["referater", "dagsordener"];
   const dokumentSektioner = document.getElementById("dokument-sektioner");
-
+ 
+  // Luk-funktion
+  const modal = document.getElementById("preview-modal");
+  const img = document.getElementById("preview-billede");
+  const lukKnappen = document.getElementById("luk-modal");
+  
+  window.visModal = visModal;
+  
 function filtypeIkon(filnavn) {
   const ext = filnavn.toLowerCase().split('.').pop();
 
@@ -63,19 +130,20 @@ function filtypeIkon(filnavn) {
   }
 }
 
-
 function visModal(url, path) {
+  // Skjul gdocs-modal, hvis den er åben
+  document.getElementById("gdocs-modal")?.classList.add("skjult");
+  document.getElementById("gdocs-frame").src = "";
+
   const modal = document.getElementById("preview-modal");
   const img = document.getElementById("preview-billede");
   const downloadBtn = document.getElementById("download-knap");
 
   img.src = url;
-
   downloadBtn.onclick = () => tvungenDownload(path, path.split("/").pop());
 
   modal.classList.remove("skjult");
 }
-
 
 async function tvungenDownload(path, filnavn = "fil") {
   const { data, error } = await client.storage
@@ -98,22 +166,6 @@ async function tvungenDownload(path, filnavn = "fil") {
   URL.revokeObjectURL(url);
 }
 
-
-window.visModal = visModal;
-
-// Luk-funktion
-const modal = document.getElementById("preview-modal");
-const img = document.getElementById("preview-billede");
-const lukKnappen = document.getElementById("luk-modal");
-
-function lukModal() {
-  modal.classList.add("skjult");
-  img.src = "";
-}
-
-// Luk på klik på kryds
-lukKnappen.addEventListener("click", lukModal);
-
 // Luk ved klik udenfor billedet (baggrunden)
 modal.addEventListener("click", (e) => {
   if (e.target === modal) {
@@ -123,8 +175,9 @@ modal.addEventListener("click", (e) => {
 
 // Luk med Escape-tast
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !modal.classList.contains("skjult")) {
-    lukModal();
+  if (e.key === "Escape") {
+    document.getElementById("context-menu").classList.add("skjult");
+    document.getElementById("file-context-menu").classList.add("skjult");
   }
 });
 
@@ -153,25 +206,124 @@ async function visMapper(bucket) {
   const mapper = await hentMapper(bucket);
 
   for (const mappe of mapper) {
-    const wrapper = document.createElement("div");
-    wrapper.classList.add("mappe");
+  const wrapper = document.createElement("div");
+  wrapper.classList.add("mappe");
 
-    const header = document.createElement("div");
-    header.classList.add("mappe-header");
-    header.innerHTML = `📁 ${mappe.name}`;
-    header.onclick = () => toggleMappe(mappe.name, wrapper);
+  const header = document.createElement("div");
+  header.classList.add("mappe-header");
+  header.innerHTML = `📁 ${mappe.name}`;
 
-    wrapper.appendChild(header);
-    container.appendChild(wrapper);
+  // 🟦 Gør topmapper til drop-zoner
+header.ondragover = (e) => {
+  e.preventDefault();
+  header.classList.add("highlight");
+};
+
+header.ondragleave = () => {
+  header.classList.remove("highlight");
+};
+
+header.ondrop = async (e) => {
+  e.preventDefault();
+  header.classList.remove("highlight");
+
+  const destinationMappe = mappe.name; // eller mappe.name ved topniveau
+  const filer = e.dataTransfer.files;
+
+  if (filer && filer.length > 0) {
+    for (const fil of filer) {
+      let filnavn = fil.name;
+const ugyldigeTegn = /[æøåÆØÅ]/g;
+
+if (ugyldigeTegn.test(filnavn)) {
+  const forslag = filnavn
+    .replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa")
+    .replace(/Æ/g, "Ae").replace(/Ø/g, "Oe").replace(/Å/g, "Aa");
+
+  const godkendt = confirm(`⚠️ Filnavnet "${filnavn}" indeholder æ, ø eller å.\nVil du omdøbe det til "${forslag}" for at kunne uploade?`);
+  if (!godkendt) {
+    console.log("⛔ Bruger afviste ændring af filnavn");
+    continue; // spring denne fil over
   }
+
+  filnavn = forslag;
+}
+
+const uploadSti = `${destinationMappe}/${filnavn}`;
+let { error } = await client.storage
+  .from(bucketNavn)
+  .upload(uploadSti, fil, { upsert: false });
+
+
+if (error) {
+  if (error.message.includes("already exists")) {
+    const overskriv = confirm(`⚠️ Filen "${fil.name}" findes allerede i denne mappe.\nVil du overskrive den?`);
+    if (overskriv) {
+      ({ error } = await client.storage
+        .from(bucketNavn)
+        .upload(uploadSti, fil, { upsert: true }));
+
+      if (error) {
+        alert(`❌ Kunne ikke overskrive filen: ${error.message}`);
+        console.error(error);
+      } else {
+        console.log(`✏️ Filen "${fil.name}" blev overskrevet`);
+      }
+    } else {
+      console.log(`⛔ Bruger afviste overskrivning af "${fil.name}"`);
+    }
+  } else {
+    alert(`❌ Upload-fejl: ${error.message}`);
+    console.error(error);
+  }
+}
+ else {
+        console.log(`✅ Uploadet ${uploadSti}`);
+      }
+    }
+
+    await visMapper(bucketNavn);
+    aktivStiEfterHandling = destinationMappe;
+    await åbnMappeEfterGenindlæsning(destinationMappe);
+    return;
+  }
+
+  // fallback til flytning af fil
+  const kildeSti = e.dataTransfer.getData("text/plain");
+  const filNavn = kildeSti.split("/").pop();
+  if (!filNavn.includes(".")) {
+    alert("❌ Du kan ikke flytte mapper.");
+    return;
+  }
+
+  const nySti = `${destinationMappe}/${filNavn}`;
+  if (kildeSti === nySti) return;
+
+  const { error } = await client.storage.from(bucketNavn).move(kildeSti, nySti);
+  if (error) {
+    alert("❌ Kunne ikke flytte filen");
+    console.error(error);
+  } else {
+    alert(`✅ Filen er flyttet til "${destinationMappe}"`);
+  }
+
+  await visMapper(bucketNavn);
+  aktivStiEfterHandling = destinationMappe;
+  await åbnMappeEfterGenindlæsning(destinationMappe);
+};
+
+  header.onclick = () => toggleMappe(mappe.name, wrapper);
+
+  wrapper.appendChild(header);
+  container.appendChild(wrapper);
+}
 }
 
 // Toggle funktion til vores mapper
 async function toggleMappe(sti, wrapperEl) {
   let indhold = wrapperEl.querySelector(".mappe-indhold");
-
   if (indhold) {
-    indhold.remove(); // skjul hvis allerede åbnet
+    indhold.remove();
     return;
   }
 
@@ -194,21 +346,119 @@ async function toggleMappe(sti, wrapperEl) {
     if (!item.name || skjulteFiler.includes(item.name)) continue;
 
     if (item.metadata === null && !item.name.includes('.')) {
-      // 🟨 Undermappe
-      const undermappeDiv = document.createElement("div");
-      undermappeDiv.classList.add("mappe");
+  // 🟨 Undermappe
+  const undermappeDiv = document.createElement("div");
+  undermappeDiv.classList.add("mappe");
 
-      const header = document.createElement("div");
-      header.classList.add("mappe-header");
-      header.innerHTML = `
-  📁 ${item.name}
-  <button style="float: right;" onclick="event.stopPropagation(); sletMappe('${fuldSti}', this)">🗑️</button>
-`;
-      header.onclick = () => toggleMappe(fuldSti, undermappeDiv);
+  const header = document.createElement("div");
+  header.classList.add("mappe-header");
+  header.innerHTML = `📁 ${item.name}`;
 
-      undermappeDiv.appendChild(header);
-      indhold.appendChild(undermappeDiv);
+  // 🟦 Drag-and-drop til mappe
+header.ondragover = (e) => {
+  e.preventDefault();
+  header.classList.add("highlight");
+};
+
+header.ondragleave = () => {
+  header.classList.remove("highlight");
+};
+
+header.ondrop = async (e) => {
+  e.preventDefault();
+  header.classList.remove("highlight");
+
+  const destinationMappe = fuldSti; // eller mappe.name ved topniveau
+  const filer = e.dataTransfer.files;
+
+  if (filer && filer.length > 0) {
+    for (const fil of filer) {
+      let filnavn = fil.name;
+const ugyldigeTegn = /[æøåÆØÅ]/g;
+
+if (ugyldigeTegn.test(filnavn)) {
+  const forslag = filnavn
+    .replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa")
+    .replace(/Æ/g, "Ae").replace(/Ø/g, "Oe").replace(/Å/g, "Aa");
+
+  const godkendt = confirm(`⚠️ Filnavnet "${filnavn}" indeholder æ, ø eller å.\nVil du omdøbe det til "${forslag}" for at kunne uploade?`);
+  if (!godkendt) {
+    console.log("⛔ Bruger afviste ændring af filnavn");
+    continue; // spring denne fil over
+  }
+
+  filnavn = forslag;
+}
+
+const uploadSti = `${destinationMappe}/${filnavn}`;
+let { error } = await client.storage
+  .from(bucketNavn)
+  .upload(uploadSti, fil, { upsert: false });
+
+
+if (error) {
+  if (error.message.includes("already exists")) {
+    const overskriv = confirm(`⚠️ Filen "${fil.name}" findes allerede i denne mappe.\nVil du overskrive den?`);
+    if (overskriv) {
+      ({ error } = await client.storage
+        .from(bucketNavn)
+        .upload(uploadSti, fil, { upsert: true }));
+
+      if (error) {
+        alert(`❌ Kunne ikke overskrive filen: ${error.message}`);
+        console.error(error);
+      } else {
+        console.log(`✏️ Filen "${fil.name}" blev overskrevet`);
+      }
     } else {
+      console.log(`⛔ Bruger afviste overskrivning af "${fil.name}"`);
+    }
+  } else {
+    alert(`❌ Upload-fejl: ${error.message}`);
+    console.error(error);
+  }
+} else {
+        console.log(`✅ Uploadet ${uploadSti}`);
+      }
+    }
+
+    await visMapper(bucketNavn);
+    aktivStiEfterHandling = destinationMappe;
+    await åbnMappeEfterGenindlæsning(destinationMappe);
+    return;
+  }
+
+  // fallback til flytning af fil
+  const kildeSti = e.dataTransfer.getData("text/plain");
+  const filNavn = kildeSti.split("/").pop();
+  if (!filNavn.includes(".")) {
+    alert("❌ Du kan ikke flytte mapper.");
+    return;
+  }
+
+  const nySti = `${destinationMappe}/${filNavn}`;
+  if (kildeSti === nySti) return;
+
+  const { error } = await client.storage.from(bucketNavn).move(kildeSti, nySti);
+  if (error) {
+    alert("❌ Kunne ikke flytte filen");
+    console.error(error);
+  } else {
+    alert(`✅ Filen er flyttet til "${destinationMappe}"`);
+  }
+
+  await visMapper(bucketNavn);
+  aktivStiEfterHandling = destinationMappe;
+  await åbnMappeEfterGenindlæsning(destinationMappe);
+};
+
+
+  header.onclick = () => toggleMappe(fuldSti, undermappeDiv);
+
+  undermappeDiv.appendChild(header);
+  indhold.appendChild(undermappeDiv);
+}
+ else {
       // 📄 Almindelig fil
       const { data: signed } = await client.storage
         .from(bucketNavn)
@@ -225,38 +475,68 @@ filWrapper.style.justifyContent = "space-between";
 filWrapper.style.gap = "0.5rem";
 filWrapper.style.padding = "0.25rem 0";
 
+// 🎯 Tilføj højreklikmenu
+filWrapper.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  højreklikFilsti = fuldSti;
+
+  document.getElementById("context-menu").classList.add("skjult"); // luk mappemenu
+
+  const menu = document.getElementById("file-context-menu");
+  visMenuUdenforKant(menu, e.pageX, e.pageY);
+  menu.classList.remove("skjult");
+
+});
+
+// 🟦 Gør filen dragbar
+if (item.metadata !== null || item.name.includes(".")) {
+  filWrapper.setAttribute("draggable", "true");
+  filWrapper.ondragstart = (e) => {
+    e.dataTransfer.setData("text/plain", fuldSti);
+  };
+}
+
+
 const filLabel = document.createElement("span");
 filLabel.style.cursor = "pointer";
 filLabel.textContent = `${ikon} ${item.name}`;
 
-const erOnlyOfficeFil = item.name.match(/\.(docx?|xlsx?|pptx?|txt)$/i);
+const erGoogleDocs = item.name.match(/\.(docx?|pdf|pptx?|txt)$/i);
+const erExcel = item.name.match(/\.(xlsx?|csv|xlsm|xlsb)$/i);
 
 if (erBillede) {
   filLabel.onclick = () => visModal(signed.signedUrl, fuldSti);
-} else if (erOnlyOfficeFil) {
-  filLabel.onclick = () => åbnDokumentEditor(fuldSti, item.name);
+} else if (erExcel) {
+  filLabel.onclick = () => visExcelModal(signed.signedUrl);
+} else if (erGoogleDocs) {
+  filLabel.onclick = () => visGdocsModal(signed.signedUrl, fuldSti);
 } else {
   filLabel.onclick = () => window.open(signed?.signedUrl || "#", "_blank");
 }
 
-
-const sletFilKnap = document.createElement("button");
-sletFilKnap.textContent = "🗑️";
-sletFilKnap.title = `Slet ${item.name}`;
-sletFilKnap.className = "slet-knap";
-sletFilKnap.onclick = (e) => {
-  e.stopPropagation(); // forhindrer åbning
-  sletFil(bucketNavn, fuldSti);
+const menuKnap = document.createElement("button");
+menuKnap.innerHTML = "⋮";
+menuKnap.title = "Flere handlinger";
+menuKnap.className = "slet-knap";
+menuKnap.onclick = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  højreklikFilsti = fuldSti;
+  const menu = document.getElementById("file-context-menu");
+  visMenuUdenforKant(menu, e.pageX, e.pageY);
+  menu.classList.remove("skjult");
 };
 
+
 filWrapper.appendChild(filLabel);
-filWrapper.appendChild(sletFilKnap);
+filWrapper.appendChild(menuKnap);
 indhold.appendChild(filWrapper);
 
     }
   }
-
-  wrapperEl.appendChild(indhold);  
+  
+  wrapperEl.appendChild(indhold);
+  wrapperEl.classList.remove("aabner");  
 }
 
 // 🔄 Hent alle mappestier rekursivt (helper)
@@ -276,70 +556,36 @@ async function hentAlleMapper(prefix = "", resultater = []) {
   return resultater;
 }
 
-// 💾 Udfyld autocomplete-liste
-async function visMapperSomAutocomplete() {
-  const liste = document.getElementById("sti-forslag");
-  const mapper = await hentAlleMapper();
-  liste.innerHTML = "";
-  for (const sti of mapper) {
-    const option = document.createElement("option");
-    option.value = sti;
-    liste.appendChild(option);
-  }
-}
-
-// 🟦 Initialiser autocomplete
-visMapperSomAutocomplete();
-
-// 📤 Upload-håndtering
-document.getElementById("upload-knap").addEventListener("click", async () => {
-  const sti = document.getElementById("sti-felt").value.trim();
-  const fil = document.getElementById("upload-fil").files[0];
-  const status = document.getElementById("upload-status");
-
-  if (!sti || !fil) {
-    status.textContent = "❗ Vælg både mappe og fil.";
-    return;
+window.visGdocsModal = function (signedUrl, filsti) {
+  // Skjul billedmodal
+  const billedModal = document.getElementById("preview-modal");
+  if (billedModal) {
+    billedModal.classList.add("skjult");
+    billedModal.classList.remove("vis");
+    document.getElementById("preview-billede").src = "";
   }
 
-  const uploadSti = `${sti}/${fil.name}`;
+  // Vis tekstmodal
+  const modal = document.getElementById("gdocs-modal");
+  const iframe = document.getElementById("gdocs-frame");
+  const downloadBtn = document.getElementById("gdocs-download-knap");
 
-  const { error } = await client.storage.from(bucketNavn).upload(uploadSti, fil, {
-    upsert: true,
-  });
+  // Ryd iframe
+  iframe.src = "";
 
-  if (error) {
-    status.textContent = "❌ Upload-fejl: " + error.message;
-  } else {
-    status.textContent = `✅ Fil uploadet til "${sti}"`;
-    await visMapperSomAutocomplete();  // ← opdater autocomplete
-    await visMapper(bucketNavn);       // ← opdater dynamisk mapper
-  }
-});
+  // Vis modal først
+  modal.classList.remove("skjult");
+  modal.classList.add("vis");
 
-function åbnDokumentEditor(filsti, filnavn) {
-  const bruger = JSON.parse(localStorage.getItem("bruger")) || { id: "ukendt", navn: "Anonym" };
+  // Tilføj iframe lidt forsinket
+  const gviewUrl = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
+  setTimeout(() => {
+    iframe.src = gviewUrl;
+  }, 50);
 
-  fetch("https://nglevagter-test.onrender.com/onlyoffice-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filsti, filnavn, bruger })
-  })
-    .then(res => res.json())
-    .then(result => {
-      if (!result.config) return alert("❌ Kunne ikke hente dokument-konfiguration.");
-
-      const editorUrl = `https://documentserver-onlyoffice.up.railway.app/web-apps/apps/documenteditor/main/index.html?config=${encodeURIComponent(JSON.stringify(result.config))}`;
-
-      // 💥 Åbn i ny fane
-      window.open(editorUrl, "_blank");
-    })
-    .catch(err => {
-      console.error("OnlyOffice fejl:", err);
-      alert("Der opstod en fejl ved indlæsning af dokumenteditoren.");
-    });
-}
-
+  // Download-knap
+  downloadBtn.onclick = () => tvungenDownload(filsti, filsti.split("/").pop());
+};
 
 // slet enkelte filer
 window.sletFil = async function(bucket, sti) {
@@ -387,31 +633,441 @@ window.sletMappe = async function(sti, knapEl) {
   }
 };
 
+window.lukGdocsModal = function () {
+  const modal = document.getElementById("gdocs-modal");
+  const iframe = document.getElementById("gdocs-frame");
+
+  iframe.src = "";
+  modal.classList.remove("vis");
+  modal.classList.add("skjult");
+};
+
+window.visExcelModal = async function (signedUrl) {
+  const res = await fetch(signedUrl);
+  const blob = await res.blob();
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+
+    const arkVælger = document.getElementById("arkvælger");
+    arkVælger.innerHTML = ""; // ryd tidligere indhold
+
+    // Tilføj alle ark til dropdown
+    workbook.SheetNames.forEach((navn, index) => {
+      const option = document.createElement("option");
+      option.value = navn;
+      option.textContent = navn;
+      if (index === 0) option.selected = true;
+      arkVælger.appendChild(option);
+    });
+
+    // Funktion til at vise valgt ark
+    function visArk(navn) {
+      const sheet = workbook.Sheets[navn];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: true });
+
+      const html = XLSX.utils.sheet_to_html(sheet);
+
+      document.getElementById("excel-output").innerHTML = html;
+    }
+
+    // Vis første ark og håndtér ændringer
+    visArk(workbook.SheetNames[0]);
+    arkVælger.onchange = () => visArk(arkVælger.value);
+
+    document.getElementById("excel-modal").classList.remove("skjult");
+  };
+
+  reader.readAsArrayBuffer(blob);
+};
+
+
+window.lukExcelModal = function () {
+  document.getElementById("excel-modal").classList.add("skjult");
+  document.getElementById("excel-output").innerHTML = "";
+};
+
+
+function visMenuUdenforKant(menuEl, x, y) {
+  menuEl.classList.remove("skjult"); // gør den midlertidigt synlig
+
+  const { innerWidth, innerHeight } = window;
+  const offsetWidth = menuEl.offsetWidth || 160;
+  const offsetHeight = menuEl.offsetHeight || 80;
+
+  let left = x;
+  let top = y;
+
+  if (x + offsetWidth > innerWidth) {
+    left = innerWidth - offsetWidth - 10;
+  }
+
+  if (y + offsetHeight > innerHeight) {
+    top = innerHeight - offsetHeight - 10;
+  }
+
+  menuEl.style.left = `${left}px`;
+  menuEl.style.top = `${top}px`;
+
+}
+
+function lukModal() {
+  modal.classList.remove("vis");
+  modal.classList.add("skjult");
+
+  img.src = "";
+}
+
+// Luk på klik på kryds
+lukKnappen.addEventListener("click", lukModal);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !document.getElementById("gdocs-modal").classList.contains("skjult")) {
+    lukGdocsModal();
+  }
+});
+
+document.getElementById("gdocs-modal").addEventListener("click", (e) => {
+  if (e.target.id === "gdocs-modal") {
+    lukGdocsModal();
+  }
+});
+
+let højreklikFilsti = "";
+let højreklikSti = "";
+let aktivStiEfterHandling = "";
+
+
+  document.addEventListener("contextmenu", function(e) {
+  const el = e.target.closest(".mappe-header");
+
+  if (el) {
+    e.preventDefault();
+
+    const sti = hentStiFraElement(el);
+    højreklikSti = sti;
+
+    document.getElementById("file-context-menu").classList.add("skjult"); // luk filmenu
+
+    const menu = document.getElementById("context-menu");
+    visMenuUdenforKant(menu, e.pageX, e.pageY);
+    menu.classList.remove("skjult");
+  } else {
+    lukContextMenu(); // luk hvis man højreklikker andetsteds
+  }
+});
+
+document.addEventListener("click", () => {
+  document.getElementById("context-menu").classList.add("skjult");
+  document.getElementById("file-context-menu").classList.add("skjult");
+});
+
+function lukContextMenu() {
+  const menu = document.getElementById("context-menu");
+  menu.classList.add("skjult");
+}
+
+function hentStiFraElement(el) {
+  const dele = [];
+  let current = el;
+
+  // Gå op gennem .mappe elementerne
+  while (current && current.classList.contains("mappe-header")) {
+    const mappeEl = current.closest(".mappe");
+    const navn = current.textContent.trim().replace("📁", "").trim();
+    if (navn) dele.unshift(navn);
+
+    // Gå op til næste overordnede mappe
+    const næsteMappe = mappeEl?.parentElement?.closest(".mappe");
+    current = næsteMappe?.querySelector(".mappe-header") || null;
+
+    // Sikkerhedsnet: Stop hvis vi kommer i loop
+    if (dele.length > 10) break;
+  }
+
+  return dele.join("/");
+}
+
+// Opret ny mappe (højreklik)
+document.getElementById("ny-mappe-valg").addEventListener("click", async () => {
+  lukContextMenu();
+  const navn = prompt(`Navn på ny mappe i "${højreklikSti}":`);
+  if (!navn) return;
+
+  const navnTrimmet = navn.trim();
+  const ugyldigeTegn = /[^a-zA-Z0-9 _\-]/;
+
+  if (ugyldigeTegn.test(navnTrimmet)) {
+    alert("❌ Mappenavnet må kun indeholde bogstaver (A-Z), tal, mellemrum, bindestreg og underscore.");
+    return;
+  }
+
+  const sti = `${højreklikSti}/${navnTrimmet}`;
+  const placeholderPath = `${sti}/.emptyFolderPlaceholder`;
+
+  const { error } = await client.storage
+    .from(bucketNavn)
+    .upload(placeholderPath, new Blob([""]), { upsert: false });
+
+  if (error) {
+    alert("❌ Kunne ikke oprette mappen: " + error.message);
+    console.error(error);
+  } else {
+    alert(`✅ Mappen "${sti}" er oprettet`);
+    aktivStiEfterHandling = sti;
+	await visMapper(bucketNavn);
+	åbnMappeEfterGenindlæsning(aktivStiEfterHandling);
+  }
+});
+
+// Slet en mappe (højreklik)
+document.getElementById("slet-mappe-valg").addEventListener("click", async () => {
+  lukContextMenu();
+  if (!højreklikSti) return;
+
+  const bekræft = confirm(`Vil du slette hele mappen "${højreklikSti}" og alt indhold?`);
+  if (!bekræft) return;
+
+  async function hentFiler(path, acc = []) {
+    const { data } = await client.storage.from(bucketNavn).list(path, { limit: 100 });
+    for (const item of data) {
+      const fuldSti = `${path}/${item.name}`;
+      if (item.metadata === null && !item.name.includes(".")) {
+        await hentFiler(fuldSti, acc); // undermappe
+      } else {
+        acc.push(fuldSti);
+      }
+    }
+    return acc;
+  }
+
+  const filerDerSkalSlettes = await hentFiler(højreklikSti);
+  if (filerDerSkalSlettes.length === 0) {
+    filerDerSkalSlettes.push(`${højreklikSti}/.emptyFolderPlaceholder`);
+  }
+
+  const { error } = await client.storage.from(bucketNavn).remove(filerDerSkalSlettes);
+  if (error) {
+    alert("❌ Fejl ved sletning af mappen");
+    console.error(error);
+  } else {
+    alert(`🗑️ Mappen "${højreklikSti}" er slettet`);
+	aktivStiEfterHandling = højreklikSti;
+    await visMapper(bucketNavn);
+	åbnMappeEfterGenindlæsning(aktivStiEfterHandling);
+  }
+});
+
+// Omdøb en mappe (højreklik)
+document.getElementById("omdoeb-mappe-valg").addEventListener("click", async () => {
+  lukContextMenu();
+  if (!højreklikSti) return;
+
+  let nytnavn = prompt(`Omdøb mappen "${højreklikSti}" til:`);
+  if (!nytnavn) return;
+
+  nytnavn = nytnavn.trim();
+  const ugyldigeTegn = /[^a-zA-Z0-9 _\-]/;
+
+  if (ugyldigeTegn.test(nytnavn)) {
+    alert("❌ Mappenavnet må kun indeholde bogstaver (A-Z), tal, mellemrum, bindestreg og underscore.");
+    return;
+  }
+
+  const stiDele = højreklikSti.split("/");
+  stiDele.pop();
+  const nySti = [...stiDele, nytnavn].join("/");
+
+  if (nySti === højreklikSti) return;
+
+  async function hentFiler(path, acc = []) {
+    const { data } = await client.storage.from(bucketNavn).list(path, { limit: 100 });
+    for (const item of data) {
+      const fuldSti = `${path}/${item.name}`;
+      if (item.metadata === null && !item.name.includes(".")) {
+        await hentFiler(fuldSti, acc);
+      } else {
+        acc.push(fuldSti);
+      }
+    }
+    return acc;
+  }
+
+  const filer = await hentFiler(højreklikSti);
+  if (filer.length === 0) {
+    filer.push(`${højreklikSti}/.emptyFolderPlaceholder`);
+  }
+
+  for (const gammelSti of filer) {
+    const relativDel = gammelSti.slice(højreklikSti.length + 1);
+    const nyPath = `${nySti}/${relativDel}`;
+    const { error } = await client.storage.from(bucketNavn).move(gammelSti, nyPath);
+    if (error) {
+      alert(`❌ Kunne ikke flytte "${gammelSti}" → "${nyPath}"`);
+      console.error(error);
+      return;
+    }
+  }
+
+  alert(`✏️ Mappen er nu omdøbt til "${nySti}"`);
+  aktivStiEfterHandling = nySti;
+  await visMapper(bucketNavn);
+  åbnMappeEfterGenindlæsning(aktivStiEfterHandling);
+});
+
+// Slet en fil (højreklik)
+document.getElementById("slet-fil-valg").addEventListener("click", async () => {
+  document.getElementById("file-context-menu").classList.add("skjult");
+
+  if (!højreklikFilsti) return;
+
+  const bekræft = confirm(`🗑️ Vil du slette filen:\n"${højreklikFilsti.split("/").pop()}"?`);
+  if (!bekræft) return;
+
+  const { error } = await client.storage.from(bucketNavn).remove([højreklikFilsti]);
+
+  if (error) {
+    alert("❌ Der opstod en fejl ved sletning");
+    console.error(error);
+  } else {
+    alert("🗑️ Filen blev slettet");
+    const stiTilMappe = højreklikFilsti.split("/").slice(0, -1).join("/");
+    aktivStiEfterHandling = stiTilMappe;
+    await visMapper(bucketNavn);
+    await åbnMappeEfterGenindlæsning(stiTilMappe);
+  }
+
+  højreklikFilsti = "";
+});
+
+// Omdøb en fil (højreklik)
+document.getElementById("omdoeb-fil-valg").addEventListener("click", async () => {
+  document.getElementById("file-context-menu").classList.add("skjult");
+
+  if (!højreklikFilsti) return;
+
+  const gammeltNavn = højreklikFilsti.split("/").pop();
+  const stiTilMappe = højreklikFilsti.split("/").slice(0, -1).join("/");
+
+  const nytNavn = prompt(`Omdøb filen "${gammeltNavn}" til:`, gammeltNavn);
+  if (!nytNavn || nytNavn.trim() === "" || nytNavn === gammeltNavn) return;
+
+  // Valider navn (samme som mapper – du kan justere regex hvis du vil tillade .pdf fx)
+  const ugyldigeTegn = /[^a-zA-Z0-9 _\-.]/;
+  if (ugyldigeTegn.test(nytNavn)) {
+    alert("❌ Filnavnet må kun indeholde A-Z, 0-9, mellemrum, bindestreg, underscore og punktum.");
+    return;
+  }
+
+  const nySti = `${stiTilMappe}/${nytNavn.trim()}`;
+
+  const { error } = await client.storage.from(bucketNavn).move(højreklikFilsti, nySti);
+  if (error) {
+    alert("❌ Kunne ikke omdøbe filen");
+    console.error(error);
+  } else {
+    alert(`✏️ Filen blev omdøbt til "${nytNavn.trim()}"`);
+    aktivStiEfterHandling = stiTilMappe;
+    await visMapper(bucketNavn);
+    await åbnMappeEfterGenindlæsning(stiTilMappe);
+  }
+
+  højreklikFilsti = "";
+});
+
+// Download en fil (højreklik)
+document.getElementById("download-fil-valg").addEventListener("click", async () => {
+  document.getElementById("file-context-menu").classList.add("skjult");
+
+  if (!højreklikFilsti) return;
+
+  const filnavn = højreklikFilsti.split("/").pop();
+
+  try {
+    const { data, error } = await client.storage
+      .from(bucketNavn)
+      .download(højreklikFilsti);
+
+    if (error || !data) {
+      alert("❌ Kunne ikke hente filen");
+      console.error(error);
+      return;
+    }
+
+    const url = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filnavn;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error("❌ Fejl ved download:", err);
+    alert("❌ Teknisk fejl under download.");
+  }
+
+  højreklikFilsti = "";
+});
+
+
+function vent(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function ventPåElement(findFn, maxTries = 20, interval = 100) {
+  for (let i = 0; i < maxTries; i++) {
+    const el = findFn();
+    if (el) return el;
+    await vent(interval);
+  }
+  return null;
+}
+
+async function åbnMappeEfterGenindlæsning(sti) {
+  if (!sti) return;
+  const dele = sti.split("/");
+
+  let aktuel = document;
+  let stiAkkumuleret = "";
+
+  for (let i = 0; i < dele.length; i++) {
+    const delnavn = dele[i];
+    stiAkkumuleret = stiAkkumuleret ? `${stiAkkumuleret}/${delnavn}` : delnavn;
+
+    // Vent til elementet findes i DOM'en
+    const match = await ventPåElement(() =>
+      Array.from(aktuel.querySelectorAll(".mappe-header"))
+        .find(el => el.textContent.trim().includes(delnavn))
+    );
+
+    if (match) {
+      match.click(); // fold ud
+      aktuel = match.parentElement;
+      await vent(100); // vent lidt så næste niveau kan indlæses
+    } else {
+      break;
+    }
+  }
+
+  // Highlight sidste mappe
+  const sidsteNavn = dele[dele.length - 1];
+  const sidsteMatch = Array.from(document.querySelectorAll(".mappe-header"))
+    .find(el => el.textContent.trim().includes(sidsteNavn));
+  if (sidsteMatch) {
+    sidsteMatch.classList.add("highlight");
+    setTimeout(() => {
+      sidsteMatch.classList.remove("highlight");
+    }, 2000);
+  }
+
+  aktivStiEfterHandling = "";
+}
 
 </script>
-
-<!-- modal-preview-billeder -->
-<div id="preview-modal" class="modal skjult">
-  <div class="modal-indhold">
-    <span id="luk-modal" class="luk" title="Luk">
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
-       viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" 
-       stroke-linecap="round" stroke-linejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-</span>
-    <img id="preview-billede" src="" alt="Preview" />
-    <button id="download-knap" class="knap-vis">⬇️ Download billede</button>
-  </div>
-</div>
-
-<div id="onlyoffice-modal" class="modal skjult">
-  <div class="modal-indhold" style="width:95%; height:90vh;">
-    <span class="luk" onclick="document.getElementById('onlyoffice-modal').classList.add('skjult')">✖</span>
-    <iframe id="onlyoffice-editor" style="width:100%; height:100%; border:none;"></iframe>
-  </div>
-</div>
 
 
 </body>
