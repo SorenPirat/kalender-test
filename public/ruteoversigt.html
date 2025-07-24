@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ruteoversigt – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <style>
+    canvas {
+      border: 1px solid #333;
+      margin-top: 1rem;
+      max-width: 100%;
+    }
+    #ruteSelector {
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>🧗 Ruteoversigt</h2>
+
+  <select id="vægValg">
+    <option value="sektor-a">Sektor A</option>
+    <option value="sektor-b">Sektor B</option>
+  </select>
+  
+  <select id="ruteValg">
+	<option value="">Vælg en rute</option>
+  </select>
+ <p id="status">Vælg en væg for at se ruter</p>
+  
+<div id="canvasWrapper" style="position: relative; display: inline-block;">
+  <canvas id="canvas"></canvas>
+
+  <div id="ruteInfoBoks" class="rute-info skjul">
+    <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
+    <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
+    <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
+  </div>
+</div>
+
+
+  <script type="module">
+import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+adgangskontrol({
+  tilladteRoller: [],
+  redirectVedFejl: "protected.html",
+  efterLogin: bruger => indsætMenu(bruger)
+});
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let img = new Image();
+let alleRuter = [];
+let ruterKlar = false;
+
+const vægValg = document.getElementById("vægValg");
+const ruteValg = document.getElementById("ruteValg");
+
+vægValg.addEventListener("change", () => visRuterForVæg(vægValg.value));
+
+ruteValg.addEventListener("change", () => {
+  const valgtId = ruteValg.value;
+  const rute = alleRuter.find(r => r.id == valgtId);
+  if (rute) visRute(rute);
+});
+
+async function visRuterForVæg(billedeId) {
+  // Nulstil og ryd canvas og dropdown
+  ruterKlar = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  alleRuter = [];
+  ruteValg.innerHTML = '<option value="">Vælg en rute</option>';
+  document.getElementById("status").textContent = "🔄 Indlæser billede og ruter...";
+
+  // Hent billede
+  const { data: urlData, error: urlFejl } = await client
+    .storage.from("ruter")
+    .createSignedUrl(`${billedeId}.jpg`, 60);
+
+  if (urlFejl || !urlData?.signedUrl) {
+    document.getElementById("status").textContent = "❌ Kunne ikke hente billede.";
+    return;
+  }
+
+  img = new Image();
+  img.onload = async () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    // Hent ruter
+    const { data: ruter, error } = await client
+      .from("ruter")
+      .select("*")
+      .eq("billede_id", billedeId);
+
+    if (error || !ruter.length) {
+      document.getElementById("status").textContent = "Ingen ruter fundet.";
+      return;
+    }
+
+    alleRuter = ruter;
+    udfyldRuteDropdown(ruter);
+    document.getElementById("status").textContent = "✅ Vælg en rute eller klik på et greb";
+    ruterKlar = true;
+  };
+
+  img.src = urlData.signedUrl;
+}
+
+function udfyldRuteDropdown(ruter) {
+  ruteValg.innerHTML = '<option value="">Vælg en rute</option>';
+  for (const r of ruter) {
+    const option = document.createElement("option");
+    option.value = r.id;
+    option.textContent = r.navn;
+    ruteValg.appendChild(option);
+  }
+}
+
+function visRute(rute) {
+  ctx.drawImage(img, 0, 0);
+  const farve = rute.farve || "cyan";
+  rute.greb.forEach(g => tegnGreb(g, farve));
+
+  // Opdater info-boks
+  document.getElementById("infoNavn").textContent = rute.navn;
+  document.getElementById("infoGrad").textContent = rute.grad || "?";
+  document.getElementById("infoBygger").textContent = rute.rutebygger || "Ukendt";
+  document.getElementById("ruteInfoBoks").classList.remove("skjul");
+
+  document.getElementById("status").textContent = `🧗 Viser rute: ${rute.navn}`;
+}
+
+
+function tegnGreb(p, farve) {
+  // Skygge (sort med lav opacity)
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
+
+  // Farveramme ovenpå
+  ctx.strokeStyle = farve;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
+}
+
+
+// Klik på canvas = vælg rute via greb
+canvas.onclick = function (e) {
+  if (!ruterKlar) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
+
+  for (const rute of alleRuter) {
+    for (const greb of rute.greb) {
+      const { x, y, width, height } = greb;
+      const inBox =
+        clickX >= x - width / 2 && clickX <= x + width / 2 &&
+        clickY >= y - height / 2 && clickY <= y + height / 2;
+
+      if (inBox) {
+        visRute(rute);
+        ruteValg.value = rute.id; // opdater dropdown
+        return;
+      }
+    }
+  }
+};
+
+// Start med første væg
+visRuterForVæg(vægValg.value);
+
+  </script>
+</body>
+</html>

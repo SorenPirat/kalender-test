@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Klatregreb-visning (YOLOv8)</title>
+  <link rel="stylesheet" href="base.css" /> 
+  <link rel="stylesheet" href="menu.css" />
+  <style>
+    canvas {
+      border: 1px solid #444;
+      max-width: 100%;
+      margin-top: 20px;
+    }
+    #colorButtons {
+      margin-top: 15px;
+    }
+    button {
+      margin-right: 8px;
+      padding: 6px 12px;
+    }
+    #ruteForm {
+      margin-top: 20px;
+    }
+    #ruteForm input {
+      padding: 6px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🧗 Upload billede og opret rute</h2>
+  <input type="file" id="imgInput" accept="image/*" />
+
+  <p id="status">Ingen billede valgt endnu</p>
+
+<div id="ruteForm">
+  
+  <input type="text" id="rutenavn" placeholder="Navn på rute" />
+  <select id="rutefarve">
+    <option value="grey">Grå</option>
+    <option value="red">Rød</option>
+    <option value="green">Grøn</option>
+    <option value="blue">Blå</option>
+    <option value="orange">Orange</option>
+	<option value="purple">Lilla</option>
+	<option value="black">Sort</option>
+	<option value="yellow">Gul</option>
+	<option value="white">Hvid</option>
+	<option value="pink">Pink</option>
+	<option value="mint">Mint</option>
+  </select>
+  
+  <select id="rutegrad">
+  <option value="">Grad</option>
+  <option>4</option>
+  <option>5a</option>
+  <option>5b</option>
+  <option>5c</option>
+  <option>6a</option>
+  <option>6a+</option>
+  <option>6b</option>
+  <option>6b+</option>
+  <option>6c</option>
+  <option>6c+</option>
+  <option>7a</option>
+  <option>7a+</option>
+  <option>7b</option>
+  <option>7b+</option>
+  <option>7c</option>
+</select>
+  <input type="text" id="rutebygger" placeholder="Navn på rutebygger" />
+  
+  <select id="billedeIdValg">
+  <!-- Boulder -->
+  <option value="sektor-a">Sektor A</option>
+  <option value="sektor-b">Sektor B</option>
+  <option value="sektor-c">Sektor C</option>
+  <option value="sektor-d">Sektor D</option>
+  <!-- Højvæg -->
+  <option value="endevæg">Anker 1-2-3</option>
+  <option value="taget">Taget</option>
+  <option value="slab">Slab 13 - 14</option>
+</select>
+  
+  <button id="gemKnap">✅ Gem rute</button>
+  <button onclick="fortrydSidste()">↩️ Fortryd sidste greb</button>
+  <button onclick="rydValg()">🗑️ Ryd valg</button>
+  <button id="toggleGrebKnap">🔍 Vis alle greb</button>
+
+</div>
+
+
+  <canvas id="canvas"></canvas>
+  
+<h3>Gemte ruter</h3>
+<div id="ruteListe"></div>
+
+<script type="module">
+  import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "protected.html",
+    efterLogin: (bruger) => {
+      indsætMenu(bruger);
+      const brugerNavnEl = document.getElementById("bruger-navn");
+if (brugerNavnEl) {
+  brugerNavnEl.textContent = (bruger?.navn || "Ukendt");
+}
+    }
+  });
+
+async function hentRuter() {
+  const { data, error } = await client
+    .from("ruter")
+    .select("*");
+
+  if (error) {
+    console.error("❌ Kunne ikke hente ruter:", error);
+    return;
+  }
+
+  gemteRuter = data;
+  opdaterRuteListe();
+}
+
+
+  let allPredictions = [];
+  let valgtRute = [];
+  let gemteRuter = [];
+  let img, canvas, ctx;
+  let visAlleGreb = false;
+
+
+document.getElementById("imgInput").addEventListener("change", async function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    img = new Image();
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+canvas.onclick = async function(e) {
+const rect = canvas.getBoundingClientRect();
+const scaleX = canvas.width / rect.width;
+const scaleY = canvas.height / rect.height;
+
+const clickX = (e.clientX - rect.left) * scaleX;
+const clickY = (e.clientY - rect.top) * scaleY;
+
+
+  const clicked = allPredictions.find(p => {
+    const { x, y, width, height } = p;
+    return clickX >= x - width / 2 && clickX <= x + width / 2 &&
+           clickY >= y - height / 2 && clickY <= y + height / 2;
+  });
+
+  if (!clicked) {
+    // Brugeren klikkede på et tomt sted → gør ingenting
+    return;
+  }
+
+  const match = gemteRuter.find(rute => {
+    return rute.greb.some(g =>
+      Math.abs(g.x - clicked.x) < 5 &&
+      Math.abs(g.y - clicked.y) < 5 &&
+      g.class === clicked.class
+    );
+  });
+
+  if (match) {
+    visRute(match);
+    return;
+  }
+
+  // Klikket er et nyt greb der ikke findes i en rute
+  valgtRute.push(clicked);
+  drawSelection();
+};
+
+canvas.addEventListener("contextmenu", function (e) {
+  e.preventDefault(); // forhindrer den normale højreklik-menu
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
+
+  // Find det valgte greb der blev højreklikket på
+  const clicked = valgtRute.find(p => {
+    return (
+      clickX >= p.x - p.width / 2 &&
+      clickX <= p.x + p.width / 2 &&
+      clickY >= p.y - p.height / 2 &&
+      clickY <= p.y + p.height / 2
+    );
+  });
+
+  if (clicked) {
+    valgtRute = valgtRute.filter(p => p !== clicked);
+    drawSelection();
+  }
+});
+
+
+
+    const reader = new FileReader();
+    reader.onloadend = async function () {
+  const base64Image = reader.result.split(',')[1];
+
+  const response = await fetch("https://serverless.roboflow.com/infer/workflows/climbing-holds-etzec/detect-count-and-visualize-2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: "rmYgUFzqbYEM2ziXw75d",
+      inputs: {
+        image: { type: "base64", value: base64Image }
+      }
+    })
+  });
+
+  const result = await response.json();
+  allPredictions = result.outputs?.[0]?.predictions?.predictions || [];
+
+  const billedeId = document.getElementById("billedeIdValg").value; // 👈 dette er vigtigt
+  document.getElementById("status").textContent = `✅ Greb læst – klar til at oprette rute på ${billedeId}`;
+
+  await hentRuter();
+};
+	
+    reader.readAsDataURL(file);
+  });
+
+function drawSelection() {
+  ctx.drawImage(img, 0, 0);
+
+  if (visAlleGreb) {
+    allPredictions.forEach(p => drawSingleHold(p));
+  }
+
+  valgtRute.forEach(p => drawSingleHold(p, "magenta"));
+}
+
+function drawSingleHold(p, overrideColor = null) {
+    const { x, y, width, height, class: label } = p;
+    const color = overrideColor || label.replace("climbing-holds-", "");
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+
+    ctx.font = "14px Arial";
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 3;
+    ctx.strokeText(color, x - width / 2, y - height / 2 - 5);
+    ctx.fillStyle = color;
+    ctx.fillText(color, x - width / 2, y - height / 2 - 5);
+  }
+
+document.getElementById("gemKnap").addEventListener("click", async () => {
+  const navn = document.getElementById("rutenavn").value.trim();
+  const farve = document.getElementById("rutefarve").value;
+  const grad = document.getElementById("rutegrad").value;
+  const rutebygger = document.getElementById("rutebygger").value.trim();
+  const billedeId = document.getElementById("billedeIdValg").value;
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const user_id = bruger?.id || null;
+  const ruteId = document.getElementById("gemKnap").dataset.redigerId;
+
+  
+  if (!navn || valgtRute.length === 0) {
+    return alert("Vælg greb og skriv et rutenavn først.");
+  }
+
+  let error;
+
+  if (ruteId) {
+    // 🔄 Opdater eksisterende rute
+    ({ error } = await client
+	  .from("ruter")
+	  .update({ navn, greb: valgtRute, farve, grad, rutebygger })
+	  .eq("id", ruteId));
+
+  } else {
+    // ➕ Opret ny rute
+    ({ error } = await client
+	  .from("ruter")
+	  .insert([{ navn, billede_id: billedeId, greb: valgtRute, farve, grad, rutebygger, user_id }]));
+  }
+
+  if (error) {
+    console.error("❌ Fejl ved gemning:", error);
+    alert("Fejl ved gemning af ruten.");
+    return;
+  }
+
+  console.log("✅ Rute gemt:", navn);
+  alert("Rute gemt!");
+
+  valgtRute = [];
+  document.getElementById("rutenavn").value = "";
+  drawSelection();
+  await hentRuter();
+});
+
+function visRute(rute) {
+  ctx.drawImage(img, 0, 0);
+  const farve = rute.farve || "cyan";
+
+  rute.greb.forEach(p => drawSingleHold(p, farve));
+
+  // Forbedret tekstvisning
+  ctx.font = "bold 22px Arial";
+  ctx.fillStyle = "white";
+  ctx.textBaseline = "top";
+
+  const tekstX = 20;
+  let tekstY = 20;
+  const linjeAfstand = 30;
+
+  const linjer = [
+    `📌 ${rute.navn}`,
+    `🎯 ${rute.grad || "?"}`,
+    `👷 ${rute.rutebygger || "Ukendt"}`
+  ];
+
+  // Baggrundsskygge (valgfri)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.fillRect(tekstX - 10, tekstY - 10, 250, linjer.length * linjeAfstand + 20);
+
+  // Tekst ovenpå baggrund
+  ctx.fillStyle = "white";
+  linjer.forEach((tekst, i) => {
+    ctx.fillText(tekst, tekstX, tekstY + i * linjeAfstand);
+  });
+
+  document.getElementById("status").textContent = `🧗 Viser rute: ${rute.navn}`;
+}
+
+function redigérRute(rute) {
+  valgtRute = rute.greb;
+  drawSelection();
+  document.getElementById("rutenavn").value = rute.navn;
+  document.getElementById("rutefarve").value = rute.farve || "cyan";
+
+  // Husk ID hvis du vil opdatere i stedet for ny insert
+  document.getElementById("gemKnap").dataset.redigerId = rute.id;
+}
+
+async function sletRute(id) {
+  if (!confirm("Vil du slette denne rute?")) return;
+
+  const { error } = await client
+    .from("ruter")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("❌ Fejl ved sletning:", error);
+    alert("Kunne ikke slette ruten.");
+  } else {
+    alert("Rute slettet.");
+    await hentRuter();
+    drawSelection();
+  }
+}
+
+function opdaterRuteListe() {
+  const listeEl = document.getElementById("ruteListe");
+  listeEl.innerHTML = "";
+
+  if (!gemteRuter || gemteRuter.length === 0) {
+    listeEl.innerHTML = "<p>Ingen ruter fundet.</p>";
+    return;
+  }
+
+  gemteRuter.forEach(rute => {
+    const wrapper = document.createElement("div");
+    wrapper.style.marginBottom = "5px";
+
+    const btn = document.createElement("button");
+    btn.textContent = `📌 ${rute.navn}`;
+    btn.addEventListener("click", () => visRute(rute));
+
+    const redigér = document.createElement("button");
+    redigér.textContent = "✏️";
+    redigér.title = "Redigér";
+    redigér.addEventListener("click", () => redigérRute(rute));
+
+    const slet = document.createElement("button");
+    slet.textContent = "🗑️";
+    slet.title = "Slet";
+    slet.addEventListener("click", () => sletRute(rute.id));
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(redigér);
+    wrapper.appendChild(slet);
+    listeEl.appendChild(wrapper);
+  });
+}
+
+document.getElementById("toggleGrebKnap").addEventListener("click", () => {
+  visAlleGreb = !visAlleGreb;
+
+  const knap = document.getElementById("toggleGrebKnap");
+  knap.textContent = visAlleGreb ? "🙈 Skjul greb" : "🔍 Vis alle greb";
+
+  drawSelection();
+});
+
+  window.fortrydSidste = function () {
+    valgtRute.pop();
+    drawSelection();
+  };
+
+  window.rydValg = function () {
+    valgtRute = [];
+    drawSelection();
+  };
+  
+
+</script>
+</body>
+</html>

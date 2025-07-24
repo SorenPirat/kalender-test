@@ -135,6 +135,7 @@ export async function indsætMenu(bruger) {
     <li><a href="protected.html">🏠 Hjem</a></li>
     <li><a href="public.html">📅 Kalender</a></li>
     <li><a href="kontakt.html">📞 Kontakt</a></li>
+	<li><a href="ruteoversigt.html">🧗 Ruteoversigt</a></li>
     ${bruger.roller.includes("bestyrelsesmedlem") || bruger.roller.includes("admin")
       ? '<li><a href="bestyrelse.html">📁 Bestyrelse</a></li>' : ''}
     ${bruger.roller.includes("admin") || bruger.roller.includes("nøglebærer") || bruger.roller.includes("eventmaker")
