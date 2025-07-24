@@ -93,6 +93,38 @@ nav a:hover {
   border: 1px solid #ccc;
 }
 
+.rute-info {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  right: auto;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: var(--font, system-ui);
+  line-height: 1.6;
+  max-width: 300px;
+  z-index: 10;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  backdrop-filter: blur(6px);
+  word-break: break-word;
+}
+
+.ikon-linje {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.skjul {
+  display: none;
+}
+
+
+
 /* === RESPONSIVT: MOBIL === */
 @media screen and (max-width: 600px) {
   body {
@@ -107,6 +139,22 @@ nav a:hover {
   nav a {
     font-size: 1rem;
     padding: 0.8rem;
+  }
+  
+  .rute-info {
+    position: static;
+    margin-top: 1rem;
+    max-width: 100%;
+    backdrop-filter: none;
+    box-shadow: none;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 1rem;
+    font-size: 1rem;
+    border-radius: 12px;
+  }
+
+  .ikon-linje {
+    font-size: 0.95rem;
   }
 }
 
