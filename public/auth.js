@@ -51,6 +51,17 @@ if (error || !count || count === 0) {
   badgeEl.textContent = count;
   badgeEl.classList.remove("skjult");
 }
+
+const badgeProfil = document.getElementById("badge-profil");
+if (badgeProfil) {
+  if (error || !count || count === 0) {
+    badgeProfil.classList.add("skjult");
+    badgeProfil.textContent = "";
+  } else {
+    badgeProfil.textContent = count;
+    badgeProfil.classList.remove("skjult");
+  }
+}
 }
 
 
@@ -120,7 +131,7 @@ export async function indsætMenu(bruger) {
   <div class="menu-header">
     <button id="menu-toggle">☰</button>
     <div id="user-name">
-      <a href="auth.html" title="Gå til din profil" id="profil-link">
+      <a href="#" title="Vis profilmenu" id="profil-link">
         <span class="badge-wrapper">
           <span id="notifikations-badge" class="skjult"></span>
           <span class="profiltekst">
@@ -142,12 +153,37 @@ export async function indsætMenu(bruger) {
       ? '<li><a href="noeglevagter.html">🔑 Nøglevagter</a></li>' : ''}
     ${bruger.roller.includes("admin")
       ? '<li><a href="adminpanel.html">🛠️ Adminpanel</a></li>' : ''}
-    <li><a href="#" id="logout-link">🚪 Log ud</a></li>
+	${bruger.roller.includes("rutebygger") || bruger.roller.includes("admin")
+      ? '<li><a href="testruteupload.html">👷 Rutebygger</a></li>' : ''}  
   </ul>
 </nav>
 `;
 
   document.body.insertAdjacentHTML("afterbegin", navMarkup);
+
+const profilMarkup = `
+<div id="profil-panel" class="profil-skjult">
+  <div class="profil-indhold">
+    <h2 id="profil-navn">👤 ${bruger.navn}</h2>
+    <li><a href="beskeder.html" id="besked-link-profil">💬 Gå til beskeder 
+      <span id="badge-profil" class="badge skjult"></span>
+    </a></li>
+    <li><a href="minelog.html">📘 Mine logs</a></li>
+    <li><label><input type="checkbox" id="push-toggle"> 🔔 Notifikationer</label></li>
+    </select></li>
+	<p><li><a href="#" id="logout-link">🚪 Log ud</a></li></p>
+  </div>
+
+</div>
+`;
+document.body.insertAdjacentHTML("beforeend", profilMarkup);
+
+const lukKnap = document.getElementById("luk-profil-knap");
+if (lukKnap) {
+  lukKnap.addEventListener("click", () => {
+    lukProfilMenu();
+  });
+}
 
   // Real-time badge-lytning
   setTimeout(() => {
@@ -197,8 +233,66 @@ export async function indsætMenu(bruger) {
       });
     }
   }, 0);
+
+  // Klik på profil → vis profilmenu
+  const profilKnap = document.getElementById("profil-link");
+  if (profilKnap) {
+    profilKnap.addEventListener("click", (e) => {
+      e.preventDefault();
+      visProfilMenu();
+    });
+  }
 }
 
+window.visProfilMenu = function () {
+  const panel = document.getElementById("profil-panel");
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  document.getElementById("profil-navn").textContent = `👤 ${bruger?.navn || "Ukendt"}`;
+  document.getElementById("push-toggle").checked = localStorage.getItem("push") === "true";
+  panel.classList.add("vis");
+};
+
+window.lukProfilMenu = function () {
+  document.getElementById("profil-panel").classList.remove("vis");
+};
+
+// Åben/luk profil-vindue
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("profil-panel");
+  const profilLink = document.getElementById("profil-link");
+  if (
+    panel.classList.contains("vis") &&
+    !panel.contains(e.target) &&
+    !profilLink.contains(e.target)
+  ) {
+    panel.classList.remove("vis");
+  }
+});
+
+// Luk profilmenu automatisk når man scroller
+window.addEventListener("scroll", () => {
+  const panel = document.getElementById("profil-panel");
+  if (panel && panel.classList.contains("vis")) {
+    lukProfilMenu();
+  }
+});
+
+// Gem brugerens valg
+setTimeout(() => {
+  document.getElementById("push-toggle")?.addEventListener("change", e => {
+    localStorage.setItem("push", e.target.checked);
+  });
+
+  document.getElementById("dark-toggle")?.addEventListener("change", e => {
+    localStorage.setItem("dark", e.target.checked);
+    document.documentElement.classList.toggle("dark-mode", e.target.checked);
+  });
+
+  document.getElementById("language-select")?.addEventListener("change", e => {
+    localStorage.setItem("language", e.target.value);
+    location.reload();
+  });
+}, 500);
 
 
 export function lytTilNotifikationer(brugerId) {
