@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Min logbog – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="minelog.css" /> 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>📘 Min logbog</h2>
+  
+  <div id="logListe"></div>
+  
+  <div style="max-width: 100%; padding: 1rem;">
+  <canvas id="gradChart"></canvas>
+  </div>
+  
+  <div id="gradDetaljer" class="skjul" style="max-width: 700px; margin: 2rem auto;"></div>
+  
+  <canvas id="canvas" class="skjul"></canvas>
+  
+  <div id="ruteModal" class="rute-modal skjul">
+  <div class="rute-modal-indhold">
+    <span class="luk" onclick="lukRuteModal()">❌</span>
+    <h3 id="modalTitel">🧗 Rutevisning</h3>
+    <canvas id="modalCanvas"></canvas>
+  </div>
+  </div>
+
+  <script type="module">
+    import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+    adgangskontrol({
+      tilladteRoller: [],
+      redirectVedFejl: "protected.html",
+      efterLogin: async (bruger) => {
+        indsætMenu(bruger);
+        await hentLogbog(bruger.id);
+      }
+    });
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let img = new Image();
+	let alleLogs = [];
+
+async function hentLogbog(user_id) {
+  const { data, error } = await client
+    .from("rutelog")
+    .select("*, ruter(*)")
+    .eq("user_id", user_id)
+    .order("logget_dato", { ascending: false });
+
+  const logListe = document.getElementById("logListe");
+  if (!logListe) {
+    console.warn("Elementet #logListe findes ikke i DOM'en.");
+    return;
+  }
+
+  if (error) {
+    logListe.textContent = "❌ Kunne ikke hente din logbog.";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    logListe.innerHTML = `<p>Du har ingen loggede ruter endnu.</p>`;
+    return;
+  }
+
+  alleLogs = data;
+
+  // 👉 Lav tælling af grader
+  const gradTælling = {};
+  data.forEach(log => {
+    const grad = log.ruter.grad?.trim() || "Ukendt";
+    gradTælling[grad] = (gradTælling[grad] || 0) + 1;
+  });
+
+  // 👉 Tegn graf med Chart.js
+  const labels = Object.keys(gradTælling).sort();
+  const dataSet = labels.map(label => gradTælling[label]);
+
+  const ctxChart = document.getElementById("gradChart").getContext("2d");
+  new Chart(ctxChart, {
+    type: "polarArea",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "Loggede ruter pr. grad",
+        data: dataSet,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "right" },
+        title: {
+          display: true,
+          text: "📊 Loggede ruter pr. grad"
+        }
+      },
+      scales: {
+        r: {
+          ticks: {
+            callback: value => Number.isInteger(value) ? value : "",
+            stepSize: 1,
+            precision: 0
+          },
+          suggestedMin: 0
+        }
+      },
+      onClick: (evt, elements) => {
+        if (elements.length > 0) {
+          const chart = elements[0].element.$context.chart;
+          const index = elements[0].index;
+          const valgtGrad = chart.data.labels[index];
+          visGradDetaljer(valgtGrad);
+        }
+      }
+    }
+  });
+}
+
+
+function visGradDetaljer(grad) {
+  const container = document.getElementById("gradDetaljer");
+  container.innerHTML = `<h3>🧗 Ruter i grad: ${grad}</h3>`;
+
+  const filtreret = alleLogs.filter(log => (log.ruter.grad?.trim() || "Ukendt") === grad);
+
+  filtreret.forEach(log => {
+    const div = document.createElement("div");
+    div.className = "logpost";
+    const rute = log.ruter;
+    const dato = new Date(log.logget_dato).toLocaleDateString("da-DK");
+
+    div.innerHTML = `
+      <strong>${rute.navn || "(uden navn)"}</strong><br/>
+      🗓️ ${dato}<br/>
+      🔁 ${log.forsøg || "-"}<br/>
+      💬 ${log.kommentar || ""}<br/>
+	  🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
+      🎯 Din vurdering: ${log.bedømmelse || "-"}<br/>
+      <button onclick='visRute(${JSON.stringify(rute).replace(/'/g, "\\'")})'>🎯 Vis rute</button>
+    `;
+
+    container.appendChild(div);
+  });
+
+  container.classList.remove("skjul");
+}
+
+window.visRute = async function(rute) {
+  const billedeSti = rute.billedenavn || `${rute.billede_id}.jpg`;
+
+  const { data, error } = await client
+    .storage.from("ruter")
+    .createSignedUrl(billedeSti, 60);
+
+  if (error || !data?.signedUrl) {
+    alert("❌ Kunne ikke hente billedet.");
+    return;
+  }
+
+  const img = new Image();
+  img.src = data.signedUrl;
+  await img.decode();
+
+  const modal = document.getElementById("ruteModal");
+  const canvas = document.getElementById("modalCanvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+
+  rute.greb.forEach(g => {
+    ctx.strokeStyle = rute.farve || "cyan";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(g.x - g.width / 2, g.y - g.height / 2, g.width, g.height);
+  });
+
+  document.getElementById("modalTitel").textContent = rute.navn || "Rutevisning";
+  modal.classList.remove("skjul");
+  document.body.style.overflow = "hidden";
+};
+
+window.lukRuteModal = function () {
+  document.getElementById("ruteModal").classList.add("skjul");
+  document.body.style.overflow = "auto";
+};
+
+
+  </script>
+</body>
+</html>

@@ -27,7 +27,7 @@
 	<option value="sektor-d">Sektor D</option>
 	<option value="tagruter">Taget</option>
   </select>
-  
+    
   <select id="ruteValg">
 	<option value="">Vælg en rute</option>
   </select>
@@ -35,6 +35,32 @@
   
 <div id="canvasWrapper" style="position: relative; display: inline-block;">
   <canvas id="canvas"></canvas>
+  
+  <div id="logModal" class="skjul" style="position:fixed;top:0;left:0;right:0;bottom:0;
+background:rgba(0,0,0,0.6);align-items:center;justify-content:center;z-index:1000;">
+  <div style="background:white;padding:1rem;border-radius:8px;max-width:400px;width:100%;">
+    <h3>📘 Log din rute</h3>
+    <label>Forsøg:
+      <select id="logForsøg">
+        <option value="">Vælg</option>
+        <option value="flash">Flash</option>
+        <option value="redpoint">Redpoint</option>
+        <option value="onsight">Onsight</option>
+        <option value="toprope">Toprope</option>
+        <option value="boulder">Boulder</option>
+      </select>
+    </label><br /><br />
+    <label>Bedømmelse:<br />
+      <input type="text" id="logBedømmelse" placeholder="fx 6b+, 4/5, svær" />
+    </label><br /><br />
+    <label>Kommentar:<br />
+      <textarea id="logKommentar" rows="3" style="width:100%;"></textarea>
+    </label><br /><br />
+    <button id="gemLogKnap">📘 Gem i logbog</button>
+    <button onclick="lukLogModal()">❌ Luk</button>
+  </div>
+</div>
+
 
   <div id="ruteInfoBoks" class="rute-info skjul">
     <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
@@ -71,34 +97,62 @@ ruteValg.addEventListener("change", () => {
 });
 
 async function visRuterForVæg(billedeId) {
-  // Nulstil og ryd canvas og dropdown
   ruterKlar = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   alleRuter = [];
   ruteValg.innerHTML = '<option value="">Vælg en rute</option>';
   document.getElementById("status").textContent = "🔄 Indlæser billede og ruter...";
 
-  // Hent billede
+  // 🔍 Find nyeste billede for den valgte væg
+  const { data: alleFiler, error } = await client
+    .storage
+    .from("ruter")
+    .list("", { limit: 100 });
+
+  if (error) {
+    document.getElementById("status").textContent = "❌ Kunne ikke hente billeder.";
+    return;
+  }
+
+  // Filtrér billeder der matcher fx "sektor-d_"
+  const matcher = alleFiler
+    .filter(f => f.name.startsWith(`${billedeId}_`) && f.name.endsWith(".jpg"))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // seneste først
+
+  if (matcher.length === 0) {
+    document.getElementById("status").textContent = "❌ Ingen billede fundet for væg.";
+    return;
+  }
+
+  const nyesteFilnavn = matcher[0].name;
+
+  // 🔗 Hent billedets signed URL
   const { data: urlData, error: urlFejl } = await client
-    .storage.from("ruter")
-    .createSignedUrl(`${billedeId}.jpg`, 60);
+    .storage
+    .from("ruter")
+    .createSignedUrl(nyesteFilnavn, 60);
 
   if (urlFejl || !urlData?.signedUrl) {
     document.getElementById("status").textContent = "❌ Kunne ikke hente billede.";
     return;
   }
 
+  // Vis billedet
   img = new Image();
   img.onload = async () => {
     canvas.width = img.width;
     canvas.height = img.height;
+	canvas.style.width = "100%";
+    canvas.style.height = "auto";
     ctx.drawImage(img, 0, 0);
 
-    // Hent ruter
-    const { data: ruter, error } = await client
-      .from("ruter")
-      .select("*")
-      .eq("billede_id", billedeId);
+    // Hent ruter for billedeId (uden dato)
+   const { data: ruter, error } = await client
+  .from("ruter")
+  .select("*")
+  .eq("billede_id", billedeId)
+  .eq("aktiv", true)
+  .order("navn", { ascending: true });
 
     if (error || !ruter.length) {
       document.getElementById("status").textContent = "Ingen ruter fundet.";
@@ -115,14 +169,33 @@ async function visRuterForVæg(billedeId) {
 }
 
 function udfyldRuteDropdown(ruter) {
-  ruteValg.innerHTML = '<option value="">Vælg en rute</option>';
+  ruteValg.innerHTML = ''; // ryd alt
+
   for (const r of ruter) {
     const option = document.createElement("option");
     option.value = r.id;
     option.textContent = r.navn;
     ruteValg.appendChild(option);
   }
+
+  // Tilføj knap efter dropdown – når en rute er valgt
+  ruteValg.addEventListener("change", () => {
+    const valgtId = ruteValg.value;
+    const logKnap = document.getElementById("logKnap");
+
+    if (!logKnap) {
+      const knap = document.createElement("button");
+      knap.id = "logKnap";
+      knap.textContent = "📘 Log denne rute";
+      knap.style.marginLeft = "1rem";
+      knap.onclick = () => logRute(valgtId);
+      ruteValg.parentNode.insertBefore(knap, ruteValg.nextSibling);
+    } else {
+      logKnap.onclick = () => logRute(valgtId);
+    }
+  });
 }
+
 
 function visRute(rute) {
   ctx.drawImage(img, 0, 0);
@@ -136,7 +209,67 @@ function visRute(rute) {
   document.getElementById("ruteInfoBoks").classList.remove("skjul");
 
   document.getElementById("status").textContent = `🧗 Viser rute: ${rute.navn}`;
+  ruteValg.value = rute.id; // opdater dropdown
+
+  // 👉 Vis log-knap
+  let logKnap = document.getElementById("logKnap");
+  if (!logKnap) {
+    logKnap = document.createElement("button");
+    logKnap.id = "logKnap";
+    logKnap.textContent = "📘 Log denne rute";
+    logKnap.style.marginLeft = "1rem";
+    ruteValg.parentNode.insertBefore(logKnap, ruteValg.nextSibling);
+  }
+  logKnap.onclick = () => logRute(rute.id);
 }
+
+
+let aktivRuteId = null;
+
+window.logRute = function(ruteId) {
+  aktivRuteId = ruteId;
+  document.getElementById("logKommentar").value = "";
+  document.getElementById("logForsøg").value = "";
+  document.getElementById("logBedømmelse").value = "";
+  document.getElementById("logModal").classList.remove("skjul");
+};
+
+window.lukLogModal = function() {
+  document.getElementById("logModal").classList.add("skjul");
+};
+
+document.getElementById("gemLogKnap").addEventListener("click", async () => {
+  const kommentar = document.getElementById("logKommentar").value.trim();
+  const forsøg = document.getElementById("logForsøg").value;
+  const bedømmelse = document.getElementById("logBedømmelse").value.trim();
+
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const user_id = bruger?.id;
+
+  if (!user_id || !aktivRuteId) {
+    alert("Du skal være logget ind og vælge en rute.");
+    return;
+  }
+
+  const { error } = await client
+    .from("rutelog")
+    .insert([{
+      user_id,
+      rute_id: aktivRuteId,
+      logget_dato: new Date().toISOString(),
+      kommentar,
+      forsøg,
+      bedømmelse
+    }]);
+
+  if (error) {
+    console.error("❌ Fejl:", error);
+    alert("Kunne ikke gemme log.");
+  } else {
+    alert("✅ Ruten blev logget!");
+    lukLogModal();
+  }
+});
 
 
 function tegnGreb(p, farve) {

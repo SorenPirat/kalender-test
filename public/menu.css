@@ -378,6 +378,153 @@ body {
   margin-left: 6px;
 }
 
+#profil-panel {
+  position: fixed;
+  top: 1rem;
+  right: -100%;
+  width: 80%;
+  max-width: 400px;
+  height: auto%;
+  background-color: white;
+  color: #111;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+  transition: right 0.3s ease;
+  z-index: 9999;
+}
+
+#profil-panel.vis {
+  right: 0;
+}
+
+#profil-panel li {
+  list-style-type: none;
+}
+
+.profil-indhold {
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+#luk-profil-knap {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.kort {
+  background: var(--bg-light, #fff);
+  color: var(--text-light, #111);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem auto;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  max-width: 960px;
+}
+
+.kort h2 {
+  font-size: 1.5rem;
+  color: var(--accent, #007bff);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kort input,
+.kort select {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.kort label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.kort input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tool-actions button {
+  background-color: var(--accent, #007bff);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tool-actions button:hover {
+  background-color: #0056b3;
+}
+
+#canvas {
+  margin: 2rem auto;
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 2px solid #ccc;
+}
+
+#ruteListe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.rute-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f0f0f0;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid #ccc;
+}
+
+.rute-knapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rute-knapper button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  background-color: #2d2d2d;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.rute-knapper button:hover {
+  background-color: #444;
+}
 
 /* === MOBIL === */
 @media screen and (max-width: 600px) {
@@ -421,11 +568,55 @@ body {
     text-decoration: underline;
   cursor: pointer;
 	}
+
+  #profil-panel {
+    width: 50%;
+    max-width: 320px;
+    font-size: 0.95rem;
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+    box-shadow: -2px 0 12px rgba(0,0,0,0.4);
+  }
+
+.profil-indhold {
+  position: relative;
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+
+#luk-profil-knap {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 10;
+}
 }
 
 /* === DARK MODE === */
 @media (prefers-color-scheme: dark) {
-  #menu {
+
+  .rute-item {
+    background: #1f1f1f;
+    border-color: #444;
+    color: #eee;
+  }
+
+  .rute-knapper button {
+    background-color: #444;
+    color: #fff;
+  }
+
+  .rute-knapper button:hover {
+    background-color: #666;
+  }
+ 
+ #menu {
     background-color: rgba(30, 30, 30, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(5px);
@@ -511,4 +702,46 @@ body {
     background: #007bff;
     color: white;
   }
+    #profil-panel {
+    background-color: #1e1e1e;
+    color: #ddd;
+  }
+  .kort {
+    background: #1e1e1e;
+    color: #ddd;
+    box-shadow: 0 2px 6px rgba(255, 255, 255, 0.05);
+  }
+
+  .kort input,
+  .kort select {
+    background: #2b2b2b;
+    color: #fff;
+    border: 1px solid #444;
+  }
+
+  .tool-actions button {
+    background-color: var(--accent-dark, #81cfff);
+  }
+
+  #canvas {
+    border-color: #444;
+  }
+  
+    button,
+  .tool-actions button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    border-radius: 8px !important;
+    background-color: #2d2d2d;
+    color: #fff;
+    border: 1px solid #444;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  button:hover,
+  .tool-actions button:hover {
+    background-color: #3a3a3a;
+  }
+  
 }
