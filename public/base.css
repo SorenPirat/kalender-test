@@ -130,7 +130,32 @@ nav a:hover {
   display: none !important;
 }
 
+.canvas-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: all;
+}
 
+.hidden {
+  display: none !important;
+}
+
+.spinner {
+  width: 64px;
+  height: 64px;
+  border: 6px solid #ccc;
+  border-top-color: #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
 
 /* === RESPONSIVT: MOBIL === */
 @media screen and (max-width: 600px) {
@@ -223,6 +248,18 @@ nav a:hover {
   }
 
   .samtykke-tekst input[type="checkbox"] {
-    accent-color: #81cfff;
+      accent-color: #81cfff;
+  }
+  
+  .spinner {
+    border: 6px solid #444;
+    border-top-color: #fff;
+  }
+  
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

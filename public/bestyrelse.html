@@ -9,6 +9,8 @@
   <link rel="stylesheet" href="bestyrelse.css" /> 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
 <body>
 
@@ -78,10 +80,32 @@
   </div>
 </div>
 
-<h1>📁 Bestyrelsens dokumenter</h1>
+<div id="sektion-knapper" style="margin-bottom: 1rem;">
+  <button onclick="visSektion('dokumenter')">📁 Dokumenter</button>
+  <button onclick="visSektion('statistik')">📊 Statistik</button>
+</div>
 
-<div id="bruger-navn" style="margin-bottom: 1rem;"></div>
-<div id="dokument-sektioner"></div>
+<div id="sektion-dokumenter">
+  <h1>📁 Bestyrelsens dokumenter</h1>
+  <div id="dokument-sektioner"></div>
+</div>
+
+<div id="sektion-statistik">
+	<h1>📊 Bestyrelsens statistik</h1>
+	
+<div id="statistik-knapper">
+  <button id="rolle-knap" class="btn-sub">👥 Rollefordeling</button>
+  <button id="begivenhed-knap" class="btn-sub">📅 Begivenheder pr. måned</button>
+  <button id="kategori-knap" class="btn-sub">📂 Begivenheder pr. kategori</button>
+  <!-- Klar til kommende knapper her -->
+</div>
+
+<div class="chart-container">
+  <canvas id="statistik-chart"></canvas>
+</div>
+
+
+
 
 
 <script type="module">
@@ -93,6 +117,7 @@
     efterLogin: (bruger) => {
       indsætMenu(bruger);
       visMapper(bucketNavn);
+	  visSektion("dokumenter");
     }
   });
 
@@ -170,14 +195,6 @@ async function tvungenDownload(path, filnavn = "fil") {
 modal.addEventListener("click", (e) => {
   if (e.target === modal) {
     lukModal();
-  }
-});
-
-// Luk med Escape-tast
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    document.getElementById("context-menu").classList.add("skjult");
-    document.getElementById("file-context-menu").classList.add("skjult");
   }
 });
 
@@ -556,6 +573,7 @@ async function hentAlleMapper(prefix = "", resultater = []) {
   return resultater;
 }
 
+
 window.visGdocsModal = function (signedUrl, filsti) {
   // Skjul billedmodal
   const billedModal = document.getElementById("preview-modal");
@@ -689,6 +707,21 @@ window.lukExcelModal = function () {
   document.getElementById("excel-output").innerHTML = "";
 };
 
+window.visSektion = function(navn) {
+  // skjul alle sektioner
+  document.getElementById("sektion-dokumenter").classList.add("skjult");
+  document.getElementById("sektion-statistik").classList.add("skjult");
+
+  // vis valgt sektion
+  document.getElementById(`sektion-${navn}`).classList.remove("skjult");
+
+  // opdater aktiv-knap styling
+  const knapper = document.querySelectorAll("#sektion-knapper button");
+  knapper.forEach(knap => knap.classList.remove("aktiv"));
+  const aktivKnap = document.querySelector(`#sektion-knapper button[onclick*="${navn}"]`);
+  if (aktivKnap) aktivKnap.classList.add("aktiv");
+};
+
 
 function visMenuUdenforKant(menuEl, x, y) {
   menuEl.classList.remove("skjult"); // gør den midlertidigt synlig
@@ -724,23 +757,29 @@ function lukModal() {
 lukKnappen.addEventListener("click", lukModal);
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !document.getElementById("gdocs-modal").classList.contains("skjult")) {
-    lukGdocsModal();
-  }
+  if (e.key !== "Escape") return;
+
+  // Luk kontekstmenuer
+  document.getElementById("context-menu")?.classList.add("skjult");
+  document.getElementById("file-context-menu")?.classList.add("skjult");
+
+  // Luk modaler
+  const gdocs = document.getElementById("gdocs-modal");
+  if (gdocs && !gdocs.classList.contains("skjult")) lukGdocsModal();
+
+  const excel = document.getElementById("excel-modal");
+  if (excel && !excel.classList.contains("skjult")) lukExcelModal();
+
+  const preview = document.getElementById("preview-modal");
+  if (preview && !preview.classList.contains("skjult")) lukModal();
 });
 
-document.getElementById("gdocs-modal").addEventListener("click", (e) => {
-  if (e.target.id === "gdocs-modal") {
-    lukGdocsModal();
-  }
-});
 
 let højreklikFilsti = "";
 let højreklikSti = "";
 let aktivStiEfterHandling = "";
 
-
-  document.addEventListener("contextmenu", function(e) {
+document.addEventListener("contextmenu", function(e) {
   const el = e.target.closest(".mappe-header");
 
   if (el) {
@@ -1013,7 +1052,6 @@ document.getElementById("download-fil-valg").addEventListener("click", async () 
   højreklikFilsti = "";
 });
 
-
 function vent(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -1067,8 +1105,155 @@ async function åbnMappeEfterGenindlæsning(sti) {
   aktivStiEfterHandling = "";
 }
 
-</script>
+let chartInstance = null;
 
+function renderChart(config) {
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById("statistik-chart"), {
+    ...config,
+    plugins: [ChartDataLabels]
+  });
+}
+
+// 👥 Rollefordeling
+async function visRolleStatistik() {
+  try {
+    const { data, error } = await client.from("users").select("rolle");
+    if (error) throw error;
+
+    const rolleTælling = {};
+    data.forEach(bruger => {
+      const roller = Array.isArray(bruger.rolle) ? bruger.rolle : [bruger.rolle];
+      roller.forEach(r => rolleTælling[r] = (rolleTælling[r] || 0) + 1);
+    });
+
+    renderChart({
+      type: "pie",
+      data: {
+        labels: Object.keys(rolleTælling),
+        datasets: [{
+          data: Object.values(rolleTælling),
+          backgroundColor: ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: "bottom" },
+          title: {
+            display: true,
+            text: "👥 Rollefordeling i klubben"
+          },
+          datalabels: {
+            color: "#fff",
+            font: { weight: "bold", size: 14 },
+            formatter: value => value
+          }
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error("Fejl ved visRolleStatistik:", err);
+    alert("Kunne ikke hente rolledata.");
+  }
+}
+
+// 📅 Begivenheder pr. måned
+async function visBegivenhedsStatistik() {
+  const res = await fetch("https://nglevagter-test.onrender.com/public-events");
+  const events = await res.json();
+
+  const countByMonth = {};
+  events.forEach(ev => {
+    const d = new Date(ev.start || ev.end);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    countByMonth[key] = (countByMonth[key] || 0) + 1;
+  });
+
+  renderChart({
+    type: "bar",
+    data: {
+      labels: Object.keys(countByMonth).sort(),
+      datasets: [{
+        label: "Begivenheder pr. måned",
+        data: Object.values(countByMonth),
+        backgroundColor: "#007bff"
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        title: { display: true, text: "📅 Begivenheder pr. måned" },
+        datalabels: {
+          color: "#000",
+          font: { weight: "bold", size: 14 },
+          formatter: value => value
+        }
+      },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
+// 📂 Begivenheder pr. kategori
+async function visBegivenhedsEfterKategori() {
+  const res = await fetch("https://nglevagter-test.onrender.com/public-events");
+  const events = await res.json();
+
+  const kategorier = {
+    "🛠️ Rutebygning": 0,
+    "🏆 Konkurrence": 0,
+    "🎉 Socialt": 0,
+    "🚪 Lukkedag": 0,
+    "❓ Andet": 0
+  };
+
+  events.forEach(ev => {
+    const t = (ev.summary || ev.title || ev.short || "").toLowerCase();
+    if (t.includes("rutebyg")) kategorier["🛠️ Rutebygning"]++;
+    else if (t.includes("konkurrence") || t.includes("mesterskab")) kategorier["🏆 Konkurrence"]++;
+    else if (t.includes("grill") || t.includes("hygge") || t.includes("tur") || t.includes("fælles")) kategorier["🎉 Socialt"]++;
+    else if (t.includes("lukket") || t.includes("closed")) kategorier["🚪 Lukkedag"]++;
+    else kategorier["❓ Andet"]++;
+  });
+
+  renderChart({
+    type: "bar",
+    data: {
+      labels: Object.keys(kategorier),
+      datasets: [{
+        label: "Begivenheder pr. kategori",
+        data: Object.values(kategorier),
+        backgroundColor: ["#ffb347", "#36A2EB", "#4BC0C0", "#FF6384", "#c9cbcf"]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        title: { display: true, text: "📂 Begivenheder fordelt på kategori" },
+        datalabels: {
+          color: "#000",
+          font: { weight: "bold", size: 14 },
+          formatter: value => value
+        }
+      },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
+// 📌 Event binding
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("rolle-knap")?.addEventListener("click", visRolleStatistik);
+  document.getElementById("begivenhed-knap")?.addEventListener("click", visBegivenhedsStatistik);
+  document.getElementById("kategori-knap")?.addEventListener("click", visBegivenhedsEfterKategori);
+});
+
+
+</script>
 
 </body>
 </html>

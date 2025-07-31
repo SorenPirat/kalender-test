@@ -19,9 +19,7 @@
   </div>
   
   <div id="gradDetaljer" class="skjul" style="max-width: 700px; margin: 2rem auto;"></div>
-  
-  <canvas id="canvas" class="skjul"></canvas>
-  
+    
   <div id="ruteModal" class="rute-modal skjul">
   <div class="rute-modal-indhold">
     <span class="luk" onclick="lukRuteModal()">❌</span>
@@ -41,18 +39,33 @@
         await hentLogbog(bruger.id);
       }
     });
-
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    let img = new Image();
+	
 	let alleLogs = [];
+	let modalCanvas, ctx;
+
 
 async function hentLogbog(user_id) {
-  const { data, error } = await client
-    .from("rutelog")
-    .select("*, ruter(*)")
-    .eq("user_id", user_id)
-    .order("logget_dato", { ascending: false });
+const { data, error } = await client
+  .from("rutelog")
+  .select(`
+    id,
+    logget_dato,
+    kommentar,
+    forsøg,
+    bedømmelse,
+    ruter (
+      id,
+      navn,
+      farve,
+      greb,
+      grad,
+      billede_id,
+      billedenavn
+    )
+  `)
+  .eq("user_id", user_id)
+  .order("logget_dato", { ascending: false });
+
 
   const logListe = document.getElementById("logListe");
   if (!logListe) {
@@ -72,14 +85,14 @@ async function hentLogbog(user_id) {
 
   alleLogs = data;
 
-  // 👉 Lav tælling af grader
+  // Lav tælling af grader
   const gradTælling = {};
   data.forEach(log => {
     const grad = log.ruter.grad?.trim() || "Ukendt";
     gradTælling[grad] = (gradTælling[grad] || 0) + 1;
   });
 
-  // 👉 Tegn graf med Chart.js
+  // Tegn graf med Chart.js
   const labels = Object.keys(gradTælling).sort();
   const dataSet = labels.map(label => gradTælling[label]);
 
@@ -125,7 +138,6 @@ async function hentLogbog(user_id) {
   });
 }
 
-
 function visGradDetaljer(grad) {
   const container = document.getElementById("gradDetaljer");
   container.innerHTML = `<h3>🧗 Ruter i grad: ${grad}</h3>`;
@@ -145,7 +157,7 @@ function visGradDetaljer(grad) {
       💬 ${log.kommentar || ""}<br/>
 	  🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
       🎯 Din vurdering: ${log.bedømmelse || "-"}<br/>
-      <button onclick='visRute(${JSON.stringify(rute).replace(/'/g, "\\'")})'>🎯 Vis rute</button>
+      <button class="knap-vis" onclick='visRute(${JSON.stringify(rute).replace(/'/g, "\\'")})'>🎯 Vis rute</button>
     `;
 
     container.appendChild(div);
@@ -154,12 +166,57 @@ function visGradDetaljer(grad) {
   container.classList.remove("skjul");
 }
 
+function hexOrNamedToRgba(color, alpha) {
+  const dummy = document.createElement("div");
+  dummy.style.color = color;
+  document.body.appendChild(dummy);
+  const computed = getComputedStyle(dummy).color;
+  document.body.removeChild(dummy);
+  const rgb = computed.match(/\d+/g);
+  if (!rgb) return `rgba(255, 0, 255, ${alpha})`; // fallback pink
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
+function tegnGreb(greb, farve = "magenta") {
+  ctx.save();
+
+  // Fyldfarve med 75% opacitet
+  ctx.fillStyle = hexOrNamedToRgba(farve, 0.25);
+
+  // Kantfarve (samme farve, fuld opacitet)
+  ctx.strokeStyle = hexOrNamedToRgba(farve, 1.0);
+  ctx.lineWidth = 3;
+
+  if (Array.isArray(greb.points) && greb.points.length >= 3) {
+    // 👉 Polygon
+    ctx.beginPath();
+    ctx.moveTo(greb.points[0].x, greb.points[0].y);
+    for (let i = 1; i < greb.points.length; i++) {
+      ctx.lineTo(greb.points[i].x, greb.points[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (greb.x && greb.y && greb.width && greb.height) {
+    // 👉 Fallback rektangel
+    const x = greb.x - greb.width / 2;
+    const y = greb.y - greb.height / 2;
+    const w = greb.width;
+    const h = greb.height;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+  } else {
+    console.warn("Ukendt grebsformat:", greb);
+  }
+
+  ctx.restore();
+}
+
+
+
 window.visRute = async function(rute) {
   const billedeSti = rute.billedenavn || `${rute.billede_id}.jpg`;
-
-  const { data, error } = await client
-    .storage.from("ruter")
-    .createSignedUrl(billedeSti, 60);
+  const { data, error } = await client.storage.from("ruter").createSignedUrl(billedeSti, 60);
 
   if (error || !data?.signedUrl) {
     alert("❌ Kunne ikke hente billedet.");
@@ -171,24 +228,24 @@ window.visRute = async function(rute) {
   await img.decode();
 
   const modal = document.getElementById("ruteModal");
-  const canvas = document.getElementById("modalCanvas");
-  const ctx = canvas.getContext("2d");
+  modalCanvas = document.getElementById("modalCanvas");
+  ctx = modalCanvas.getContext("2d");
 
-  canvas.width = img.width;
-  canvas.height = img.height;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  modalCanvas.width = img.width;
+  modalCanvas.height = img.height;
+
+  // 🔁 Ryd og tegn kun billede
+  ctx.clearRect(0, 0, modalCanvas.width, modalCanvas.height);
   ctx.drawImage(img, 0, 0);
 
-  rute.greb.forEach(g => {
-    ctx.strokeStyle = rute.farve || "cyan";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(g.x - g.width / 2, g.y - g.height / 2, g.width, g.height);
-  });
+  // 🎨 Tegn farvede greb – direkte
+  rute.greb.forEach(greb => tegnGreb(greb, rute.farve || "cyan"));
 
   document.getElementById("modalTitel").textContent = rute.navn || "Rutevisning";
   modal.classList.remove("skjul");
   document.body.style.overflow = "hidden";
 };
+
 
 window.lukRuteModal = function () {
   document.getElementById("ruteModal").classList.add("skjul");
