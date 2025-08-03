@@ -509,21 +509,23 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .rute-knapper button {
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  font-weight: bold;
-  font-size: 0.9rem;
-  background-color: #2d2d2d;
+  background-color: var(--accent, #007bff);
   color: white;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  font-size: 1rem;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .rute-knapper button:hover {
-  background-color: #444;
+  background-color: #0056b3;
 }
 
 .modal-overlay {

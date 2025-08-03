@@ -1039,6 +1039,92 @@ function visVærktøj(id) {
 }
 window.visVærktøj = visVærktøj;
 
+async function visRutebyggerePrGrad() {	
+
+  // Skjul evt. andre graf-sektioner
+  document.querySelectorAll(".chart-section").forEach(s => {
+    s.style.display = "none";
+  });
+  
+  
+
+  // Vis canvas
+const canvas = document.getElementById("stats-chart");
+if (canvas.style.display === "none") {
+  canvas.style.display = "block";
+}
+
+  // Nulstil klik
+  if (chartInstance && chartInstance.canvas) {
+    chartInstance.canvas.onclick = null;
+  }
+
+  // Hent ruter
+  const { data: ruter, error } = await client
+    .from("ruter")
+    .select("rutebygger, grad")
+    .eq("aktiv", true);
+
+  if (error || !ruter) {
+    console.error("❌ Fejl ved hentning af rutedata", error);
+    return;
+  }
+
+  const tælling = {};
+  ruter.forEach(({ rutebygger, grad }) => {
+    if (!rutebygger || !grad) return;
+    if (!tælling[rutebygger]) tælling[rutebygger] = {};
+    tælling[rutebygger][grad] = (tælling[rutebygger][grad] || 0) + 1;
+  });
+
+  const alleGradNavne = [...new Set(ruter.map(r => r.grad).filter(Boolean))].sort();
+  const alleByggere = Object.keys(tælling);
+
+  const datasets = alleGradNavne.map((grad, i) => ({
+    label: grad,
+    data: alleByggere.map(bygger => tælling[bygger][grad] || 0),
+    backgroundColor: `hsl(${(i * 40) % 360}, 70%, 60%)`
+  }));
+
+  renderChart({
+  type: "bar",
+  data: {
+    labels: alleByggere,
+    datasets: datasets
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      title: {
+        display: true,
+        text: "🛠️ Rutebyggere fordelt på grader"
+      },
+      tooltip: {
+        mode: "index",
+        intersect: false
+      },
+      legend: { position: "right" }
+    },
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, beginAtZero: true }
+    }
+  }
+});
+
+
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const statsTab = document.querySelector('[data-target="stats"]');
+  statsTab?.addEventListener("click", () => {
+    const byggerKnap = document.getElementById("bygger-grad-knap");
+    if (byggerKnap && !byggerKnap.dataset.init) {
+      byggerKnap.addEventListener("click", visRutebyggerePrGrad);
+      byggerKnap.dataset.init = "true";
+    }
+  });
+});
 
 
 </script>
@@ -1097,6 +1183,8 @@ window.visVærktøj = visVærktøj;
     <button id="show-month-chart">Oprettelser pr. måned</button>
 	<button id="show-event-chart">Begivenheder</button>
 	<button id="visNoglebaererStatistik">Nøglebærer-statistik</button>
+	<button id="bygger-grad-knap">🛠️ Bygger vs. grader</button>
+
 
 	
 	<div id="event-popup" class="modal hidden">

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="menu.css" />
   <link rel="stylesheet" href="minelog.css" /> 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
 </head>
 <body>
   <h2>📘 Min logbog</h2>
@@ -20,16 +21,19 @@
   
   <div id="gradDetaljer" class="skjul" style="max-width: 700px; margin: 2rem auto;"></div>
     
-  <div id="ruteModal" class="rute-modal skjul">
+  <div id="rute-modal" class="rute-modal skjul">
   <div class="rute-modal-indhold">
     <span class="luk" onclick="lukRuteModal()">❌</span>
     <h3 id="modalTitel">🧗 Rutevisning</h3>
-    <canvas id="modalCanvas"></canvas>
+	
+	<canvas id="ruteCanvas"></canvas>
   </div>
   </div>
 
+
+
   <script type="module">
-    import { client, adgangskontrol, indsætMenu } from './auth.js';
+    import { client, adgangskontrol, indsætMenu, hentSignedUrl } from './auth.js';
 
     adgangskontrol({
       tilladteRoller: [],
@@ -41,7 +45,15 @@
     });
 	
 	let alleLogs = [];
-	let modalCanvas, ctx;
+	let modalCanvas;
+	let canvas = document.getElementById("ruteCanvas");
+	let ctx = canvas.getContext("2d");
+	let img = null;
+	let startTid = 0;
+	let pulsAnimationId = 0;
+	let sidsteFrameTid = 0;
+	const ønsketFPS = 30;
+	const frameInterval = 1000 / ønsketFPS;
 
 
 async function hentLogbog(user_id) {
@@ -138,13 +150,13 @@ const { data, error } = await client
   });
 }
 
-function visGradDetaljer(grad) {
+async function visGradDetaljer(grad) {
   const container = document.getElementById("gradDetaljer");
   container.innerHTML = `<h3>🧗 Ruter i grad: ${grad}</h3>`;
 
   const filtreret = alleLogs.filter(log => (log.ruter.grad?.trim() || "Ukendt") === grad);
 
-  filtreret.forEach(log => {
+  for (const log of filtreret) {
     const div = document.createElement("div");
     div.className = "logpost";
     const rute = log.ruter;
@@ -155,13 +167,25 @@ function visGradDetaljer(grad) {
       🗓️ ${dato}<br/>
       🔁 ${log.forsøg || "-"}<br/>
       💬 ${log.kommentar || ""}<br/>
-	  🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
-      🎯 Din vurdering: ${log.bedømmelse || "-"}<br/>
-      <button class="knap-vis" onclick='visRute(${JSON.stringify(rute).replace(/'/g, "\\'")})'>🎯 Vis rute</button>
+      🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
+       ⭐ Din rating: ${"⭐".repeat(log.bedømmelse)}<br/>
     `;
 
+    const visKnap = document.createElement("button");
+    visKnap.className = "knap-vis";
+    visKnap.innerHTML = "🎯 Vis rute";
+    visKnap.onclick = async () => {
+      const kopi = { ...rute };
+      const sti = rute.billedenavn;
+      const signedUrl = await hentSignedUrl(sti, "ruter"); // ← skift bucket-navn hvis nødvendigt
+      if (!signedUrl) return alert("❌ Kunne ikke hente billede.");
+      kopi.billede_url = signedUrl;
+      visRute(kopi);
+    };
+
+    div.appendChild(visKnap);
     container.appendChild(div);
-  });
+  }
 
   container.classList.remove("skjul");
 }
@@ -177,80 +201,147 @@ function hexOrNamedToRgba(color, alpha) {
   return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
 }
 
-function tegnGreb(greb, farve = "magenta") {
-  ctx.save();
+function tegnGlød(polygon, farve = "white", puls = 1) {
+  if (!polygon?.points || polygon.points.length < 3) return;
 
-  // Fyldfarve med 75% opacitet
-  ctx.fillStyle = hexOrNamedToRgba(farve, 0.25);
-
-  // Kantfarve (samme farve, fuld opacitet)
-  ctx.strokeStyle = hexOrNamedToRgba(farve, 1.0);
-  ctx.lineWidth = 3;
-
-  if (Array.isArray(greb.points) && greb.points.length >= 3) {
-    // 👉 Polygon
+  const maxGlow = 6;
+  for (let i = maxGlow; i > 0; i--) {
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(greb.points[0].x, greb.points[0].y);
-    for (let i = 1; i < greb.points.length; i++) {
-      ctx.lineTo(greb.points[i].x, greb.points[i].y);
+    ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
+    for (let j = 1; j < polygon.points.length; j++) {
+      ctx.lineTo(polygon.points[j].x, polygon.points[j].y);
     }
     ctx.closePath();
-    ctx.fill();
+
+    ctx.strokeStyle = farve;
+    ctx.globalAlpha = (i / maxGlow) * 0.15 * puls;
+    ctx.lineWidth = i * 2;
+    ctx.shadowColor = farve;
+    ctx.shadowBlur = i * 4 * puls;
     ctx.stroke();
-  } else if (greb.x && greb.y && greb.width && greb.height) {
-    // 👉 Fallback rektangel
-    const x = greb.x - greb.width / 2;
-    const y = greb.y - greb.height / 2;
-    const w = greb.width;
-    const h = greb.height;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeRect(x, y, w, h);
-  } else {
-    console.warn("Ukendt grebsformat:", greb);
+    ctx.restore();
   }
+}
+
+function tegnGreb(p, farve = "magenta") {
+  if (!p.points || p.points.length < 3) return;
+
+  const fyldFarve = hexOrNamedToRgba(farve, 0.2);
+  const kantFarve = hexOrNamedToRgba(farve, 1.0);
+  const skyggeFarve = hexOrNamedToRgba("black", 0.25);
+
+  ctx.save();
+
+  // Skygge
+  ctx.beginPath();
+  ctx.moveTo(p.points[0].x + 1, p.points[0].y + 1);
+  for (let i = 1; i < p.points.length; i++) {
+    ctx.lineTo(p.points[i].x + 1, p.points[i].y + 1);
+  }
+  ctx.closePath();
+  ctx.fillStyle = skyggeFarve;
+  ctx.fill();
+
+  // Fyld
+  ctx.beginPath();
+  ctx.moveTo(p.points[0].x, p.points[0].y);
+  for (let i = 1; i < p.points.length; i++) {
+    ctx.lineTo(p.points[i].x, p.points[i].y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fyldFarve;
+  ctx.fill();
+
+  // Kant
+  ctx.strokeStyle = kantFarve;
+  ctx.lineWidth = 0.1;
+  ctx.stroke();
 
   ctx.restore();
 }
 
+function visRute(rute) {
+  const modal = document.getElementById("rute-modal");
+  modal.classList.remove("skjul");
 
+  if (pulsAnimationId) cancelAnimationFrame(pulsAnimationId);
 
-window.visRute = async function(rute) {
-  const billedeSti = rute.billedenavn || `${rute.billede_id}.jpg`;
-  const { data, error } = await client.storage.from("ruter").createSignedUrl(billedeSti, 60);
+  const startTid = performance.now();
+  sidsteFrameTid = 0;
+  img = new Image();
+  img.onload = () => {
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
 
-  if (error || !data?.signedUrl) {
-    alert("❌ Kunne ikke hente billedet.");
+function tegnScene() {
+  const nu = performance.now();
+
+  // Hvis modal er lukket, stop animation
+  if (document.getElementById("rute-modal").classList.contains("skjul")) {
+    cancelAnimationFrame(pulsAnimationId);
     return;
   }
 
-  const img = new Image();
-  img.src = data.signedUrl;
-  await img.decode();
+  // Skip frame hvis ikke tid endnu
+  if (nu - sidsteFrameTid < frameInterval) {
+    pulsAnimationId = requestAnimationFrame(tegnScene);
+    return;
+  }
 
-  const modal = document.getElementById("ruteModal");
-  modalCanvas = document.getElementById("modalCanvas");
-  ctx = modalCanvas.getContext("2d");
+  sidsteFrameTid = nu;
 
-  modalCanvas.width = img.width;
-  modalCanvas.height = img.height;
+  const delta = (nu - startTid) / 1000;
+  const pulsStyrke = Math.sin(delta * 2 * Math.PI) * 0.5 + 0.5;
 
-  // 🔁 Ryd og tegn kun billede
-  ctx.clearRect(0, 0, modalCanvas.width, modalCanvas.height);
+  // Baggrund
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0);
 
-  // 🎨 Tegn farvede greb – direkte
-  rute.greb.forEach(greb => tegnGreb(greb, rute.farve || "cyan"));
+  // Mørklæg
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  document.getElementById("modalTitel").textContent = rute.navn || "Rutevisning";
-  modal.classList.remove("skjul");
-  document.body.style.overflow = "hidden";
-};
+  // Klip polygoner ud
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  rute.greb.forEach(p => {
+    if (p.points?.length >= 3) {
+      ctx.beginPath();
+      ctx.moveTo(p.points[0].x, p.points[0].y);
+      for (let i = 1; i < p.points.length; i++) {
+        ctx.lineTo(p.points[i].x, p.points[i].y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+  ctx.restore();
 
+  ctx.globalCompositeOperation = "source-over";
+
+  // Glød
+  rute.greb.forEach(p => tegnGlød(p, "white", pulsStyrke));
+
+  // Farve
+  rute.greb.forEach(p => tegnGreb(p, rute.farve || "cyan"));
+
+  // Næste frame
+  pulsAnimationId = requestAnimationFrame(tegnScene);
+}
+
+
+
+    tegnScene();
+  };
+  img.src = rute.billede_url;
+}
 
 window.lukRuteModal = function () {
-  document.getElementById("ruteModal").classList.add("skjul");
-  document.body.style.overflow = "auto";
+  if (pulsAnimationId) cancelAnimationFrame(pulsAnimationId);
+  document.getElementById("rute-modal").classList.add("skjul");
 };
+
 
 
   </script>

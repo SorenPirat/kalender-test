@@ -121,6 +121,53 @@ return;
   efterLogin(bruger);
 }
 
+// Cacher rutebilleder i 7 dage til localstorage
+export async function hentSignedUrl(filnavn, bucket = "ruter") {
+  const nøgle = `signedUrl_${bucket}_${filnavn}`;
+  const cache = localStorage.getItem(nøgle);
+
+  if (cache) {
+    const gemt = JSON.parse(cache);
+    const nu = Date.now();
+    const udløb = gemt?.udløber || 0;
+
+    // Test om link stadig er gyldigt (ikke udløbet)
+    if (nu < udløb && gemt.url) {
+      // Valider evt. linket ved at lave en HEAD-request
+      try {
+        const test = await fetch(gemt.url, { method: "HEAD" });
+        if (test.ok) {
+          return gemt.url; // stadig gyldigt
+        } else {
+          console.warn("🔁 Cached signed URL ikke længere gyldig – henter ny.");
+        }
+      } catch (err) {
+        console.warn("❌ Fejl ved HEAD-request til cached URL:", err);
+      }
+    }
+  }
+
+  // 🔁 Hent ny signed URL fra Supabase (7 dage)
+  const { data, error } = await client
+    .storage
+    .from(bucket)
+    .createSignedUrl(filnavn, 60 * 60 * 24 * 7);
+
+  if (error || !data?.signedUrl) {
+    console.warn("❌ Kunne ikke hente ny signed URL:", error);
+    return null;
+  }
+
+  // Gem ny URL i cache
+  const udløber = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  localStorage.setItem(nøgle, JSON.stringify({
+    url: data.signedUrl,
+    udløber
+  }));
+
+  return data.signedUrl;
+}
+
 
 // 🟦 Menu-indsætning – med klikbar brugernavn
 export async function indsætMenu(bruger) {
