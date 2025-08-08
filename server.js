@@ -1039,78 +1039,55 @@ app.get("/export-user/:id", async (req, res) => {
 
 // ==== Kontaktformular + notifikation + threadoprettelse ====
 app.post("/kontakt", async (req, res) => {
-  console.log("🔥 Modtog POST /kontakt");
+  const { afsender, modtager, rolle, titel, tekst, billede_url, lyd_url } = req.body;
 
-  const { rolle, titel, afsender, tekst, billede_url, lyd_url } = req.body;
-
-  if (!rolle || !titel || !afsender || (!tekst && !billede_url && !lyd_url)) {
-    return res.status(400).json({ error: "Manglende nødvendige felter" });
+  if (!afsender || !titel || (!tekst && !lyd_url)) {
+    return res.status(400).json({ error: "Mangler påkrævede felter" });
   }
 
-  const threadId = uuidv4();
+  try {
+    const { data: thread, error: threadError } = await supabase
+      .from("threads")
+      .insert([{
+        oprettet_af: afsender,
+        modtager: modtager || null,
+        rolle: rolle || null,
+        titel
+      }])
+      .select()
+      .single();
 
-  const { error: threadError } = await supabase
-    .from("threads")
-    .insert({
-      id: threadId,
-      rolle,
-      titel,
-      oprettet_af: afsender
-    });
+    if (threadError) throw threadError;
 
-  if (threadError) {
-    console.error("❌ Trådfejl:", threadError);
-    return res.status(500).json({ error: "Kunne ikke oprette tråd" });
-  }
+    const { error: msgError } = await supabase
+      .from("messages")
+      .insert([{
+        thread_id: thread.id,
+        afsender,
+        tekst,
+        billede_url,
+        lyd_url
+      }]);
 
-  const { error: messageError } = await supabase
-    .from("messages")
-    .insert({
-      thread_id: threadId,
-      afsender,
-      tekst,
-      billede_url,
-      lyd_url
-    });
+    if (msgError) throw msgError;
 
-  if (messageError) {
-    console.error("❌ Beskedfejl:", messageError);
-    return res.status(500).json({ error: "Kunne ikke oprette besked" });
-  }
-
-  const { data: brugere, error: userError } = await supabase
-    .from("users")
-    .select("id, rolle");
-
-  if (userError) {
-    console.error("❌ Fejl ved hentning af brugere:", userError);
-    return res.status(500).json({ error: "Kunne ikke hente brugere" });
-  }
-
-  const modtagere = brugere.filter(b => 
-    Array.isArray(b.rolle) ? b.rolle.includes(rolle) : b.rolle === rolle
-  );
-
-  const notifikationer = modtagere.map(b => ({
-    id: uuidv4(),
-    bruger_id: b.id,
-    thread_id: threadId
-  }));
-
-  if (notifikationer.length > 0) {
-    const { error: notifError } = await supabase
-      .from("kontakt_notifications")
-      .insert(notifikationer);
-
-    if (notifError) {
-      console.error("❌ Fejl ved notifikationer:", notifError);
+    // Tilføj notifikation
+    const notifikationsModtager = modtager || null;
+    if (notifikationsModtager) {
+      await supabase
+        .from("kontakt_notifications")
+        .insert([{ thread_id: thread.id, bruger_id: notifikationsModtager }]);
     }
-  }
 
-  res.json({ success: true, threadId });
+    res.status(200).json({ ok: true, thread_id: thread.id });
+  } catch (err) {
+    console.error("Fejl i /kontakt:", err);
+    res.status(500).json({ error: "Intern serverfejl" });
+  }
 });
 
 // ===== Start Server =====
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
