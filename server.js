@@ -541,12 +541,10 @@ app.get('/public-events', async (req, res) => {
 
 app.get("/threads", async (req, res) => {
   const brugerId = req.query.brugerId;
-  if (!brugerId) {
-    return res.status(400).json({ error: "brugerId mangler i forespørgslen" });
-  }
+  if (!brugerId) return res.status(400).json({ error: "brugerId mangler i forespørgslen" });
 
   try {
-    // 1. Hent brugerens rolle
+    // 1) Find brugerens roller
     const { data: brugerdata, error: brugerFejl } = await supabase
       .from("users")
       .select("rolle")
@@ -554,17 +552,14 @@ app.get("/threads", async (req, res) => {
       .single();
     if (brugerFejl || !brugerdata) throw brugerFejl || new Error("Bruger ikke fundet");
 
-    const brugerRoller = Array.isArray(brugerdata.rolle)
-      ? brugerdata.rolle
-      : [brugerdata.rolle];
+    const brugerRoller = Array.isArray(brugerdata.rolle) ? brugerdata.rolle : [brugerdata.rolle];
 
-    // 2. Tråde som afsender
-    const { data: oprettedeTråde, error: opretFejl } = await supabase
-      .from("threads")
-      .select(`
+    // Feltliste (tilføj 'modtager'!)
+    const felt = `
       id,
       titel,
       rolle,
+      modtager,
       oprettet_af,
       created_at,
       er_lukket,
@@ -572,43 +567,41 @@ app.get("/threads", async (req, res) => {
       opdateret,
       sidst_set_af_afsender,
       sidst_set_af_modtager
-      `)
+    `;
+
+    // Afsendte tråde
+    const { data: afsendte, error: e1 } = await supabase
+      .from("threads")
+      .select(felt)
       .eq("oprettet_af", brugerId);
-    if (opretFejl) throw opretFejl;
+    if (e1) throw e1;
 
-    // 3. Tråde hvor brugerens rolle matcher thread.rolle
-    const { data: modtagerTråde, error: rolleFejl } = await supabase
+    // Tråde til brugerens roller
+    const { data: tilRoller, error: e2 } = await supabase
       .from("threads")
-      .select(`
-      id,
-      titel,
-      rolle,
-      oprettet_af,
-      created_at,
-      er_lukket,
-      lukket_af,
-      opdateret,
-      sidst_set_af_afsender,
-      sidst_set_af_modtager
-      `)
+      .select(felt)
       .in("rolle", brugerRoller)
-      .neq("oprettet_af", brugerId); // undgå dublet hvis brugeren både er afsender og modtager
-    if (rolleFejl) throw rolleFejl;
+      .neq("oprettet_af", brugerId);
+    if (e2) throw e2;
 
-    const alleTråde = [...oprettedeTråde, ...modtagerTråde];
-    const unikkeTråde = Object.values(
-      alleTråde.reduce((acc, t) => {
-        acc[t.id] = t;
-        return acc;
-      }, {})
-    );
+    // Tråde med specifik modtager = brugerId
+    const { data: direkte, error: e3 } = await supabase
+      .from("threads")
+      .select(felt)
+      .eq("modtager", brugerId)
+      .neq("oprettet_af", brugerId);
+    if (e3) throw e3;
 
-    res.json(unikkeTråde);
+    // Merge + dedup
+    const map = new Map();
+    [...(afsendte || []), ...(tilRoller || []), ...(direkte || [])].forEach(t => map.set(t.id, t));
+    res.json([...map.values()]);
   } catch (err) {
     console.error("❌ Fejl i /threads:", err);
     res.status(500).json({ error: "Serverfejl ved hentning af tråde" });
   }
 });
+
 
 
 // ==== Svar på tråde ====
@@ -641,43 +634,63 @@ app.post("/reply", async (req, res) => {
 
     // 3. Hent trådinfo inkl. rolle og oprettet_af
     const { data: tråd, error: trådFejl } = await supabase
-      .from("threads")
-      .select("rolle, oprettet_af")
-      .eq("id", thread_id)
-      .single();
-    if (trådFejl || !tråd) throw trådFejl || new Error("Tråd ikke fundet");
+  .from("threads")
+  .select("rolle, oprettet_af, modtager")
+  .eq("id", thread_id)
+  .single();
+if (trådFejl || !tråd) throw trådFejl || new Error("Tråd ikke fundet");
 
-    const målrolle = tråd.rolle;
+const målrolle = tråd.rolle;
+const specifikModtager = tråd.modtager;
 
-    // 4. Hent alle brugere med denne rolle
-    const { data: brugere, error: brugerFejl } = await supabase
-      .from("users")
-      .select("id, rolle");
-    if (brugerFejl) throw brugerFejl;
+// 5) Notifikationer
+if (specifikModtager) {
+  // direkte tråd -> kun specifik modtager
+  if (specifikModtager !== afsender) {
+    const { data: eksisterende } = await supabase
+      .from("kontakt_notifications")
+      .select("id")
+      .eq("thread_id", thread_id)
+      .eq("bruger_id", specifikModtager);
 
-    const modtagere = brugere.filter(b =>
-      (Array.isArray(b.rolle) ? b.rolle.includes(målrolle) : b.rolle === målrolle)
-      && b.id !== afsender // undgå at afsender får notifikation
-    );
+    if (!eksisterende?.length) {
+      await supabase.from("kontakt_notifications").insert({
+        id: uuidv4(),
+        bruger_id: specifikModtager,
+        thread_id
+      });
+    }
+  }
+} else if (målrolle) {
+  // rolle-baseret -> hold din nuværende logik
+  const { data: brugere, error: brugerFejl } = await supabase
+    .from("users")
+    .select("id, rolle");
+  if (brugerFejl) throw brugerFejl;
 
-// 5. Tjek og indsæt notifikationer for modtagere
-for (const modtager of modtagere) {
-  const { data: eksisterende } = await supabase
-    .from("kontakt_notifications")
-    .select("id")
-    .eq("thread_id", thread_id)
-    .eq("bruger_id", modtager.id);
+  const modtagere = brugere.filter(b =>
+    (Array.isArray(b.rolle) ? b.rolle.includes(målrolle) : b.rolle === målrolle)
+    && b.id !== afsender
+  );
 
-  if (!eksisterende.length) {
-    await supabase.from("kontakt_notifications").insert({
-      id: uuidv4(),
-      bruger_id: modtager.id,
-      thread_id
-    });
+  for (const modtager of modtagere) {
+    const { data: eksisterende } = await supabase
+      .from("kontakt_notifications")
+      .select("id")
+      .eq("thread_id", thread_id)
+      .eq("bruger_id", modtager.id);
+
+    if (!eksisterende?.length) {
+      await supabase.from("kontakt_notifications").insert({
+        id: uuidv4(),
+        bruger_id: modtager.id,
+        thread_id
+      });
+    }
   }
 }
 
-// 6. Opret notifikation til oprindelig afsender, hvis modtageren svarer tilbage
+// 6) Notifikation til oprindelig afsender hvis modtager svarer (behold nuværende)
 if (afsender !== tråd.oprettet_af) {
   const { data: eksisterende } = await supabase
     .from("kontakt_notifications")
@@ -685,7 +698,7 @@ if (afsender !== tråd.oprettet_af) {
     .eq("thread_id", thread_id)
     .eq("bruger_id", tråd.oprettet_af);
 
-  if (!eksisterende.length) {
+  if (!eksisterende?.length) {
     await supabase.from("kontakt_notifications").insert({
       id: uuidv4(),
       bruger_id: tråd.oprettet_af,
@@ -693,13 +706,6 @@ if (afsender !== tråd.oprettet_af) {
     });
   }
 }
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Fejl i /reply:", err);
-    res.status(500).json({ error: "Kunne ikke sende svar" });
-  }
-});
 
 // ==== Arkivér tråde ====
 app.post("/archive-thread", async (req, res) => {
@@ -1090,4 +1096,5 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
