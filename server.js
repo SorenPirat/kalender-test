@@ -689,7 +689,7 @@ if (specifikModtager) {
     }
   }
 }
-
+    
 // 6) Notifikation til oprindelig afsender hvis modtager svarer (behold nuværende)
 if (afsender !== tråd.oprettet_af) {
   const { data: eksisterende } = await supabase
@@ -707,6 +707,14 @@ if (afsender !== tråd.oprettet_af) {
   }
 }
 
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("Fejl i /reply:", err);
+    res.status(500).json({ error: "Kunne ikke sende svar" });
+  }
+});
+    
 // ==== Arkivér tråde ====
 app.post("/archive-thread", async (req, res) => {
   const { thread_id, lukket_af } = req.body;
@@ -1096,5 +1104,4 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
-
 
