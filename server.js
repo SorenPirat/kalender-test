@@ -187,6 +187,7 @@ function suggestFilename(base) {
 }
 
 async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
+  // --- 1) Profil
   const { data: profile, error: profileErr } = await supabase
     .from('users')
     .select('*')
@@ -195,34 +196,123 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
 
   if (profileErr || !profile) return { error: 'Bruger ikke fundet i users' };
 
-  // Eksempel: eksterne signups (Render)
+  // --- 2) Messenger: tråde hvor brugeren er direkte part
+  const [{ data: threadsInitiated }, { data: threadsDirect }] = await Promise.all([
+    supabase.from('threads')
+      .select('id, titel, rolle, modtager, oprettet_af, created_at, opdateret, er_lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager')
+      .eq('oprettet_af', userId),
+    supabase.from('threads')
+      .select('id, titel, rolle, modtager, oprettet_af, created_at, opdateret, er_lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager')
+      .eq('modtager', userId)
+  ]);
+
+  const directThreadIds = [
+    ...(threadsInitiated?.map(t => t.id) || []),
+    ...(threadsDirect?.map(t => t.id) || [])
+  ];
+  const uniqueDirectThreadIds = [...new Set(directThreadIds)];
+
+  // Beskeder i disse tråde
+  let msgsByThread = {};
+  if (uniqueDirectThreadIds.length > 0) {
+    const { data: msgsInDirect } = await supabase
+      .from('messages')
+      .select('*')
+      .in('thread_id', uniqueDirectThreadIds)
+      .order('sendt', { ascending: true });
+
+    (msgsInDirect || []).forEach(m => {
+      (msgsByThread[m.thread_id] ||= []).push(m);
+    });
+  }
+
+  // Alle brugerens egne beskeder (uanset tråd)
+  const { data: messagesAuthored } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('afsender', userId)
+    .order('sendt', { ascending: true });
+
+  // Notifikationer til brugeren
+  const { data: kontaktNotifs } = await supabase
+    .from('kontakt_notifications')
+    .select('*')
+    .eq('bruger_id', userId);
+
+  // Rolletråde hvor brugeren har skrevet (så brugeren får sin egen tekst med)
+  const threadIdsFromAuthored = [...new Set((messagesAuthored || []).map(m => m.thread_id))];
+  let roleThreads = [];
+  if (threadIdsFromAuthored.length) {
+    const directSet = new Set(uniqueDirectThreadIds);
+    const { data: authoredThreads } = await supabase
+      .from('threads')
+      .select('id, titel, rolle, modtager, oprettet_af, created_at, opdateret, er_lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager')
+      .in('id', threadIdsFromAuthored);
+
+    roleThreads = (authoredThreads || []).filter(t => !directSet.has(t.id));
+
+    if (roleThreads.length) {
+      const extraIds = roleThreads.map(t => t.id);
+      const { data: extraMsgs } = await supabase
+        .from('messages')
+        .select('*')
+        .in('thread_id', extraIds)
+        .order('sendt', { ascending: true });
+      (extraMsgs || []).forEach(m => {
+        (msgsByThread[m.thread_id] ||= []).push(m);
+      });
+    }
+  }
+
+  // Redigerede/maske‑tråde
+  const messenger = {
+    threads_initiated: (threadsInitiated || []).map(t =>
+      redactThreadWithMessages(t, msgsByThread[t.id] || [], userId)
+    ),
+    direct_threads_received: (threadsDirect || []).map(t =>
+      redactThreadWithMessages(t, msgsByThread[t.id] || [], userId)
+    ),
+    // brugerens egne beskeder fuldt ud (egne data)
+    messages_authored: (messagesAuthored || []).map(cleanOwnMessage),
+    notifications: kontaktNotifs || []
+  };
+
+  if (roleThreads.length) {
+    messenger.role_threads_participated = roleThreads.map(t =>
+      redactThreadWithMessages(t, msgsByThread[t.id] || [], userId)
+    );
+  }
+
+  // --- 3) Eksterne signups (Render) — uændret
   let renderSignups = [];
   try {
     if (profile?.navn) {
       const resp = await fetch('https://nglevagter-test.onrender.com/signups');
       if (resp.ok) {
         const all = await resp.json();
-        renderSignups = all.filter((s) => (s.name || '').toLowerCase() === profile.navn.toLowerCase());
+        renderSignups = all.filter(s => (s.name || '').toLowerCase() === profile.navn.toLowerCase());
       }
     }
   } catch (_) {}
 
+  // --- 4) Payload
   const payload = {
     meta: {
       exportGeneratedAt: new Date().toISOString(),
       includeSystemMeta: !!includeSystemMeta,
       source: 'NKL Adminpanel',
-      version: 1
+      version: 3
     },
     subject: {
       id: profile.id,
-      navn: profile.navn || null,
-      email: profile.email || null,
+      navn: profile.navn ?? null,
+      email: profile.email ?? null,
       rolle: profile.rolle ?? null,
       oprettet_dato: profile.oprettet_dato ?? null
     },
     data: {
-      renderSignups
+      renderSignups,
+      messenger
     },
     raw: {
       users_row: profile
@@ -230,10 +320,59 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
   };
 
   if (includeSystemMeta) {
-    // Tilføj evt. audit-log m.m.
   }
 
   return { payload };
+}
+
+
+function cleanOwnMessage(m) {
+  return {
+    id: m.id ?? null,
+    thread_id: m.thread_id,
+    afsender: m.afsender,
+    tekst: m.tekst ?? null,
+    billede_url: m.billede_url ?? null,
+    lyd_url: m.lyd_url ?? null,
+    sendt: m.sendt ?? m.created_at ?? null
+  };
+}
+
+function summarizeOtherMessage(m) {
+  return {
+    id: m.id ?? null,
+    thread_id: m.thread_id,
+    other_participant: true,
+    // ingen tekst, ingen afsender-id
+    sendt: m.sendt ?? m.created_at ?? null,
+    has_billede: !!m.billede_url,
+    has_lyd: !!m.lyd_url,
+  };
+}
+
+function redactThreadMeta(t, userId) {
+  return {
+    id: t.id,
+    titel: t.titel ?? null,
+    rolle: t.rolle ?? null,                                   
+    modtager: t.modtager === userId ? userId : (t.modtager ? "redacted" : null),
+    oprettet_af: t.oprettet_af === userId ? userId : (t.oprettet_af ? "redacted" : null),
+    created_at: t.created_at ?? null,
+    opdateret: t.opdateret ?? null,
+    er_lukket: !!t.er_lukket,
+    lukket_af: t.lukket_af === userId ? userId : (t.lukket_af ? "redacted" : null),
+    sidst_set_af_afsender: t.oprettet_af === userId ? (t.sidst_set_af_afsender ?? null) : null,
+    sidst_set_af_modtager: t.modtager === userId ? (t.sidst_set_af_modtager ?? null) : null,
+  };
+}
+
+function redactThreadWithMessages(t, msgs, userId) {
+  const mine = (msgs || []).filter(m => m.afsender === userId).map(cleanOwnMessage);
+  const andres = (msgs || []).filter(m => m.afsender !== userId).map(summarizeOtherMessage);
+  return {
+    ...redactThreadMeta(t, userId),
+    messages: [...mine, ...andres].sort((a, b) => new Date(a.sendt) - new Date(b.sendt))
+  };
 }
 
 // ===== Routes =====
@@ -1143,6 +1282,7 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
 
 
