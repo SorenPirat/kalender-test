@@ -30,39 +30,61 @@ export async function opdaterNotifikationsBadge() {
     .select("*", { count: "exact", head: true })
     .eq("bruger_id", bruger.id);
 
+  // Sørg for badge findes (du gør det allerede)
   let badgeEl = document.getElementById("notifikations-badge");
-
   if (!badgeEl) {
     const profilLink = document.querySelector("#profil-link");
     if (profilLink) {
       badgeEl = document.createElement("span");
       badgeEl.id = "notifikations-badge";
       profilLink.appendChild(badgeEl);
+
+      // 🔔 indsæt også klokke hvis den ikke findes
+      if (!document.getElementById("bell")) {
+        const bell = document.createElement("span");
+        bell.id = "bell";
+        bell.textContent = "🔔";
+        profilLink.insertBefore(bell, badgeEl);
+      }
     } else {
-      // prøv igen lidt senere hvis linket ikke er klar endnu
       return setTimeout(opdaterNotifikationsBadge, 200);
     }
   }
 
-if (error || !count || count === 0) {
-  badgeEl.classList.add("skjult");
-  badgeEl.textContent = "";
-} else {
-  badgeEl.textContent = count;
-  badgeEl.classList.remove("skjult");
-}
-
-const badgeProfil = document.getElementById("badge-profil");
-if (badgeProfil) {
+  // Toggle badge-tekst/visning
   if (error || !count || count === 0) {
-    badgeProfil.classList.add("skjult");
-    badgeProfil.textContent = "";
+    badgeEl.classList.add("skjult");
+    badgeEl.textContent = "";
   } else {
-    badgeProfil.textContent = count;
-    badgeProfil.classList.remove("skjult");
+    badgeEl.textContent = count;
+    badgeEl.classList.remove("skjult");
+  }
+
+  // 🔔 Toggle animation på klokken
+  const bell = document.getElementById("bell");
+  if (bell) {
+    // Fjern for at kunne re‑trigge animationen:
+    bell.classList.remove("ring");
+    // Force reflow (så anim spiller igen selvom klassen var sat før)
+    void bell.offsetWidth;
+    if (!error && count > 0) {
+      bell.classList.add("ring");
+    }
+  }
+
+  // (valgfrit) Synkroniser sekundær badge
+  const badgeProfil = document.getElementById("badge-profil");
+  if (badgeProfil) {
+    if (error || !count || count === 0) {
+      badgeProfil.classList.add("skjult");
+      badgeProfil.textContent = "";
+    } else {
+      badgeProfil.textContent = count;
+      badgeProfil.classList.remove("skjult");
+    }
   }
 }
-}
+
 
 
 
@@ -122,8 +144,8 @@ return;
 }
 
 // Cacher rutebilleder i 7 dage til localstorage
-export async function hentSignedUrl(filnavn, bucket = "ruter") {
-  const nøgle = `signedUrl_${bucket}_${filnavn}`;
+export function hentPublicUrlMedCache(filnavn, bucket = "ruter") {
+  const nøgle = `publicUrl_${bucket}_${filnavn}`;
   const cache = localStorage.getItem(nøgle);
 
   if (cache) {
@@ -131,41 +153,29 @@ export async function hentSignedUrl(filnavn, bucket = "ruter") {
     const nu = Date.now();
     const udløb = gemt?.udløber || 0;
 
-    // Test om link stadig er gyldigt (ikke udløbet)
+    // ✅ Brug cached version hvis stadig gyldig
     if (nu < udløb && gemt.url) {
-      // Valider evt. linket ved at lave en HEAD-request
-      try {
-        const test = await fetch(gemt.url, { method: "HEAD" });
-        if (test.ok) {
-          return gemt.url; // stadig gyldigt
-        } else {
-          console.warn("🔁 Cached signed URL ikke længere gyldig – henter ny.");
-        }
-      } catch (err) {
-        console.warn("❌ Fejl ved HEAD-request til cached URL:", err);
-      }
+      return gemt.url;
     }
   }
 
-  // 🔁 Hent ny signed URL fra Supabase (7 dage)
-  const { data, error } = await client
-    .storage
-    .from(bucket)
-    .createSignedUrl(filnavn, 60 * 60 * 24 * 7);
+  // 🔗 Hent ny public URL (ændrer sig ikke, men vi cache alligevel)
+  const { data } = client.storage.from(bucket).getPublicUrl(filnavn);
+  const url = data?.publicUrl;
 
-  if (error || !data?.signedUrl) {
-    console.warn("❌ Kunne ikke hente ny signed URL:", error);
+  if (!url) {
+    console.warn("❌ Kunne ikke hente public URL for:", filnavn);
     return null;
   }
 
-  // Gem ny URL i cache
+  // 📦 Gem i cache i 7 dage (kan justeres)
   const udløber = Date.now() + 7 * 24 * 60 * 60 * 1000;
   localStorage.setItem(nøgle, JSON.stringify({
-    url: data.signedUrl,
+    url,
     udløber
   }));
 
-  return data.signedUrl;
+  return url;
 }
 
 

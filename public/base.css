@@ -63,6 +63,8 @@ nav a:hover {
   background-color: #0056b3;
 }
 
+.farve-mint { color: #3EB489; }
+
 .info-text {
   background: #f9f9f9;
   padding: 1rem;
@@ -95,29 +97,26 @@ nav a:hover {
 
 .rute-info {
   position: absolute;
-  bottom: 0.5rem;
+  top: 0.5rem;
   left: 0.5rem;
-  right: auto;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
-  font-family: var(--font, system-ui);
-  line-height: 1.6;
-  max-width: 300px;
   z-index: 10;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
-  backdrop-filter: blur(1px);
-  word-break: break-word;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 0.8rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 1rem;
+  box-shadow: 0 0 6px rgba(0,0,0,0.3);
+  pointer-events: none;
 }
+
 
 .ikon-linje {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.25rem;
+  gap: 0.5rem;
+  line-height: 1.4;
 }
+
 
 .skjul {
   display: none; 
@@ -237,6 +236,413 @@ button.primary:hover {
   padding: 0 1rem;
 }
 
+#modal-body h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--accent-dark, #3fa7f7);
+}
+
+#modal-body p {
+  margin-bottom: 0.8rem;
+}
+
+#modal-body ul {
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+}
+
+#modal-body .primary {
+  margin-top: 1rem;
+}
+
+summary {
+  list-style: none; /* 🔧 Fjerner marker i alle browsere */
+}
+
+summary::marker {
+  display: none;
+}
+
+summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transition: transform 0.2s ease;
+}
+
+details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.event-box {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #1e1e1e;
+  border-radius: 10px;
+  color: #eee;
+}
+
+    .modal-content {
+    width: auto;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 12px;
+    padding: 1rem;
+  }
+
+  #modal-body {
+    max-height: 75vh;
+    overflow-y: auto;
+  }
+
+  .modal {
+    align-items: flex-start;
+    padding-top: 1.5rem;
+  }
+.event-title {
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #004080; 
+  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+}
+
+
+#filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.filter-tag {
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  border: 1px solid #888;
+  background-color: #333;
+  color: #eee;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.filter-tag.aktiv {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: #fff;
+}
+
+.filter-tag:hover {
+  opacity: 0.85;
+}
+
+.luk {
+  position: absolute;
+  top: 0.5rem;
+  right: 1.5rem;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #888;
+  z-index: 10;
+}
+
+.luk:hover {
+  color: #f33;
+}
+
+.modal-box {
+  position: relative;
+}
+
+.kort-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.opretter {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: right;
+  font-style: italic;
+}
+
+
+#week-overview {
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  scroll-behavior: smooth;
+}
+
+.week-overview-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  scroll-snap-type: x mandatory;
+}
+
+td:last-child button {
+  margin-right: 0.4rem;
+}
+
+td:last-child button:last-child {
+  margin-right: 0;
+}
+
+.mobil-dag-kort {
+  background-color: #f8f8f8;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #333;
+}
+
+.mobil-linje {
+  margin-bottom: 0.5rem;
+}
+
+.mobil-linje strong {
+  display: inline-block;
+  width: 110px;
+  color: #000;
+}
+
+/* Handling-knapper under kortet */
+.mobil-handlinger {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mobil-handlinger button {
+  background-color: #eaeaea;
+  color: #333;
+  border: none;
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.mobil-handlinger button:hover {
+  background-color: #ddd;
+}
+
+    .søgefelt, .rollefilter {
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .kontaktkort {
+      background: var(--kort-baggrund, #fff);
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+
+    .kontaktkort:hover {
+      background-color: #eef;
+    }
+
+.modal-box {
+  animation: popin 0.25s ease-out;
+}
+
+/* === MESSENGER LAYOUT === */
+.beskeder-app {
+  display: flex;
+  height: 90vh;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+/* Venstre sidebar – tråd-liste */
+.tråd-liste {
+  width: 30%;
+  min-width: 250px;
+  max-width: 400px;
+  border-right: 1px solid #ccc;
+  padding: 1rem;
+  overflow-y: auto;
+  background-color: #f9f9f9;
+}
+
+.tråd-liste h2 {
+  margin-bottom: 1rem;
+}
+
+#tråd-søg {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.tråd-preview {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tråd-preview:hover {
+  background: #eef;
+}
+
+.tråd-preview.aktiv {
+  background: #dbeaff;
+}
+
+/* Højreside – aktiv samtale */
+.aktiv-tråd {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: #f4f4f4;
+  overflow: hidden;
+}
+
+.tråd-header {
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#beskeder-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+/* Enkelt besked */
+.besked {
+  background: #fff;
+  padding: 0.75rem;
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  max-width: 75%;
+  align-self: flex-start;
+}
+
+.besked.afsender {
+  align-self: flex-start;
+  background: #dcf8c6;
+}
+
+.besked.modtager {
+  align-self: flex-end;
+  background: #fff;
+}
+
+/* Svarfelt */
+.svar-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid #ccc;
+  padding-top: 1rem;
+}
+
+#besked-input {
+  flex-grow: 1;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.svar-form button {
+  padding: 0.6rem 1rem;
+  border: none;
+  background-color: var(--accent, #007bff);
+  color: white;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.svar-form button:hover {
+  background-color: #0056b3;
+}
+
+.tilbage-knap {
+  display: none;
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.notif-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #e11d48; 
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px #fff; 
+}
+.tråd-preview.aktiv .notif-dot {
+  display: none;
+}
+
+.bell {
+  display: inline-block;
+  margin-right: 6px;
+  transform-origin: 50% 0%; 
+  animation:
+    bell-wiggle 1.4s ease-in-out infinite,
+    bell-glow   1.4s ease-in-out infinite;
+  will-change: transform, text-shadow;
+}
+
+
+.tråd-header .bell + * {
+  vertical-align: middle;
+}
+
+.emoji-wrap { position: relative; display: flex; }
+#emoji-picker {
+  position: absolute;
+  bottom: 2.6rem; /* lige over knappen/textarea */
+  right: 0;
+  z-index: 1000;
+  max-height: 360px;
+  width: min(340px, 90vw);
+  box-shadow: 0 6px 18px rgba(0,0,0,.2);
+  border-radius: 10px;
+}
+
 
 /* === RESPONSIVT: MOBIL === */
 @media screen and (max-width: 600px) {
@@ -256,7 +662,6 @@ button.primary:hover {
   
   .rute-info {
     position: static;
-    margin-top: 1rem;
     max-width: 100%;
     backdrop-filter: blur(1px);
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
@@ -269,6 +674,75 @@ button.primary:hover {
   .ikon-linje {
     font-size: 0.95rem;
   }
+
+  #filter-tags {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filter-tag {
+    width: 100%;
+    text-align: left;
+  }
+    .week-overview-wrapper {
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+  }
+  
+.beskeder-app {
+    flex-direction: column;
+  }
+
+  .tråd-liste {
+    width: 100%;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .aktiv-tråd {
+    display: none;
+	width: 100%;
+  }
+
+  .aktiv-tråd.vis {
+    display: flex;
+	flex-direction: column;
+  }
+  
+  .tråd-liste.skjul {
+    display: none;
+  }
+
+  #tilbage-knap {
+    display: inline-block;
+	align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #007bff;
+    cursor: pointer;
+  }
+
+  .tråd-header {
+    justify-content: flex-start;
+    gap: 1rem;
+  }
+  
+    #emoji-picker {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    width: 96vw;
+    max-height: 60vh;
+    border-radius: 12px;
+    z-index: 9999;
+  }
+  
+    .svar-form, .emoji-wrap { overflow: visible; }
 }
 
 /* === DARK MODE === */
@@ -365,10 +839,176 @@ button.primary:hover {
 button.primary:hover {
  background-color: #3a3a3a;
 }
+
+  .modal-content {
+    background: #1e1e1e;
+    color: #f0f0f0;
+  }
+
+  .mobil-dag-kort {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+  }
+
+  .mobil-linje strong {
+    color: #ddd;
+  }
+
+  .mobil-handlinger button {
+    background-color: #444;
+    color: #eee;
+  }
+
+  .mobil-handlinger button:hover {
+    background-color: #555;
+  }
+
+.kort {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  box-shadow: 0 1px 4px rgba(255, 255, 255, 0.05);
+  color: #f0f0f0;
+}
+
+.event-title {
+  color: #81cfff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+
+.event-dato {
+  color: #ccc;
+}
+
+.opretter {
+  color: #999;
+  font-size: 0.8rem;
+  font-style: italic;
+  text-align: right;
+}
+
+  #resultatliste {
+    background-color: transparent;
+  }
+
+  .kontaktkort {
+    background-color: #1e1e1e;
+    color: #f0f0f0;
+    border: 1px solid #333;
+  }
+
+  .kontaktkort:hover {
+    background-color: #2a2a2a;
+  }
+
+  .kontaktkort small {
+    color: #aaa;
+  }
+
+  .tråd-liste {
+    background-color: #1e1e1e;
+    border-color: #333;
+  }
+
+  .tråd-liste h2 {
+    color: #81cfff;
+  }
+
+  #tråd-søg {
+    background-color: #2a2a2a;
+    color: #eee;
+    border: 1px solid #444;
+  }
+
+  .tråd-preview {
+    background: #2a2a2a;
+    color: #eee;
+    border: 1px solid #333;
+  }
+
+  .tråd-preview:hover {
+    background: #333;
+  }
+
+  .tråd-preview.aktiv {
+    background: #004080;
+    color: #fff;
+  }
+
+  .aktiv-tråd {
+    background: #121212;
+  }
+
+  .tråd-header {
+    border-bottom: 1px solid #333;
+    color: #eee;
+  }
+
+  .beskeder-container {
+    scrollbar-color: #555 transparent;
+  }
+
+  .besked {
+    background: #2a2a2a;
+    color: #eee;
+  }
+
+  .besked.afsender {
+    background: #004080;
+    color: #fff;
+  }
+
+  .besked.modtager {
+    background: #2a2a2a;
+  }
+
+  #besked-input {
+    background-color: #1e1e1e;
+    color: #fff;
+    border: 1px solid #444;
+  }
+
+  .svar-form button {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #555;
+  }
+
+  .svar-form button:hover {
+    background-color: #444;
+  }
+
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes popin {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bell-wiggle {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(-18deg); }
+  20%  { transform: rotate(14deg); }
+  30%  { transform: rotate(-10deg); }
+  40%  { transform: rotate(6deg); }
+  50%  { transform: rotate(-3deg); }
+  60%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes bell-glow {
+  0%, 100% { text-shadow: 0 0 0 rgba(225,29,72,0); }
+  25%      { text-shadow: 0 0 6px rgba(225,29,72,0.55); }
+  50%      { text-shadow: 0 0 10px rgba(225,29,72,0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell {
+    animation: none;
   }
 }

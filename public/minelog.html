@@ -33,7 +33,7 @@
 
 
   <script type="module">
-    import { client, adgangskontrol, indsætMenu, hentSignedUrl } from './auth.js';
+    import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
 
     adgangskontrol({
       tilladteRoller: [],
@@ -177,9 +177,9 @@ async function visGradDetaljer(grad) {
     visKnap.onclick = async () => {
       const kopi = { ...rute };
       const sti = rute.billedenavn;
-      const signedUrl = await hentSignedUrl(sti, "ruter"); // ← skift bucket-navn hvis nødvendigt
-      if (!signedUrl) return alert("❌ Kunne ikke hente billede.");
-      kopi.billede_url = signedUrl;
+      const publicUrl = hentPublicUrlMedCache(sti, "ruter");
+	  if (!publicUrl) return alert("❌ Kunne ikke hente billede.");
+	  kopi.billede_url = publicUrl;
       visRute(kopi);
     };
 

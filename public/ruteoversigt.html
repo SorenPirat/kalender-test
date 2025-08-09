@@ -35,11 +35,23 @@
   
 
 <div class="kort">
-  <div id="canvasWrapper">
+  <div id="canvasWrapper" style="position: relative;">
     <canvas id="canvas"></canvas>
+
+    <div id="ruteInfoBoks" class="rute-info skjul">
+      <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
+      <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
+      <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
+    </div>
   </div>
 </div>
 
+
+  <div id="ruteInfoBoks" class="rute-info skjul">
+    <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
+    <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
+    <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
+  </div>
 
 <div id="logModal" class="skjul modal-overlay">
   <div class="modal-box">
@@ -69,22 +81,18 @@
 
 
 
-  <div id="ruteInfoBoks" class="rute-info skjul">
-    <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
-    <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
-    <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
-  </div>
+
 
 
 
 
   <script type="module">
-import { client, adgangskontrol, indsætMenu, hentSignedUrl } from './auth.js';
+import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
 
 
 adgangskontrol({
   tilladteRoller: [],
-  redirectVedFejl: "protected.html",
+  redirectVedFejl: "index.html",
   efterLogin: bruger => indsætMenu(bruger)
 });
 
@@ -95,6 +103,22 @@ let alleRuter = [];
 let ruterKlar = false;
 let pulsAnimationId = null;
 let pulsFrame = 0;
+
+const farveMap = {
+  mint: "#3EB489",
+  pink: "pink",
+  gul: "yellow",
+  grøn: "green",
+  lilla: "purple",
+  blå: "blue",
+  orange: "orange",
+  rød: "red",
+  sort: "black",
+  hvid: "white",
+  cyan: "cyan",
+  magenta: "magenta",
+  grå: "gray"
+};
 
 const vægValg = document.getElementById("vægValg");
 const ruteValg = document.getElementById("ruteValg");
@@ -162,11 +186,12 @@ document.getElementById("status").textContent = "Indlæser...";
   const nyesteFilnavn = matcher[0].name;
 
   // 🔗 Hent billedets signed URL
-  const signedUrl = await hentSignedUrl(nyesteFilnavn);
-  if (!signedUrl) {
+  const billedeUrl = hentPublicUrlMedCache(nyesteFilnavn);
+  if (!billedeUrl) {
   console.warn("❌ Kunne ikke hente billedet:", nyesteFilnavn);
   return;
   }
+
   
   // Vis billedet
   img = new Image();
@@ -198,8 +223,9 @@ document.getElementById("status").textContent = "Indlæser...";
 	: "✅ Vælg en rute eller klik på et greb";
     ruterKlar = true;
   };
+  
+  img.src = billedeUrl;
 
-  img.src = signedUrl;
 }
 
 function udfyldRuteDropdown(ruter) {
@@ -306,7 +332,8 @@ function visRute(rute) {
     rute.greb.forEach(p => tegnGlød(p, "white", pulsStyrke));
 
     // Tegn grebene i farve
-    rute.greb.forEach(p => tegnGreb(p, rute.farve || "cyan"));
+    const farve = farveMap[rute.farve?.toLowerCase()] || rute.farve || "gray";
+	rute.greb.forEach(p => tegnGreb(p, farve));
 
     // Kør næste frame
     pulsFrame++;
@@ -397,15 +424,20 @@ function tegnGreb(p, farve = "magenta") {
 }
 
 function hexOrNamedToRgba(color, alpha) {
-  const dummy = document.createElement("div");
-  dummy.style.color = color;
-  document.body.appendChild(dummy);
-  const computed = getComputedStyle(dummy).color;
-  document.body.removeChild(dummy);
-  const rgb = computed.match(/\d+/g);
-  if (!rgb) return `rgba(255, 0, 255, ${alpha})`; // fallback
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+  try {
+    const dummy = document.createElement("div");
+    dummy.style.color = color;
+    document.body.appendChild(dummy);
+    const computed = getComputedStyle(dummy).color;
+    document.body.removeChild(dummy);
+    const rgb = computed.match(/\d+/g);
+    if (!rgb || rgb.length < 3) throw new Error("Ugyldig farve");
+    return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+  } catch {
+    return `rgba(255, 0, 255, ${alpha})`;
+  }
 }
+
 
 function opdaterForsøgsvalg(kategori) {
   const select = document.getElementById("logForsøg");

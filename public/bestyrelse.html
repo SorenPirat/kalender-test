@@ -1,6 +1,6 @@
-<!DOCTYPE html>
 <html lang="da">
 <head>
+  <script src="gate.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Bestyrelsesdokumenter – NKL</title>
@@ -14,107 +14,15 @@
 </head>
 <body>
 
-<!-- Højrekliksmenu - mapper -->
-<ul id="context-menu" class="skjult">
-  <li id="ny-mappe-valg">➕ Opret ny mappe</li>
-  <li id="slet-mappe-valg">🗑️ Slet mappe</li>
-  <li id="omdoeb-mappe-valg">✏️ Omdøb mappe</li>
-</ul>
-
-<!-- Højrekliksmenu - filer -->
-<ul id="file-context-menu" class="skjult">
-  <li id="slet-fil-valg">🗑️ Slet fil</li>
-  <li id="omdoeb-fil-valg">✏️ Omdøb fil</li>
-  <li id="download-fil-valg">⬇️ Download</li>
-</ul>
-
-<!-- modal-preview-billeder -->
-<div id="preview-modal" class="modal skjult">
-  <div class="modal-indhold">
-    <span id="luk-modal" class="luk" title="Luk">
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
-       viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" 
-       stroke-linecap="round" stroke-linejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-</span>
-    <img id="preview-billede" src="" alt="Preview" />
-    <div class="modal-knap-wrapper">
-  <button id="download-knap" class="knap-vis">⬇️ Download billede</button>
-</div>
-</div>
-</div>
-
-<!-- modal-preview-google-docs -->
-<div id="gdocs-modal" class="modal skjult">
-  <div class="modal-indhold">
-    <span class="luk" onclick="lukGdocsModal()" title="Luk">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-           viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    </span>
-    <iframe id="gdocs-frame"></iframe>
-	<div class="modal-knap-wrapper">
-  <button id="gdocs-download-knap" class="knap-vis">⬇️ Download dokument</button>
-</div>
-
-</div>
-</div>
-
-<!-- modal-preview-excel-filer -->
-<div id="excel-modal" class="modal skjult">
-  <div class="modal-indhold" style="overflow: auto; max-height: 90vh;">
-    <span class="luk" onclick="lukExcelModal()" title="Luk">
-	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-			viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-			stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg></span>
-	<select id="arkvælger" style="margin: 1rem 0; padding: 0.4rem;"></select>
-    <div id="excel-output"></div>
-  </div>
-</div>
-
-<div id="sektion-knapper" style="margin-bottom: 1rem;">
-  <button onclick="visSektion('dokumenter')">📁 Dokumenter</button>
-  <button onclick="visSektion('statistik')">📊 Statistik</button>
-</div>
-
-<div id="sektion-dokumenter">
-  <h1>📁 Bestyrelsens dokumenter</h1>
-  <div id="dokument-sektioner"></div>
-</div>
-
-<div id="sektion-statistik">
-	<h1>📊 Bestyrelsens statistik</h1>
-	
-<div id="statistik-knapper">
-  <button id="rolle-knap" class="btn-sub">👥 Rollefordeling</button>
-  <button id="begivenhed-knap" class="btn-sub">📅 Begivenheder pr. måned</button>
-  <button id="kategori-knap" class="btn-sub">📂 Begivenheder pr. kategori</button>
-  <!-- Klar til kommende knapper her -->
-</div>
-
-<div class="chart-container">
-  <canvas id="statistik-chart"></canvas>
-</div>
-
-
-
-
 
 <script type="module">
   import { adgangskontrol, indsætMenu, client } from './auth.js';
 
   adgangskontrol({
     tilladteRoller: ["bestyrelsesmedlem", "admin"],
-    redirectVedFejl: "protected.html",
+    redirectVedFejl: "index.html",
     efterLogin: (bruger) => {
+	  if (window.releaseAuthGate) window.releaseAuthGate();
       indsætMenu(bruger);
       visMapper(bucketNavn);
 	  visSektion("dokumenter");
@@ -1254,6 +1162,99 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 </script>
+
+<!-- Højrekliksmenu - mapper -->
+<ul id="context-menu" class="skjult">
+  <li id="ny-mappe-valg">➕ Opret ny mappe</li>
+  <li id="slet-mappe-valg">🗑️ Slet mappe</li>
+  <li id="omdoeb-mappe-valg">✏️ Omdøb mappe</li>
+</ul>
+
+<!-- Højrekliksmenu - filer -->
+<ul id="file-context-menu" class="skjult">
+  <li id="slet-fil-valg">🗑️ Slet fil</li>
+  <li id="omdoeb-fil-valg">✏️ Omdøb fil</li>
+  <li id="download-fil-valg">⬇️ Download</li>
+</ul>
+
+<!-- modal-preview-billeder -->
+<div id="preview-modal" class="modal skjult">
+  <div class="modal-indhold">
+    <span id="luk-modal" class="luk" title="Luk">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
+       viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" 
+       stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+</span>
+    <img id="preview-billede" src="" alt="Preview" />
+    <div class="modal-knap-wrapper">
+  <button id="download-knap" class="knap-vis">⬇️ Download billede</button>
+</div>
+</div>
+</div>
+
+<!-- modal-preview-google-docs -->
+<div id="gdocs-modal" class="modal skjult">
+  <div class="modal-indhold">
+    <span class="luk" onclick="lukGdocsModal()" title="Luk">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+           viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </span>
+    <iframe id="gdocs-frame"></iframe>
+	<div class="modal-knap-wrapper">
+  <button id="gdocs-download-knap" class="knap-vis">⬇️ Download dokument</button>
+</div>
+
+</div>
+</div>
+
+<!-- modal-preview-excel-filer -->
+<div id="excel-modal" class="modal skjult">
+  <div class="modal-indhold" style="overflow: auto; max-height: 90vh;">
+    <span class="luk" onclick="lukExcelModal()" title="Luk">
+	<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+			viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+			stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg></span>
+	<select id="arkvælger" style="margin: 1rem 0; padding: 0.4rem;"></select>
+    <div id="excel-output"></div>
+  </div>
+</div>
+
+<div id="sektion-knapper" style="margin-bottom: 1rem;">
+  <button onclick="visSektion('dokumenter')">📁 Dokumenter</button>
+  <button onclick="visSektion('statistik')">📊 Statistik</button>
+</div>
+
+<div id="sektion-dokumenter">
+  <h1>📁 Bestyrelsens dokumenter</h1>
+  <div id="dokument-sektioner"></div>
+</div>
+
+<div id="sektion-statistik">
+	<h1>📊 Bestyrelsens statistik</h1>
+	
+<div id="statistik-knapper">
+  <button id="rolle-knap" class="btn-sub">👥 Rollefordeling</button>
+  <button id="begivenhed-knap" class="btn-sub">📅 Begivenheder pr. måned</button>
+  <button id="kategori-knap" class="btn-sub">📂 Begivenheder pr. kategori</button>
+  <!-- Klar til kommende knapper her -->
+</div>
+
+<div class="chart-container">
+  <canvas id="statistik-chart"></canvas>
+</div>
+
+
+
 
 </body>
 </html>

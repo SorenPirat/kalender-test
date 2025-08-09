@@ -2,307 +2,260 @@
 <html lang="da">
 <head>
   <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>NKL Login</title>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="base.css"/>
+
   <style>
-  
-  .login-wrapper {
-  max-width: 400px;
-  margin: 2rem auto;
-  padding: 1.5rem;
-}
-
-input[type="email"],
-input[type="password"],
-button {
-  display: block;
-  width: 100%;
-  margin-bottom: 1rem;
-  padding: 0.6rem;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-
-button {
-  background-color: #007bff;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  border: none;
-}
-
-button:hover {
-  background-color: #0056b3;
-}
-
-.error {
-  color: red;
-  font-weight: bold;
-  margin-top: 0.5rem;
-}
-
-.input-style {
-  display: block;
-  width: 100%;
-  margin-bottom: 1rem;
-  padding: 0.6rem;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-
-.hidden {
-  display: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-}
-
-    </style>
+    .login-wrapper { max-width: 420px; margin: 2rem auto; padding: 1.5rem; }
+    input[type="email"], input[type="password"], input[type="text"], button {
+      display: block; width: 100%; margin-bottom: 1rem; padding: 0.6rem;
+      font-size: 1rem; border-radius: 6px; border: 1px solid #ccc;
+    }
+    button { background-color: #007bff; color: #fff; font-weight: 700; cursor: pointer; border: none; }
+    button[disabled] { opacity: .7; cursor: not-allowed; }
+    button:hover:not([disabled]) { background-color: #0056b3; }
+    .error { color: #d93025; font-weight: 600; margin-top: .5rem; }
+    .hidden { display: none !important; }
+    .info-text { font-size: .95rem; }
+    .input-fejl { border-color: #d93025 !important; }
+    .samtykke-tekst { margin: .5rem 0 1rem; }
+  </style>
 </head>
 <body>
 
-  <h2>Login</h2>
-  
-  <input type="email" id="email" placeholder="Din e-mail">
-  <input type="password" id="password" placeholder="Adgangskode">
-  <button onclick="login()">Log ind</button>
+  <div class="login-wrapper">
+    <h2>Login</h2>
 
-  <button id="opret-knap">Opret bruger</button>
- <div id="opret-info" class="info-text hidden"></div>
+    <input type="email" id="email" placeholder="Din e-mail" autocomplete="username" />
+    <input type="password" id="password" placeholder="Adgangskode" autocomplete="current-password" />
+    <button id="login-knap">Log ind</button>
 
-  <p id="status"></p>
+    <button id="opret-knap" type="button">Opret bruger</button>
+    <div id="opret-info" class="info-text hidden"></div>
+
+    <p id="status" role="status" aria-live="polite"></p>
+  </div>
 
   <script>
-    const client = supabase.createClient(
-      "https://cianxaxaphvrutmstydr.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ"
-    );
+    // ===== Supabase init =====
+    const SUPABASE_URL = "https://cianxaxaphvrutmstydr.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYW54YXhhcGh2cnV0bXN0eWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk2NTAsImV4cCI6MjA2NTM5NTY1MH0.gdBTs6VoPx3BUAPW63o7kh3WbaCrjfe5YIRe3ubV_mQ";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ===== Helpers =====
+    const $ = (sel) => document.querySelector(sel);
+    const statusEl = $("#status");
+    function setStatus(txt, isError=false) {
+      statusEl.textContent = txt || "";
+      statusEl.className = isError ? "error" : "";
+    }
+    function disableWhile(btns, on=true) {
+      btns.forEach(b => b && (b.disabled = on));
+    }
+
+    // ===== Loop-safe session check =====
+    // Kun redirect til protected.html når:
+    // 1) der ER en gyldig session og
+    // 2) profilen findes i "users".
     async function checkSessionAndRedirect() {
-      const { data: { session } } = await client.auth.getSession();
-      if (!session || !session.access_token) return;
+      try {
+        const { data: { session } } = await client.auth.getSession();
+        if (!session?.access_token) return;
 
-      const { data: { user }, error } = await client.auth.getUser();
-      if (!user || error) return;
+        const { data: { user }, error: userErr } = await client.auth.getUser();
+        if (userErr || !user) return;
 
-      const { data: profile, error: profileError } = await client
-        .from("users")
-        .select("id")
-        .eq("id", user.id)
-        .single();
+        const { data: profile, error: profileError } = await client
+          .from("users").select("id, navn, rolle").eq("id", user.id).single();
 
-      if (!profile || profileError) return;
+        if (!profile || profileError) return;
 
-      window.location.href = "protected.html";
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      setTimeout(() => {
-        checkSessionAndRedirect();
-      }, 500);
-    });
-
-    async function login() {
-	
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const status = document.getElementById("status");
-
-      const { data, error } = await client.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        status.textContent = "Login fejlede: " + error.message;
-        status.className = "error";
-        return;
-      }
-
-      const userId = data.user.id;
-
-      const { data: profile, error: profileError } = await client
-        .from("users")
-        .select("navn, rolle")
-        .eq("id", userId)
-        .single();
-
-      if (profileError) {
-        status.textContent = "Login lykkedes, men kunne ikke hente profil.";
-        return;
-      }
-
-      localStorage.setItem("bruger", JSON.stringify({
-        id: userId,
-        navn: profile.navn,
-        rolle: profile.rolle
-      }));
-
-      setTimeout(() => {
+        // OK → gem lokalt og videre til protected
+        localStorage.setItem("bruger", JSON.stringify({
+          id: user.id, navn: profile.navn, rolle: profile.rolle
+        }));
         window.location.href = "protected.html";
-      }, 600);
+      } catch(e) {
+        // ingen redirect på fejl → loop-safe
+        console.warn("Session check fejl:", e);
+      }
     }
-  
-async function signup() {
-  const emailEl = document.getElementById("email");
-  const passwordEl = document.getElementById("password");
-  const navnEl = document.getElementById("navn");
-  const status = document.getElementById("status");
-  const samtykke = document.getElementById("samtykke");
 
-  const email = emailEl.value.trim();
-  const password = passwordEl.value;
-  const navn = navnEl.value.trim();
+    document.addEventListener("DOMContentLoaded", checkSessionAndRedirect);
 
-  [emailEl, passwordEl, navnEl].forEach(el => el.classList.remove("input-fejl"));
-  status.textContent = "";
-  status.className = "";
+    // ===== Login =====
+    async function login() {
+      const emailEl = $("#email");
+      const passwordEl = $("#password");
+      const loginBtn = $("#login-knap");
 
-  let fejl = false;
+      // reset UI
+      [emailEl, passwordEl].forEach(el => el.classList.remove("input-fejl"));
+      setStatus("");
 
-  if (!navn) {
-    navnEl.classList.add("input-fejl");
-    fejl = true;
-  }
+      const email = emailEl.value.trim();
+      const password = passwordEl.value;
 
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailPattern.test(email)) {
-    emailEl.classList.add("input-fejl");
-    fejl = true;
-  }
+      if (!email || !password) {
+        if (!email) emailEl.classList.add("input-fejl");
+        if (!password) passwordEl.classList.add("input-fejl");
+        setStatus("Udfyld e-mail og adgangskode.", true);
+        return;
+      }
 
-  if (password.length < 6) {
-    passwordEl.classList.add("input-fejl");
-    fejl = true;
-  }
+      try {
+        disableWhile([loginBtn], true);
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
 
-  if (!samtykke.checked) {
-    status.textContent = "❗ Du skal acceptere vores persondatapolitik for at oprette dig.";
-    status.className = "error";
-    return;
-  }
+        if (error) {
+          setStatus("Login fejlede: " + error.message, true);
+          return;
+        }
 
-if (fejl) {
-  const mangler = [];
-  if (!navn) mangler.push("navn");
-  if (!emailPattern.test(email)) mangler.push("e-mail");
-  if (password.length < 6) mangler.push("adgangskode");
+        const userId = data.user.id;
+        const { data: profile, error: profileError } = await client
+          .from("users").select("navn, rolle").eq("id", userId).single();
 
-  status.textContent = `❌ Mangler eller ugyldig: ${mangler.join(", ")}`;
-  status.className = "error";
-  return;
-}
+        if (profileError || !profile) {
+          setStatus("Login lykkedes, men kunne ikke hente profil.", true);
+          return;
+        }
 
-  const { data, error } = await client.auth.signUp({ email, password });
+        localStorage.setItem("bruger", JSON.stringify({
+          id: userId, navn: profile.navn, rolle: profile.rolle
+        }));
 
-  if (error) {
-    status.textContent = "❌ Fejl ved oprettelse: " + error.message;
-    status.className = "error";
-    return;
-  }
+        setStatus("✅ Login lykkedes – viderestiller …");
+        window.location.href = "protected.html";
+      } catch (err) {
+        console.error(err);
+        setStatus("Teknisk fejl under login.", true);
+      } finally {
+        disableWhile([loginBtn], false);
+      }
+    }
 
-  const userId = data.user.id;
+    // ===== Signup (opret bruger) =====
+    function mountSignupUI() {
+      const infoBox = $("#opret-info");
+      infoBox.classList.remove("hidden");
+      infoBox.innerHTML = `
+        <ul style="list-style:none; padding-left:0;">
+          <li id="check-navn">🧗 Indtast dit navn</li>
+          <li id="check-email">🧗 Brug en gyldig e-mailadresse</li>
+          <li id="check-kode">🧗 Adgangskoden skal være mindst 6 tegn lang</li>
+        </ul>
+        <div class="samtykke-tekst">
+          <label>
+            <input type="checkbox" id="samtykke" />
+            Jeg accepterer <a href="persondatapolitik.html" target="_blank" rel="noopener">persondatapolitikken</a>
+          </label>
+        </div>
+        <button id="signup-knap" type="button">Bekræft og opret</button>
+      `;
 
-  const { error: insertError } = await client
-    .from("users")
-    .insert({
-      id: userId,
-      navn: navn,
-      rolle: ["klubmedlem"]
+      // Indsæt navn-feltet over e-mail hvis det mangler
+      if (!$("#navn")) {
+        const navnFelt = document.createElement("input");
+        navnFelt.type = "text";
+        navnFelt.id = "navn";
+        navnFelt.placeholder = "Dit navn";
+        navnFelt.className = "input-style";
+        $("#email").parentNode.insertBefore(navnFelt, $("#email"));
+      }
+
+      // Live tjekliste
+      const navnEl = $("#navn");
+      const emailEl = $("#email");
+      const kodeEl = $("#password");
+      const checkNavn = $("#check-navn");
+      const checkEmail = $("#check-email");
+      const checkKode = $("#check-kode");
+
+      function opdaterTjekliste() {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        checkNavn.textContent = navnEl.value.trim() ? "✅ Indtast dit navn" : "🧗 Indtast dit navn";
+        checkEmail.textContent = emailRegex.test(emailEl.value.trim()) ? "✅ Brug en gyldig e-mailadresse" : "🧗 Brug en gyldig e-mailadresse";
+        checkKode.textContent = kodeEl.value.length >= 6 ? "✅ Adgangskoden skal være mindst 6 tegn lang" : "🧗 Adgangskoden skal være mindst 6 tegn lang";
+      }
+      [navnEl, emailEl, kodeEl].forEach(el => el.addEventListener("input", opdaterTjekliste));
+      opdaterTjekliste();
+
+      $("#signup-knap").addEventListener("click", signup, { once: true });
+    }
+
+    async function signup() {
+      const emailEl = $("#email");
+      const passwordEl = $("#password");
+      const navnEl = $("#navn");
+      const samtykkeEl = $("#samtykke");
+      const signupBtn = $("#signup-knap");
+
+      // reset UI
+      [emailEl, passwordEl, navnEl].forEach(el => el && el.classList.remove("input-fejl"));
+      setStatus("");
+
+      const email = emailEl.value.trim();
+      const password = passwordEl.value;
+      const navn = (navnEl?.value || "").trim();
+
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const fejlFelter = [];
+      if (!navn) { navnEl.classList.add("input-fejl"); fejlFelter.push("navn"); }
+      if (!emailPattern.test(email)) { emailEl.classList.add("input-fejl"); fejlFelter.push("e‑mail"); }
+      if (password.length < 6) { passwordEl.classList.add("input-fejl"); fejlFelter.push("adgangskode"); }
+
+      if (!samtykkeEl?.checked) {
+        setStatus("❗ Du skal acceptere persondatapolitikken for at oprette dig.", true);
+        return;
+      }
+      if (fejlFelter.length) {
+        setStatus(`❌ Mangler eller ugyldig: ${fejlFelter.join(", ")}`, true);
+        return;
+      }
+
+      try {
+        disableWhile([signupBtn], true);
+        const { data, error } = await client.auth.signUp({ email, password });
+        if (error) { setStatus("❌ Fejl ved oprettelse: " + error.message, true); return; }
+
+        const userId = data.user.id;
+        const { error: insertError } = await client.from("users").insert({
+          id: userId,
+          navn: navn,
+          rolle: ["klubmedlem"]
+        });
+        if (insertError) {
+          setStatus("⚠️ Profil kunne ikke gemmes: " + insertError.message, true);
+          return;
+        }
+
+        setStatus("✅ Bruger oprettet – viderestiller …");
+        // Efter signUp er brugeren normalt logget ind (afhænger af projektets auth‑policy)
+        // Forsøg at hente session og redirecte
+        await checkSessionAndRedirect();
+        // Hvis ingen session (fx kræver email‑confirm), så informér:
+        setTimeout(() => {
+          setStatus("Tjek din mail for bekræftelse, hvis du ikke viderestilles automatisk.");
+        }, 800);
+      } catch (err) {
+        console.error(err);
+        setStatus("Teknisk fejl ved oprettelse.", true);
+      } finally {
+        disableWhile([signupBtn], false);
+      }
+    }
+
+    // ===== Event wiring =====
+    $("#login-knap").addEventListener("click", login);
+    $("#password").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+    $("#opret-knap").addEventListener("click", (e) => {
+      e.currentTarget.classList.add("hidden");
+      mountSignupUI();
     });
-
-  if (insertError) {
-    status.textContent = "⚠️ Profil kunne ikke gemmes: " + insertError.message;
-    status.className = "error";
-    return;
-  }
-
-  status.textContent = "✅ Bruger oprettet – viderestiller...";
-  status.className = "";
-  setTimeout(() => {
-    window.location.href = "protected.html";
-  }, 1500);
-}
-
-
-document.getElementById("opret-knap").addEventListener("click", () => {
-  const emailFelt = document.getElementById("email");
-  const infoBox = document.getElementById("opret-info");
-
-  // Skjul knappen efter klik
-  document.getElementById("opret-knap").style.display = "none";
-
-  // Tilføj navn-felt hvis det ikke allerede findes
-  if (!document.getElementById("navn")) {
-    const navnFelt = document.createElement("input");
-    navnFelt.type = "text";
-    navnFelt.id = "navn";
-    navnFelt.placeholder = "Dit navn";
-    navnFelt.className = "navn-input";
-    navnFelt.style.marginBottom = "0.5rem";
-    navnFelt.style.width = "100%";
-    navnFelt.style.padding = "0.6rem";
-    navnFelt.style.fontSize = "1rem";
-    navnFelt.style.borderRadius = "6px";
-    navnFelt.classList.add("input-style");
-
-
-    emailFelt.parentNode.insertBefore(navnFelt, emailFelt);
-  }
-
-  // Vis info-boksen med tjekliste, checkbox og opret-knap
-  infoBox.classList.remove("hidden");
-  infoBox.innerHTML = `
-<ul style="list-style: none; padding-left: 0;">
-  <li id="check-navn">🧗 Indtast dit navn</li>
-  <li id="check-email">🧗 Brug en gyldig e-mailadresse</li>
-  <li id="check-kode">🧗 Adgangskoden skal være mindst 6 tegn lang</li>
-</ul>
-
-
-    <div class="samtykke-tekst">
-      <label>
-        <input type="checkbox" id="samtykke" />
-        Jeg accepterer <a href="persondatapolitik.html" target="_blank" rel="noopener">persondatapolitikken</a>
-      </label>
-    </div>
-
-    <button onclick="signup()">Bekræft og opret</button>
-  `;
-
-    // Real-time validering
-  const navnEl = document.getElementById("navn");
-  const emailEl = document.getElementById("email");
-  const kodeEl = document.getElementById("password");
-
-  const checkNavn = document.getElementById("check-navn");
-  const checkEmail = document.getElementById("check-email");
-  const checkKode = document.getElementById("check-kode");
-
-  function opdaterTjekliste() {
-    checkNavn.textContent = navnEl.value.trim() ? "✅ Indtast dit navn" : "🧗 Indtast dit navn";
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    checkEmail.textContent = emailRegex.test(emailEl.value.trim()) 
-      ? "✅ Brug en gyldig e-mailadresse" 
-      : "🧗 Brug en gyldig e-mailadresse";
-
-    checkKode.textContent = kodeEl.value.length >= 6
-      ? "✅ Adgangskoden skal være mindst 6 tegn lang"
-      : "🧗 Adgangskoden skal være mindst 6 tegn lang";
-  }
-
-  navnEl.addEventListener("input", opdaterTjekliste);
-  emailEl.addEventListener("input", opdaterTjekliste);
-  kodeEl.addEventListener("input", opdaterTjekliste);
-
-  opdaterTjekliste(); // initialt kald
-
-  
-});
-
-
   </script>
 </body>
 </html>

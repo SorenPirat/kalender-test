@@ -1,6 +1,6 @@
-<!DOCTYPE html>
 <html lang="da">
 <head>
+  <script src="gate.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rutebygger - NKL</title>
@@ -98,6 +98,7 @@
     <button id="deaktiverAlleKnap">🚫 Gør alle ruter inaktive</button>
     <button onclick="fortrydSidste()">↩️ Fortryd sidste greb</button>
     <button onclick="rydValg()">🗑️ Ryd valg</button>
+	<button id="visAlleRuterKnap">👁️ Vis alle gemte ruter</button>
     <button id="toggleGrebKnap">🔍 Vis alle greb</button>
 	<button id="nulstilZoomKnap">🔄 Nulstil visning</button>
   </div>
@@ -119,12 +120,13 @@
 
 
 <script type="module">
-	import { client, adgangskontrol, indsætMenu, hentSignedUrl } from './auth.js';
+	import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
 
   adgangskontrol({
     tilladteRoller: [],
-    redirectVedFejl: "protected.html",
+    redirectVedFejl: "index.html",
     efterLogin: (bruger) => {
+	  if (window.releaseAuthGate) window.releaseAuthGate();
       indsætMenu(bruger);
 	  udfyldEksisterendeBillederDropdown();
 	  aktuelBruger = bruger;
@@ -178,14 +180,14 @@ document.getElementById("eksisterendeBilleder").addEventListener("change", async
   const valgtFil = e.target.value;
   baseNavn = valgtFil.replace(/\.[^/.]+$/, "");
 
-  const signedUrl = await hentSignedUrl(valgtFil);
-  if (!signedUrl) {
+  const billedeUrl = hentPublicUrlMedCache(valgtFil);
+  if (!billedeUrl) {
   alert("❌ Kunne ikke hente billedet.");
   return;
   }
 
   // Hent billedet som blob
-  const response = await fetch(signedUrl);
+  const response = await fetch(billedeUrl);
   const blob = await response.blob();
 
   // Konverter til base64
@@ -212,7 +214,7 @@ document.getElementById("eksisterendeBilleder").addEventListener("change", async
 
   // Vis billedet
   img = new Image();
-  img.src = signedUrl;
+  img.src = billedeUrl;
   await img.decode();
 
   canvas = document.getElementById("canvas");
@@ -264,13 +266,13 @@ document.getElementById("imgInput").addEventListener("change", async function (e
   document.getElementById("status").textContent = `✅ Billede uploadet som ${webpFilnavn} – læser greb...`;
 
   // Hent billede fra Supabase som .webp
-	const signedUrl = await hentSignedUrl(webpFilnavn);
-	if (!signedUrl) {
+	const billedeUrl = hentPublicUrlMedCache(webpFilnavn);
+	if (!billedeUrl) {
 	alert("❌ Kunne ikke hente det uploadede billede.");
 	return;
 	}
 
-  const response = await fetch(signedUrl);
+  const response = await fetch(billedeUrl);
   const blob = await response.blob();
 
   // Konverter til base64 for Roboflow
@@ -293,7 +295,7 @@ document.getElementById("imgInput").addEventListener("change", async function (e
 
     // Vis billede i canvas
     img = new Image();
-    img.src = data.signedUrl;
+    img.src = billedeUrl;
     await img.decode();
 
     canvas = document.getElementById("canvas");
@@ -621,6 +623,10 @@ const data = {
     valgtRute = [];
     drawSelection();
     redigeretRuteId = null;
+	
+	// Fjerner redigérbjælken
+	document.getElementById("redigerStatus").classList.add("skjult"); // 🧹 skjul rediger-bjælke
+	document.getElementById("gemKnap").dataset.redigerId = ""; // ryd evt. ID
 
     // Nulstil felter
     document.getElementById("rutenavn").value = "";
@@ -628,6 +634,7 @@ const data = {
     document.getElementById("rutegrad").value = "";
     document.getElementById("rutebygger").value = "";
     document.getElementById("ruteAktiv").checked = true;
+	
 
     alert("✅ Ruten blev gemt og sat som aktiv for billedet.");
   } catch (err) {
@@ -648,14 +655,31 @@ function visRute(rute) {
   const farve = rute.farve || "cyan";
   rute.greb.forEach(p => drawSingleHold(p, farve));
 
-  ctx.font = "16px Arial";
-  ctx.fillStyle = "black";
-  ctx.fillText(`📌 ${rute.navn}`, 20, 30);
-  ctx.fillText(`🎯 ${rute.grad || "?"}`, 20, 55);
-  ctx.fillText(`👷 ${rute.rutebygger || "Ukendt"}`, 20, 80);
+ctx.font = "30px Arial";
+ctx.lineWidth = 6;
+ctx.strokeStyle = "black";
+ctx.fillStyle = "white";
+ctx.lineJoin = "round";
+
+const startX = 20;
+let startY = 60;     
+const linjeAfstand = 48; 
+
+ctx.strokeText(`📌 ${rute.navn}`, startX, startY);
+ctx.fillText(`📌 ${rute.navn}`, startX, startY);
+
+startY += linjeAfstand;
+ctx.strokeText(`🎯 ${rute.grad || "?"}`, startX, startY);
+ctx.fillText(`🎯 ${rute.grad || "?"}`, startX, startY);
+
+startY += linjeAfstand;
+ctx.strokeText(`👷 ${rute.rutebygger || "Ukendt"}`, startX, startY);
+ctx.fillText(`👷 ${rute.rutebygger || "Ukendt"}`, startX, startY);
+
 
   ctx.restore();
 }
+
 
 function redigérRute(rute) {
   document.getElementById("rutenavn").value = rute.navn || "";
@@ -961,6 +985,30 @@ document.getElementById("deaktiverAlleKnap").addEventListener("click", async () 
   }
 });
 
+document.getElementById("visAlleRuterKnap").addEventListener("click", () => {
+  const billedeId = document.getElementById("billedeIdValg").value;
+  if (!billedeId) return alert("Vælg en væg/sektor først.");
+
+  const ruter = gemteRuter.filter(r => r.billede_id === billedeId && r.aktiv);
+
+  if (ruter.length === 0) {
+    return alert("Ingen aktive ruter fundet for denne væg.");
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(img, 0, 0);
+
+  ruter.forEach(r => {
+    const farve = r.farve || "cyan";
+    r.greb.forEach(p => drawSingleHold(p, farve));
+  });
+
+  ctx.restore();
+});
+
 // 🔍 Zoom med mus (scroll)
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
@@ -1091,13 +1139,6 @@ const farveOrd = {
 
 };
 
-const sværhedsEndelse = {
-  let: ["eventyr", "vej", "dans", "sti", "leg"],
-  middel: ["rejse", "test", "bane", "mission", "træk"],
-  hård: ["kamp", "duel", "knuser", "krig", "hån"],
-  ekstrem: ["mareridt", "katastrofe", "underverden", "afgrund", "slagtning"]
-};
-
 function oversætGradTilSværhed(grad) {
   const g = grad.toLowerCase();
   if (["4", "4a", "4b", "4c", "5", "5a"].includes(g)) return "let";
@@ -1112,8 +1153,6 @@ const oversætFarve = {
   pink: "pink", mint: "mint"
 };
 
-
-function genererRutenavn(farve, grad) {
 const sværhedsEndelse = {
   let: [
     "eventyr", "vej", "dans", "sti", "leg", "fløjlstur", "skridt", "hyggetur", "sving", "loop",
@@ -1133,14 +1172,35 @@ const sværhedsEndelse = {
   ]
 };
 
+const actionOrd = [
+  "Tryk", "Flugt", "Eksplosion", "Snit", "Slam", "Opstigning", "Overtag", "Hvirvel",
+  "Spring", "Ryk", "Power", "Chok", "Styrt", "Lyn", "Fald", "Klatre", "Dyk", "Greb",
+  "Impact", "Zoom", "Snap", "Skift", "Vrid", "Glid", "Panik"
+];
 
+function genererRutenavn(farve, grad) {
   const danskFarve = oversætFarve[farve.toLowerCase()] || "grøn";
   const farveListe = farveOrd[danskFarve] || ["Skygge"];
   const sværhed = oversætGradTilSværhed(grad);
-  const ord1 = farveListe[Math.floor(Math.random() * farveListe.length)];
-  const ord2 = sværhedsEndelse[sværhed][Math.floor(Math.random() * sværhedsEndelse[sværhed].length)];
-  return `${ord1} ${ord2}`;
+  const sværhedsListe = sværhedsEndelse[sværhed] || [];
+
+  const type = Math.random(); // bruges til at afgøre typen
+
+  if (type < 0.25) {
+    // 🔹 25% chance: kun farveord
+    return farveListe[Math.floor(Math.random() * farveListe.length)];
+  } else if (type < 0.45) {
+    // 🔸 20% chance: kun actionord
+    return actionOrd[Math.floor(Math.random() * actionOrd.length)];
+  } else {
+    // ⚙️ 55% chance: farveord + sværhedsord
+    const ord1 = farveListe[Math.floor(Math.random() * farveListe.length)];
+    const ord2 = sværhedsListe[Math.floor(Math.random() * sværhedsListe.length)];
+    return `${ord1} ${ord2}`;
+  }
 }
+
+
 
 document.getElementById("foreslå-navn").addEventListener("click", () => {
   const farve = document.getElementById("rutefarve")?.value || "grøn";
@@ -1150,9 +1210,12 @@ document.getElementById("foreslå-navn").addEventListener("click", () => {
   container.innerHTML = ""; // ryd gamle forslag
   container.classList.remove("hidden");
 
-  // Generér 3 forslag
-  for (let i = 0; i < 3; i++) {
-    const navn = genererRutenavn(farve, grad);
+  const forslag = new Set();
+  while (forslag.size < 3) {
+    forslag.add(genererRutenavn(farve, grad));
+  }
+
+  forslag.forEach(navn => {
     const btn = document.createElement("button");
     btn.textContent = navn;
     btn.addEventListener("click", () => {
@@ -1160,8 +1223,9 @@ document.getElementById("foreslå-navn").addEventListener("click", () => {
       container.classList.add("hidden");
     });
     container.appendChild(btn);
-  }
+  });
 });
+
 
 
 </script>

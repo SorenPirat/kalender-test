@@ -2,423 +2,381 @@
 <html lang="da">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Klubbens kalender</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kalender – NKL</title>
   <link rel="stylesheet" href="base.css" />
   <link rel="stylesheet" href="menu.css" />
-  <link rel="stylesheet" href="calendar.css" />
 </head>
 <body>
-  <h2><center>📅 Klubbens arrangementer</center></h2>
-
-<div id="filter-wrapper">
-  <button id="toggle-filter">🔽 Filtrér begivenheder</button>
-  <fieldset id="filter-panel">
-    <label><input type="checkbox" value="rutebyg" checked /> 🛠️ Rutebygning</label>
-    <label><input type="checkbox" value="konkurrence" checked /> 🏆 Konkurrence</label>
-    <label><input type="checkbox" value="social" checked /> 🎉 Socialt</label>
-    <label><input type="checkbox" value="lukket" checked /> 🚪 Lukkedag</label>
-    <label><input type="checkbox" value="andet" checked /> ❓ Andet</label>
-    <label style="margin-top: 0.5rem; display: block;">
-      <input type="checkbox" id="show-past" /> ⏳ Tidligere begivenheder
-    </label>
-  </fieldset>
-</div>
-
-<div id="event-list">⏳ Henter begivenheder...</div>
-
-<!-- MODAL: BEGIVENHED MED TILMELDING -->
-<div id="event-modal" class="modal">
-	<div class="modal-wrapper">
-    <button onclick="closeModal()" style="position:absolute; top:10px; right:10px; font-size:1.2rem;">❌</button>
-    <div id="modal-content">
-      <h1 id="modal-title">⏳ Indlæser...</h1>
-      <p class="event-meta" id="modal-date"></p>
-		<div class="modal-image-wrapper">
-		<img id="modal-banner" src="" alt="Begivenhedsbillede">
-		</div>
-      <p class="event-meta" id="modal-timeplace"></p>
-      <div class="event-desc" id="modal-desc"></div>
-
-      <div class="signup-summary">
-        <div class="event-meta" id="modal-signup-count">
-		<span id="modal-signup-text">⏳ Henter tilmeldinger...</span>
-		<span id="modal-toggle-arrow">▼</span>
-		</div>
-
-        <div id="modal-signup-list"></div>
-      </div>
-
-      <div class="signup-section">
-        <div class="signup-block" id="modal-signup-block">
-          <form id="modal-signup-form">
-            <div class="signup-actions">
-              <button type="submit" id="modal-signup-btn">✅ Tilmeld</button>
-              <button type="button" id="modal-unsign-btn">🚫 Frameld</button>
-            </div>
-            <p id="modal-feedback" class="feedback"></p>
-          </form>
-        </div>
-      </div>
-    </div>
+  <h1>🧗 Begivenheder</h1>
+  
+<div id="event-modal" class="modal skjult">
+  <div class="modal-box" id="modal-body-wrapper">
+    <span class="luk" id="modal-close" onclick="lukModal()">❌</span>
+    <div id="modal-body"></div>
   </div>
 </div>
-<script type="module">
-  import { adgangskontrol, indsætMenu } from './auth.js';
 
-  adgangskontrol({
-    tilladteRoller: [],
-    redirectVedFejl: "protected.html",
-    efterLogin: (bruger) => {
-      indsætMenu(bruger); 
-      loadEvents();
-    }
-  });
-</script>
-<script type="module" src="modal-handler.js"></script>
-<script>
-let allEvents = [];
+<div class ="kort">
+<div id="filter-tags">
+  <button data-filter="rutebyg" class="filter-tag aktiv">🛠️ Rutebyg</button>
+  <button data-filter="konkurrence" class="filter-tag aktiv">🏆 Konkurrence</button>
+  <button data-filter="social" class="filter-tag aktiv">🎉 Social</button>
+  <button data-filter="lukket" class="filter-tag aktiv">🚪 Lukkedage</button>
+  <button data-filter="andet" class="filter-tag aktiv">❓ Andet</button>
 
-async function loadEvents() {
-  const res = await fetch("https://nglevagter-test.onrender.com/public-events");
-  allEvents = await res.json();
-  renderEvents();
-}
+</div>
+</div>
+  
+  <div id="event-container">Henter begivenheder...</div>
+
+  <script type="module">
+    import { adgangskontrol, indsætMenu, client } from './auth.js';
+
+    let bruger = null;
+
+    adgangskontrol({
+      tilladteRoller: [],
+      redirectVedFejl: "protected.html",
+      efterLogin: async (b) => {
+        bruger = b;
+        indsætMenu(b);
+        hentOgVisEvents();
+      }
+    });
+
 
 function categorizeEvent(ev) {
   const text = `${ev.summary} ${ev.description}`.toLowerCase();
   if (text.includes("rutebyg")) return "rutebyg";
   if (text.includes("konkurrence")) return "konkurrence";
-  if (text.includes("social") || text.includes("arrangement") || text.includes("hygge") || text.includes("hyggelig")) return "social";
+  if (text.includes("social") || text.includes("arrangement") || text.includes("hygge") || text.includes("hyggelig") || text.includes("tur") || text.includes("fællestur") || text.includes("fest")) return "social";
   if (text.includes("lukket") || text.includes("ferie") || text.includes("eksamen")) return "lukket";
   return "andet";
 }
 
-function getIcon(type) {
-  switch (type) {
-    case "rutebyg": return "🛠️";
-    case "konkurrence": return "🏆";
-    case "social": return "🎉";
-    case "lukket": return "🚪";
-    default: return "❓";
-  }
+function applyFilter() {
+  const aktive = Array.from(document.querySelectorAll(".filter-tag.aktiv"))
+    .map(btn => btn.dataset.filter);
+
+  document.querySelectorAll("#event-container .kort, .event-box").forEach(el => {
+    const kategori = el.dataset.kategori || "lukket";
+    el.style.display = aktive.includes(kategori) ? "" : "none";
+  });
 }
 
-function renderEvents() {
-  const list = document.getElementById("event-list");
-  list.innerHTML = "";
+function findEmoji(titel, beskrivelse = "") {
+  const text = `${titel} ${beskrivelse}`.toLowerCase();
 
-  const activeFilters = Array.from(document.querySelectorAll("#filter-panel input[type=checkbox]:checked"))
-    .map(cb => cb.value);
+  if (text.includes("rutebyg")) return "🛠️";
+  if (text.includes("konkurrence") || text.includes("mesterskab")) return "🏆";
+  if (text.includes("social") || text.includes("arrangement") || text.includes("hygge") || text.includes("hyggelig") || text.includes("tur") || text.includes("fællestur") || text.includes("fest")) return "🎉";
+  if (text.includes("lukket") || text.includes("ferie") || text.includes("eksamen")) return "🚪";
 
-  const showPast = document.getElementById("show-past").checked;
-  const now = new Date(); now.setHours(0, 0, 0, 0);
-
-  for (const ev of allEvents) {
-    const startDate = new Date(ev.start);
-    startDate.setHours(0, 0, 0, 0);
-    if (!showPast && startDate < now) continue;
-
-    const category = categorizeEvent(ev);
-    if (!activeFilters.includes(category)) continue;
-
-    const box = document.createElement("div");
-    box.className = "event";
-    const icon = getIcon(category);
-    const title = document.createElement("h3");
-
-    let idMatch = ev.description?.match(/event:([a-z0-9\-]+)/i);
-    let id = idMatch ? idMatch[1] : null;
-
-    if (id) {
-      const link = document.createElement("a");
-      link.href = "#";
-      link.textContent = `${icon} ${ev.summary}`;
-      link.onclick = (e) => {
-        e.preventDefault();
-        openModal(id);
-      };
-      link.style.textDecoration = "none";
-      link.style.color = "#007bff";
-      title.appendChild(link);
-    } else {
-      title.textContent = `${icon} ${ev.summary}`;
-    }
-
-    const time = document.createElement("time");
-    time.textContent = formatDate(ev.start, ev.end);
-
-    const description = document.createElement("div");
-    description.className = "event-description";
-    const lines = (ev.description || "").split("\n");
-    let shortText = "";
-    for (const line of lines) {
-      const l = line.trim().toLowerCase();
-      if (l.startsWith("event:") || l.startsWith("img:") || l.startsWith("lokation:") || l.startsWith("start:") || l.startsWith("end:")) break;
-      if (line.trim()) {
-        shortText = line.trim();
-        break;
-      }
-    }
-    description.innerHTML = linkify(shortText);
-    box.appendChild(title);
-    box.appendChild(time);
-    box.appendChild(description);
-    list.appendChild(box);
-  }
+  return "📌";
 }
 
-function formatDate(start, end) {
-  const options = { year: 'numeric', month: 'long', day: 'numeric' };
-  const s = new Date(start);
-  const e = new Date(end);
-  const sFormatted = s.toLocaleDateString('da-DK', options);
-  e.setDate(e.getDate() - 1);
-  const eFormatted = e.toLocaleDateString('da-DK', options);
-  return sFormatted === eFormatted ? sFormatted : `Fra ${sFormatted} til ${eFormatted}`;
-}
+async function hentOgVisEvents() {
+  const container = document.getElementById("event-container");
+  container.innerHTML = "";
 
-function linkify(text) {
-  if (!text) return "";
-
-  const lines = text.trim().split('\n');
-  let html = '';
-  let inList = false;
-
-  for (let line of lines) {
-    const isBullet = line.trim().startsWith('-');
-
-    // Linkify først
-    line = line.replace(/(https?:\/\/[^\s]+)/g, url =>
-      `<a href="${url}" target="_blank" rel="noopener">${url}</a>`
-    );
-
-    if (isBullet) {
-      if (!inList) {
-        html += "<ul>\n";
-        inList = true;
-      }
-      html += `<li>${line.trim().substring(1).trim()}</li>\n`;
-    } else {
-      if (inList) {
-        html += "</ul>\n";
-        inList = false;
-      }
-      if (line.trim()) {
-        html += `<p>${line.trim()}</p>\n`;
-      }
-    }
-  }
-
-  if (inList) {
-    html += "</ul>\n";
-  }
-
-  return html;
-}
-
-document.getElementById("filter-panel").addEventListener("change", renderEvents);
-const toggleBtn = document.getElementById("toggle-filter");
-const filterPanel = document.getElementById("filter-panel");
-toggleBtn.addEventListener("click", () => {
-  filterPanel.classList.toggle("open");
-  toggleBtn.textContent = filterPanel.classList.contains("open")
-    ? "🔼 Skjul filtre" : "🔽 Filtrér begivenheder";
-});
-
-async function openModal(id) {
-  const res = await fetch("https://nglevagter-test.onrender.com/public-events");
-  const events = await res.json();
-  const ev = events.find(e => e.description?.includes(`event:${id}`));
-  if (!ev) return alert("Begivenhed ikke fundet");
-
-  document.getElementById("event-modal").style.display = "block";
-  document.body.style.overflow = "hidden";
-  document.getElementById("modal-title").textContent = ev.summary;
-  document.getElementById("modal-date").textContent = formatDate(ev.start, ev.end);
-
-  // === Uddrag metadata ===
-  const lines = (ev.description || "").split("\n");
-  let img = "", desc = "", location = "", timeStart = "", timeEnd = "";
-  let collectingDesc = false;
-  desc = "";
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("img:")) { img = trimmed.slice(4).trim(); collectingDesc = false; }
-    else if (trimmed.startsWith("desc:")) { desc += trimmed.slice(5).trim() + "\n"; collectingDesc = true; }
-    else if (trimmed.startsWith("lokation:")) { location = trimmed.slice(9).trim(); collectingDesc = false; }
-    else if (trimmed.startsWith("start:")) { timeStart = trimmed.slice(6).trim(); collectingDesc = false; }
-    else if (trimmed.startsWith("end:")) { timeEnd = trimmed.slice(4).trim(); collectingDesc = false; }
-    else if (trimmed.startsWith("event:")) { collectingDesc = false; }
-    else if (collectingDesc && trimmed !== "") { desc += trimmed + "\n"; }
-    else if (trimmed !== "") { desc += trimmed + "\n"; }
-  }
-
-  const banner = document.getElementById("modal-banner");
-  banner.src = img;
-  banner.style.display = img ? "block" : "none";
-
-  let meta = "";
-  if (location) meta += `📍 ${location}`;
-  if (timeStart && timeEnd) meta += `\n🕓 ${timeStart} – ${timeEnd}`;
-  else if (timeStart) meta += `\n🕓 ${timeStart}`;
-  document.getElementById("modal-timeplace").textContent = meta;
-  document.getElementById("modal-desc").innerHTML = linkify(desc.trim());
-
-  // === Lås hvis begivenheden er forbi ===
-  const today = new Date(); today.setHours(0,0,0,0);
-  const eventDate = new Date(ev.start); eventDate.setHours(0,0,0,0);
-  const block = document.getElementById("modal-signup-block");
-  if (eventDate < today) block.classList.add("locked");
-  else block.classList.remove("locked");
-
-  // === Hent tilmeldte og opdater knapper ===
-  await loadModalSignups(id);
-  updateSignupUI(id);
-
-  // === Formular og knapper ===
-  const form = document.getElementById("modal-signup-form");
-  const feedback = document.getElementById("modal-feedback");
-
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const bruger = JSON.parse(localStorage.getItem("bruger"));
-if (bruger && bruger.navn) {
-
-
-}
-
-    const res = await fetch("https://nglevagter-test.onrender.com/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: id, names: bruger.navn })
-    });
-
-   if (res.ok) {
-  await loadModalSignups(id);
-  updateSignupUI(id, `✅ ${bruger.navn} tilmeldt`);
-} else {
-  feedback.textContent = "❌ Der opstod en fejl.";
-}
-
-    showModalFeedback();
-  };
-
-  document.getElementById("modal-unsign-btn").onclick = async () => {
-    const bruger = JSON.parse(localStorage.getItem("bruger"));
-    const feedback = document.getElementById("modal-feedback");
-
-    if (!bruger || !bruger.navn) {
-      feedback.textContent = "❌ Du er ikke logget korrekt ind.";
-      return showModalFeedback();
-    }
-
-    const res = await fetch("https://nglevagter-test.onrender.com/unsign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: id, names: bruger.navn })
-    });
-
- if (res.ok) {
-  await loadModalSignups(id);
-  updateSignupUI(id, `✅ ${bruger.navn} frameldt`);
-} else {
-  feedback.textContent = "❌ Fejl ved framelding.";
-}
-
-    showModalFeedback();
-  };
-}
-
-function closeModal() {
-  document.getElementById("event-modal").style.display = "none";
-  document.body.style.overflow = "";
-}
-
-async function loadModalSignups(id) {
-  const text = document.getElementById("modal-signup-text");
-  const list = document.getElementById("modal-signup-list");
-  const toggleArrow = document.getElementById("modal-toggle-arrow");
-  const countContainer = document.getElementById("modal-signup-count");
 
   try {
-    const res = await fetch(`https://nglevagter-test.onrender.com/signups/${id}`);
-    const data = await res.json();
+    const [{ data: events, error: eventsError }, { data: lukDage, error: lukError }] = await Promise.all([
+      client.from("events").select("*").eq("offentlig", true).order("start", { ascending: true }),
+      client.from("luk_dage").select("*").order("dato", { ascending: true })
+    ]);
 
-    text.textContent = data.count > 0
-      ? `👥 ${data.count} tilmeldt${data.count > 1 ? "e" : ""}`
-      : "Ingen tilmeldte endnu";
+    if (eventsError || lukError) throw eventsError || lukError;
 
-    if (data.names?.length) {
-      const listItems = data.names
-        .filter(n => n.trim() !== "")
-        .map(n => `<li>${n}</li>`)
-        .join("");
-      list.innerHTML = `<ul>${listItems}</ul>`;
-    } else {
-      list.innerHTML = "";
-    }
+    const kombineret = [
+      ...events.map(e => ({ type: "event", ...e })),
+      ...lukDage.map(l => ({ type: "lukket", ...l }))
+    ];
 
-    // Tilføj klik-event én gang
-    if (!countContainer.classList.contains("listener-added")) {
-      countContainer.addEventListener("click", () => {
-        const isVisible = list.style.display === "block";
-        list.style.display = isVisible ? "none" : "block";
-        toggleArrow.textContent = isVisible ? "▼" : "▲";
-      });
-      countContainer.classList.add("listener-added");
-    }
+    kombineret.sort((a, b) => {
+      const da = new Date(a.start || a.dato);
+      const db = new Date(b.start || b.dato);
+      return da - db;
+    });
 
-window.modalSignupNames = data.names || [];
-
-  } catch (err) {
-    text.textContent = "❌ Fejl i tilmeldinger";
-    list.innerHTML = "";
-  }
+for (const entry of kombineret) {
+  const kategori = entry.type === "lukket"
+    ? "lukket"
+    : categorizeEvent({ summary: entry.titel, description: entry.beskrivelse || "" });
+  entry._kategori = kategori;
 }
 
-function showModalFeedback() {
-  const fb = document.getElementById("modal-feedback");
-  fb.classList.add("show");
-  fb.classList.remove("hide");
-  setTimeout(() => {
-    fb.classList.remove("show");
-    fb.classList.add("hide");
-    setTimeout(() => {
-      fb.textContent = "";
-      fb.classList.remove("hide");
-    }, 400);
-  }, 3000);
-}
+for (const entry of kombineret) {
+  if (entry.type === "lukket") {
+    const div = document.createElement("div");
+    div.className = "event-box";
+	div.dataset.kategori = "lukket";
 
-function updateSignupUI(id, feedbackOverride = null) {
-  const signupBtn = document.getElementById("modal-signup-btn");
-  const feedback = document.getElementById("modal-feedback");
-  const bruger = JSON.parse(localStorage.getItem("bruger"));
-  const erTilmeldt = window.modalSignupNames?.includes(bruger?.navn);
-
-  if (erTilmeldt) {
-    signupBtn.disabled = true;
-    signupBtn.style.opacity = "0.6";
-    signupBtn.textContent = "✅ Allerede tilmeldt";
-    if (!feedbackOverride) {
-      feedback.textContent = `✅ Du er allerede tilmeldt som ${bruger.navn}`;
-    }
+    const dato = new Date(entry.dato).toLocaleDateString("da-DK");
+    const strong = document.createElement("strong");
+    strong.textContent = `🔒 Lukket: ${dato} – ${entry.årsag || 'Ukendt årsag'}`;
+    div.appendChild(strong);
+    container.appendChild(div);
   } else {
-    signupBtn.disabled = false;
-    signupBtn.style.opacity = "1";
-    signupBtn.textContent = "✅ Tilmeld";
-    if (!feedbackOverride) {
-      feedback.textContent = "";
-    }
-  }
+    const { data: tilmeldinger } = await client
+      .from("event_tilmeldinger")
+      .select("navn, bruger_id")
+      .eq("event_id", entry.id);
 
-  if (feedbackOverride) {
-    feedback.textContent = feedbackOverride;
+    const emoji = findEmoji(entry.titel, entry.beskrivelse || "");
+    const kortDiv = document.createElement("div");
+    kortDiv.classList.add("kort");
+	kortDiv.dataset.kategori = entry._kategori;
+    kortDiv.style.cursor = "pointer";
+		
+    kortDiv.addEventListener("click", () => {
+      window.openModal(entry, tilmeldinger);
+    });
+
+	const opretterNavn = entry.oprettet_af_visning || "Ukendt";
+
+    const title = document.createElement("h3");
+    title.innerHTML = `${emoji} <span class="event-title">${entry.titel}</span>`;
+    kortDiv.appendChild(title);
+	
+	if (entry.billede_url) {
+    const img = document.createElement("img");
+    img.src = entry.billede_url;
+    img.alt = "Event billede";
+    img.className = "kort-preview";
+    kortDiv.appendChild(img);
+    }
+
+    const start = new Date(entry.start);
+    const slut = entry.slut ? new Date(entry.slut) : null;
+    const danskDato = (d) =>
+      d.toLocaleDateString("da-DK", { day: "numeric", month: "long", year: "numeric" });
+    const sammeDag = slut && start.toDateString() === slut.toDateString();
+	const datoText = slut
+	? sammeDag
+		? `${danskDato(start)} ${start.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })} - ${slut.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}`
+		: `Fra ${danskDato(start)} til ${danskDato(slut)}`
+	: `Den ${danskDato(start)}`;
+
+
+    const dato = document.createElement("p");
+    dato.textContent = datoText;
+    dato.style.fontSize = "0.85rem";
+    dato.style.color = "#444;";
+    kortDiv.appendChild(dato);
+
+    if (entry.underrubrik) {
+      const intro = document.createElement("p");
+      intro.textContent = entry.underrubrik;
+      kortDiv.appendChild(intro);
+    }
+
+	const erLukket = entry.titel.toLowerCase().startsWith("lukket");
+
+	if (!erLukket) {
+	const opretter = document.createElement("p");
+	opretter.className = "opretter";
+	opretter.innerHTML = `<i>Oprettet af: ${opretterNavn}</i>`;
+	kortDiv.appendChild(opretter);
+	}
+
+    container.appendChild(kortDiv);
   }
 }
-</script>
+
+applyFilter();
+
+}
+ catch (err) {
+    console.error("❌ Fejl under hentning:", err);
+    container.innerHTML = "<p style='color:red;'>❌ Kunne ikke hente data.</p>";
+  }
+}
+
+
+window.openModal = (entry, tilmeldinger) => {
+  const modal = document.getElementById("event-modal");
+  const modalBody = document.getElementById("modal-body");
+  modalBody.innerHTML = "";
+
+  // 🔹 Titel
+  const titel = document.createElement("h2");
+  titel.textContent = entry.titel;
+  modalBody.appendChild(titel);
+
+  // Kort beskrivelse (underrubrik)
+if (entry.underrubrik) {
+  const kort = document.createElement("p");
+  kort.textContent = entry.underrubrik;
+  kort.style.fontStyle = "italic";
+  kort.style.marginBottom = "1rem";
+  modalBody.appendChild(kort);
+}
+
+// Billede hvis det findes
+if (entry.billede_url) {
+  const img = document.createElement("img");
+  img.src = entry.billede_url;
+  img.alt = "Event billede";
+  img.style.maxWidth = "100%";
+  img.style.borderRadius = "8px";
+  img.style.marginBottom = "1rem";
+  modalBody.appendChild(img);
+}
+
+// Lang beskrivelse (beskrivelse)
+if (entry.beskrivelse) {
+  const lang = document.createElement("p");
+  lang.textContent = entry.beskrivelse;
+  lang.style.whiteSpace = "pre-line"; // Bevar linjeskift
+  modalBody.appendChild(lang);
+}
+	
+  
+// 🔹 INFO: tid, sted, ledige pladser
+const start = new Date(entry.start);
+const slut = entry.slut ? new Date(entry.slut) : null;
+
+const danskDato = (d) =>
+  d.toLocaleDateString("da-DK", { day: "numeric", month: "long", year: "numeric" });
+const danskTid = (d) =>
+  d.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" });
+
+const sammeDag = slut && start.toDateString() === slut.toDateString();
+const datoTekst = slut
+  ? sammeDag
+    ? `${danskDato(start)} kl. ${danskTid(start)} - ${danskTid(slut)}`
+    : `Fra ${danskDato(start)} kl. ${danskTid(start)}<br>til ${danskDato(slut)} kl. ${danskTid(slut)}`
+  : `Den ${danskDato(start)} kl. ${danskTid(start)}`;
+
+
+
+  const infoboks = document.createElement("div");
+  infoboks.classList.add("info-text");
+
+const infoLinjer = [
+  { ikon: "⏰", tekst: datoTekst },
+  entry.lokation && { ikon: "📍", tekst: entry.lokation }
+].filter(Boolean);
+
+for (const linje of infoLinjer) {
+  const p = document.createElement("p");
+  p.classList.add("ikon-linje");
+  p.innerHTML = `<span>${linje.ikon}</span> <span>${linje.tekst}</span>`;
+  infoboks.appendChild(p);
+}
+
+// 👥 Tilmeldings-linje med fold-ud
+if (entry.max_deltagere || tilmeldinger.length > 0) {
+  const details = document.createElement("details");
+  details.classList.add("ikon-linje");
+
+  const summary = document.createElement("summary");
+  summary.innerHTML = `<span>👥</span> <span>${
+    entry.max_deltagere
+      ? `${tilmeldinger.length} / ${entry.max_deltagere} tilmeldt`
+      : `${tilmeldinger.length} tilmeldte`
+  }</span>`;
+  details.appendChild(summary);
+
+  const ul = document.createElement("ul");
+  ul.style.marginTop = "0.5rem";
+  ul.style.paddingLeft = "1.5rem";
+  ul.style.fontSize = "0.9rem";
+
+  tilmeldinger.forEach(t => {
+    const li = document.createElement("li");
+    li.textContent = t.navn;
+    ul.appendChild(li);
+  });
+
+  details.appendChild(ul);
+  infoboks.appendChild(details);
+}
+
+  modalBody.appendChild(infoboks);
+
+  // 🔹 Lang beskrivelse
+  if (entry.lang_beskrivelse) {
+    const beskrivelse = document.createElement("p");
+    beskrivelse.textContent = entry.lang_beskrivelse;
+    modalBody.appendChild(beskrivelse);
+  }
+
+  // 🔹 Deltagerliste
+  const alleredeTilmeldt = tilmeldinger.some(t => t.bruger_id === bruger.id);
+  const deltagerOverskrift = document.createElement("p");
+
+  // 🔹 Tilmeld / frameld knap
+  const knap = document.createElement("button");
+  knap.classList.add("primary");
+  knap.disabled = entry.max_deltagere && tilmeldinger.length >= entry.max_deltagere && !alleredeTilmeldt;
+  knap.textContent = alleredeTilmeldt
+    ? "❌ Frameld mig"
+    : (knap.disabled ? "🚫 Fuldt booket" : "✅ Tilmeld mig");
+
+  knap.onclick = async () => {
+    knap.disabled = true;
+    await window.toggleTilmelding(entry.id, alleredeTilmeldt);
+    const { data: nyeTilmeldinger } = await client
+      .from("event_tilmeldinger")
+      .select("navn, bruger_id")
+      .eq("event_id", entry.id);
+    window.openModal(entry, nyeTilmeldinger);
+  };
+
+  const erLukket = entry.titel.toLowerCase().startsWith("lukket");
+
+if (!erLukket) {
+  modalBody.appendChild(knap);
+}
+
+  modal.classList.remove("skjult");
+};
+
+window.toggleTilmelding = async (eventId, erTilmeldt) => {
+  try {
+    if (erTilmeldt) {
+      await client
+        .from("event_tilmeldinger")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("bruger_id", bruger.id);
+    } else {
+      await client
+        .from("event_tilmeldinger")
+        .insert({
+          event_id: eventId,
+          bruger_id: bruger.id,
+          navn: bruger.navn,
+          tilmeldt: new Date().toISOString()
+        });
+    }
+
+    hentOgVisEvents();
+  } catch (err) {
+    console.error("❌ Fejl ved (fram)tilmelding:", err);
+    alert("Der opstod en fejl ved tilmelding.");
+  }
+};
+
+// Luk-modal knappen
+window.lukModal = function () {
+  document.getElementById("event-modal").classList.add("skjult");
+};
+
+// Filter knapper
+document.querySelectorAll(".filter-tag").forEach(btn => {
+  btn.addEventListener("click", () => {
+    btn.classList.toggle("aktiv");
+    applyFilter();
+  });
+});
+
+
+
+
+  </script>
 </body>
 </html>
-
