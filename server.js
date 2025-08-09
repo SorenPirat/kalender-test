@@ -325,50 +325,31 @@ app.get('/assignments-with-events', async (req, res) => {
   }
 });
 
-// Endpoint: /api/admin/gdpr-export?lookupType=userId|email&lookupValue=...&includeSystemMeta=0|1
-app.get("/api/admin/gdpr-export", requireAdmin, async (req, res) => {
-  try {
-    const { lookupType = "userId", lookupValue = "", includeSystemMeta = "0" } = req.query;
-    if (!lookupValue) return res.status(400).json({ error: "lookupValue påkrævet" });
+app.get("/gdpr-export", requireAdmin, async (req, res) => {
+  const { lookupType = "userId", lookupValue = "", includeSystemMeta = "0" } = req.query;
+  if (!lookupValue) return res.status(400).json({ error: "lookupValue påkrævet" });
 
-    // Slå bruger op i jeres 'users'
-    let subject;
-    if (lookupType === "email") {
-      const { data, error } = await supabaseAdmin
-        .from("users")
-        .select("id, navn, email")
-        .ilike("email", lookupValue) // ilike for case-insensitive match
-        .maybeSingle();
-      if (error || !data) return res.status(404).json({ error: "Bruger (email) ikke fundet" });
-      subject = data;
-    } else {
-      const { data, error } = await supabaseAdmin
-        .from("users")
-        .select("id, navn, email")
-        .eq("id", lookupValue)
-        .maybeSingle();
-      if (error || !data) return res.status(404).json({ error: "Bruger (id) ikke fundet" });
-      subject = data;
-    }
-
-    const { payload, error } = await buildGdprPayloadByUserId(subject.id, { includeSystemMeta: includeSystemMeta === "1" });
-    if (error) return res.status(400).json({ error });
-
-    // Filnavn
-    const safeName = (subject.navn || "bruger").replace(/[^a-zA-Z0-9._-]+/g, "_");
-    const filename = suggestFilename(`gdpr_${safeName}`);
-
-    // Headers for fil-download
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Cache-Control", "no-store");
-
-    // Pæn formattering (2 spaces)
-    res.status(200).send(JSON.stringify(payload, null, 2));
-  } catch (e) {
-    console.error("GDPR eksport fejl:", e);
-    res.status(500).json({ error: "Uventet serverfejl ved GDPR-eksport" });
+  let subject;
+  if (lookupType === "email") {
+    const { data, error } = await supabaseAdmin.from("users").select("id, navn, email").ilike("email", lookupValue).maybeSingle();
+    if (error || !data) return res.status(404).json({ error: "Bruger (email) ikke fundet" });
+    subject = data;
+  } else {
+    const { data, error } = await supabaseAdmin.from("users").select("id, navn, email").eq("id", lookupValue).maybeSingle();
+    if (error || !data) return res.status(404).json({ error: "Bruger (id) ikke fundet" });
+    subject = data;
   }
+
+  const { payload, error } = await buildGdprPayloadByUserId(subject.id, { includeSystemMeta: includeSystemMeta === "1" });
+  if (error) return res.status(400).json({ error });
+
+  const safeName = (subject.navn || "bruger").replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const filename = suggestFilename(`gdpr_${safeName}`);
+
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).send(JSON.stringify(payload, null, 2));
 });
 
 app.get("/signups", async (req, res) => {
@@ -1200,5 +1181,6 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
 
