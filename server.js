@@ -137,8 +137,9 @@ function redactThreadWithMessages(t, msgs, userId) {
   };
 }
 
+// ===== GDPR: Supabase-only payload builder =====
 async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
-  // Profil
+  // --- 0) Hent profil (users) ---
   const { data: profile, error: profileErr } = await supabase
     .from("users")
     .select("*")
@@ -146,15 +147,19 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
     .single();
   if (profileErr || !profile) return { error: "Bruger ikke fundet i users" };
 
-  // Tråde hvor brugeren er part
-  const [{ data: threadsInitiated }, { data: threadsDirect }] = await Promise.all([
-    supabase.from("threads")
-      .select("id, titel, rolle, oprettet_af, modtager, created_at, opdateret, er_lukket, lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager, oprettet_dato, genåbnet_af")
-      .eq("oprettet_af", userId),
-    supabase.from("threads")
-      .select("id, titel, rolle, oprettet_af, modtager, created_at, opdateret, er_lukket, lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager, oprettet_dato, genåbnet_af")
-      .eq("modtager", userId),
-  ]);
+  // --- 1) Tråde hvor brugeren er part (oprettet_af eller modtager) ---
+  const feltThread = `
+    id, titel, rolle, oprettet_af, modtager, created_at, opdateret, er_lukket,
+    lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager,
+    oprettet_dato, genåbnet_af
+  `;
+
+  const [{ data: threadsInitiated, error: t1Err }, { data: threadsDirect, error: t2Err }] =
+    await Promise.all([
+      supabase.from("threads").select(feltThread).eq("oprettet_af", userId),
+      supabase.from("threads").select(feltThread).eq("modtager", userId),
+    ]);
+  if (t1Err || t2Err) console.warn("Threads fetch warn:", t1Err || t2Err);
 
   const directIds = [
     ...(threadsInitiated?.map(t => t.id) || []),
@@ -162,53 +167,133 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
   ];
   const uniqueDirectIds = [...new Set(directIds)];
 
-  // Beskeder for de tråde
+  // --- 2) Beskeder for disse tråde (messages) ---
   const msgsByThread = {};
   if (uniqueDirectIds.length) {
-    const { data: msgs } = await supabase
+    const { data: msgs, error: mErr } = await supabase
       .from("messages")
       .select("id, thread_id, afsender, tekst, billede_url, lyd_url, tidspunkt, er_arkiveret")
       .in("thread_id", uniqueDirectIds)
       .order("tidspunkt", { ascending: true });
+    if (mErr) console.warn("Messages fetch warn:", mErr);
     (msgs || []).forEach(m => (msgsByThread[m.thread_id] ||= []).push(m));
   }
 
-  // Egne beskeder (uanset tråd)
-  const { data: messagesAuthored } = await supabase
+  // --- 3) Egne beskeder (uanset tråd) ---
+  const { data: messagesAuthored, error: maErr } = await supabase
     .from("messages")
     .select("id, thread_id, afsender, tekst, billede_url, lyd_url, tidspunkt, er_arkiveret")
     .eq("afsender", userId)
     .order("tidspunkt", { ascending: true });
+  if (maErr) console.warn("messages_authored warn:", maErr);
 
-  // Rolletråde hvor brugeren har skrevet (så egne beskeder er med)
+  // --- 4) Rolle-tråde hvor brugeren har skrevet (så egne beskeder også får kontekst) ---
   const authoredThreadIds = [...new Set((messagesAuthored || []).map(m => m.thread_id))];
   let roleThreads = [];
   if (authoredThreadIds.length) {
     const directSet = new Set(uniqueDirectIds);
-    const { data: authoredThreads } = await supabase
+    const { data: authoredThreads, error: atErr } = await supabase
       .from("threads")
-      .select("id, titel, rolle, oprettet_af, modtager, created_at, opdateret, er_lukket, lukket, lukket_af, sidst_set_af_afsender, sidst_set_af_modtager, oprettet_dato, genåbnet_af")
+      .select(feltThread)
       .in("id", authoredThreadIds);
+    if (atErr) console.warn("authoredThreads warn:", atErr);
     roleThreads = (authoredThreads || []).filter(t => !directSet.has(t.id));
 
     if (roleThreads.length) {
       const extraIds = roleThreads.map(t => t.id);
-      const { data: extraMsgs } = await supabase
+      const { data: extraMsgs, error: emErr } = await supabase
         .from("messages")
         .select("id, thread_id, afsender, tekst, billede_url, lyd_url, tidspunkt, er_arkiveret")
         .in("thread_id", extraIds)
         .order("tidspunkt", { ascending: true });
+      if (emErr) console.warn("extraMsgs warn:", emErr);
       (extraMsgs || []).forEach(m => (msgsByThread[m.thread_id] ||= []).push(m));
     }
   }
 
-  // Notifikationer til brugeren
-  const { data: kontaktNotifs } = await supabase
+  // --- 5) Notifikationer til brugeren ---
+  const { data: kontaktNotifs, error: nErr } = await supabase
     .from("kontakt_notifications")
     .select("id, bruger_id, thread_id, ulæst")
     .eq("bruger_id", userId);
+  if (nErr) console.warn("notifications warn:", nErr);
 
-  // Messenger blok (maskeret)
+  // --- 6) Event-tilmeldinger (Supabase) ---
+  // Primær: brug entries med bruger_id = userId
+  // Fallback: hvis gamle rækker mangler bruger_id, match på navn (case-insensitive)
+  const { data: tilmeldingerDb, error: etErr } = await supabase
+    .from("event_tilmeldinger")
+    .select("id, event_id, bruger_id, navn, tilmeldt")
+    .or(`bruger_id.eq.${userId},navn.ilike.%${(profile.navn||"").replace(/%/g,"%25")}%`);
+  if (etErr) console.warn("event_tilmeldinger warn:", etErr);
+
+  const eventIds = [...new Set((tilmeldingerDb || []).map(r => r.event_id).filter(Boolean))];
+  let eventsById = {};
+  if (eventIds.length) {
+    const { data: events, error: eErr } = await supabase
+      .from("events")
+      .select("id, titel, start, slut, lokation, offentlig, created_at")
+      .in("id", eventIds);
+    if (eErr) console.warn("events warn:", eErr);
+    (events || []).forEach(ev => { eventsById[ev.id] = ev; });
+  }
+
+  const eventsSignups = (tilmeldingerDb || []).map(r => {
+    const ev = eventsById[r.event_id] || null;
+    return {
+      event_id: r.event_id,
+      tilmeldings_id: r.id,
+      navn_match: r.bruger_id ? "via_bruger_id" : "via_navn",
+      tilmeldt: r.tilmeldt,
+      event: ev ? {
+        titel: ev.titel ?? null,
+        start: ev.start ?? null,
+        slut: ev.slut ?? null,
+        lokation: ev.lokation ?? null,
+        offentlig: typeof ev.offentlig === "boolean" ? ev.offentlig : null,
+      } : null
+    };
+  });
+
+  // --- 7) Rutelog (frivilligt persondata, men relevant hvis det er “min aktivitet”) ---
+  const { data: rutelogDb, error: rlErr } = await supabase
+    .from("rutelog")
+    .select("id, rute_id, logget_dato, kommentar, forsøg, bedømmelse")
+    .eq("user_id", userId)
+    .order("logget_dato", { ascending: true });
+  if (rlErr) console.warn("rutelog warn:", rlErr);
+
+  const ruteIds = [...new Set((rutelogDb || []).map(r => r.rute_id).filter(Boolean))];
+  let ruterById = {};
+  if (ruteIds.length) {
+    const { data: ruter, error: rErr } = await supabase
+      .from("ruter")
+      .select("id, navn, farve, grad, aktiv, created_at, rutebygger")
+      .in("id", ruteIds);
+    if (rErr) console.warn("ruter warn:", rErr);
+    (ruter || []).forEach(r => { ruterById[r.id] = r; });
+  }
+
+  const rutelog = (rutelogDb || []).map(row => {
+    const ru = ruterById[row.rute_id] || null;
+    return {
+      id: row.id,
+      rute_id: row.rute_id,
+      logget_dato: row.logget_dato,
+      kommentar: row.kommentar ?? null,
+      forsøg: row.forsøg ?? null,
+      bedømmelse: row.bedømmelse ?? null,
+      rute: ru ? {
+        navn: ru.navn ?? null,
+        farve: ru.farve ?? null,
+        grad: ru.grad ?? null,
+        aktiv: typeof ru.aktiv === "boolean" ? ru.aktiv : null,
+        rutebygger: ru.rutebygger ?? null
+      } : null
+    };
+  });
+
+  // --- 8) Byg messenger-blok med masking ---
   const messenger = {
     threads_initiated: (threadsInitiated || []).map(t =>
       redactThreadWithMessages(t, msgsByThread[t.id] || [], userId)
@@ -226,31 +311,46 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
     );
   }
 
-  // (Valgfrit) andre Supabase‑kilder (fx rutelog, tilmeldinger mv.) kan tilføjes her
-
-  return {
-    payload: {
-      meta: {
-        exportGeneratedAt: new Date().toISOString(),
-        includeSystemMeta: !!includeSystemMeta,
-        source: "NKL Adminpanel",
-        version: 4,
-      },
-      subject: {
-        id: profile.id,
-        navn: profile.navn ?? null,
-        email: profile.email ?? null,
-        rolle: profile.rolle ?? null,
-        oprettet_dato: profile.oprettet_dato ?? null,
-      },
-      data: {
-        messenger,
-      },
-      raw: {
-        users_row: profile,
-      },
+  // --- 9) Saml payload (Supabase-only) ---
+  const payload = {
+    meta: {
+      exportGeneratedAt: new Date().toISOString(),
+      includeSystemMeta: !!includeSystemMeta,
+      source: "NKL Adminpanel",
+      version: 5
     },
+    subject: {
+      id: profile.id,
+      navn: profile.navn ?? null,
+      email: profile.email ?? null,       // hvis du ikke har email-kolonnen i users, lad den være null
+      rolle: profile.rolle ?? null,
+      oprettet_dato: profile.oprettet_dato ?? null
+    },
+    data: {
+      messenger,
+      events_signups: eventsSignups,
+      rutelog
+    },
+    raw: {
+      users_row: profile
+    }
   };
+
+  // (Valgfrit) inkluder simpelt systemmeta/diagnostik
+  if (includeSystemMeta) {
+    payload.system = {
+      counts: {
+        threads_initiated: threadsInitiated?.length || 0,
+        direct_threads_received: threadsDirect?.length || 0,
+        messages_authored: messagesAuthored?.length || 0,
+        notifications: kontaktNotifs?.length || 0,
+        events_signups: eventsSignups.length,
+        rutelog: rutelog.length
+      }
+    };
+  }
+
+  return { payload };
 }
 
 // ===== Routes =====
@@ -650,3 +750,4 @@ app.post("/unsign", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på port ${PORT} (${NODE_ENV || "dev"})`);
 });
+
