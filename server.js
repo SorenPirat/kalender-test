@@ -228,33 +228,43 @@ async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
   return { payload };
 }
 
-// ===== Express App Setup =====
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
+// Tilpas denne liste til DIT/jeres domæner:
 const tilladteOrigins = [
   "http://localhost:8080",
-  "https://nglevagter-test.netlify.app"
+  "https://nglevagter-test.netlify.app",
+  // tilføj dit rigtige domæne herunder (fx production):
+  "https://nkl.dk",                      // <- hvis I har eget domæne
+  "https://*.netlify.app"               // <- wildcard håndteres nedenfor
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Tillad requests uden origin (fx mobile apps eller curl)
-    if (!origin || tilladteOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Ikke tilladt af CORS: " + origin));
-    }
+// Egen matcher der håndterer wildcards (*.netlify.app) og null-origin (apps/curl)
+function originMatcher(origin) {
+  if (!origin) return true; // tillad fx curl / mobile webviews
+  if (tilladteOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    // tillad alle subdomæner på netlify.app (build previews mv.)
+    if (url.hostname.endsWith(".netlify.app")) return true;
+  } catch {}
+  return false;
+}
+
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (originMatcher(origin)) return cb(null, true);
+    return cb(new Error("Ikke tilladt af CORS: " + origin));
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Content-Disposition"],     // så vi kan læse filnavn
+  optionsSuccessStatus: 204,                   // nogle browsere forventer 204
+  preflightContinue: false
+};
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+app.use(cors(corsOptions));
+
+// Ekstra sikkerhed: håndtér OPTIONS tidligt, så preflight altid lykkes
+app.options("*", cors(corsOptions));
 
 
 // ===== Routes =====
@@ -1181,6 +1191,7 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
 
 
