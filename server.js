@@ -102,6 +102,132 @@ async function updateSheetEntry(day, name) {
   });
 }
 
+// Simpel admin-beskyttelse baseret på dit 'users'-table
+async function requireAdmin(req, res, next) {
+  try {
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Manglende token" });
+
+    // Valider token og find session-bruger
+    const { data: userData, error: getUserErr } = await supabaseAdmin.auth.getUser(token);
+    if (getUserErr || !userData?.user) return res.status(401).json({ error: "Ugyldigt token" });
+
+    const sessionUserId = userData.user.id;
+
+    // Slå admin-rolle op i dit eget 'users' table
+    const { data: me, error: meErr } = await supabaseAdmin
+      .from("users")
+      .select("id, navn, rolle")
+      .eq("id", sessionUserId)
+      .single();
+
+    if (meErr || !me) return res.status(403).json({ error: "Bruger ikke fundet i users" });
+
+    const roller = Array.isArray(me.rolle) ? me.rolle : (me.rolle ? [me.rolle] : []);
+    if (!roller.includes("admin")) return res.status(403).json({ error: "Kræver admin-rolle" });
+
+    // OK
+    req.adminUser = me;
+    next();
+  } catch (e) {
+    console.error("requireAdmin fejl:", e);
+    res.status(500).json({ error: "Serverfejl i adgangskontrol" });
+  }
+}
+
+// Hjælpere
+function suggestFilename(base) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const d = new Date();
+  return `${base}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+}
+
+// Saml “alt” om en bruger her. Start simpelt → udbyg løbende.
+async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
+  // 1) Grundprofil fra dit 'users' table
+  const { data: profile, error: profileErr } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (profileErr || !profile) {
+    return { error: "Bruger ikke fundet i users" };
+  }
+
+  // 2) Eksempler på relaterede data — udbyg efter jeres DB
+  //    Hvis du ikke har relationer endnu, kan du lade disse være tomme.
+  //    Tilpas feltnavne/foreign keys til jeres schema.
+  //    Nedenfor er eksempler; kommentér dem ud hvis de ikke findes hos jer.
+
+  // const { data: beskeder } = await supabaseAdmin
+  //   .from("beskeder")
+  //   .select("*")
+  //   .eq("user_id", userId);
+
+  // const { data: filer } = await supabaseAdmin
+  //   .from("attachments")
+  //   .select("*")
+  //   .eq("user_id", userId);
+
+  // const { data: eventsTilmeldinger } = await supabaseAdmin
+  //   .from("event_signups")
+  //   .select("*")
+  //   .eq("user_id", userId);
+
+  // 3) (Valgfrit) Eksterne systemer (Render). Hvis I ønsker at medtage nu:
+  //    Matcher på navn. Fjern hvis ikke relevant.
+  let renderSignups = [];
+  try {
+    if (profile?.navn) {
+      const resp = await fetch("https://nglevagter-test.onrender.com/signups");
+      if (resp.ok) {
+        const all = await resp.json();
+        renderSignups = all.filter((s) => (s.name || "").toLowerCase() === profile.navn.toLowerCase());
+      }
+    }
+  } catch (_) {
+    // Ignorér netværksfejl mod eksternt system
+  }
+
+  // 4) Meta
+  const payload = {
+    meta: {
+      exportGeneratedAt: new Date().toISOString(),
+      includeSystemMeta: !!includeSystemMeta,
+      source: "NKL Adminpanel",
+      version: 1
+    },
+    subject: {
+      id: profile.id,
+      navn: profile.navn || null,
+      email: profile.email || null, // fjern/tilpas hvis feltet ikke findes i jeres 'users'
+      rolle: profile.rolle ?? null,
+      oprettet_dato: profile.oprettet_dato ?? null
+    },
+    // data: saml alt herunder i klare grupper
+    data: {
+      // beskeder: beskeder ?? [],
+      // filer: filer ?? [],
+      // events: eventsTilmeldinger ?? [],
+      renderSignups
+    },
+    // Inkludér hele 'users'-rækken (rå) – brugbart for portability
+    raw: {
+      users_row: profile
+    }
+  };
+
+  // 5) (Valgfrit) systemfelter / audit (hvis I har)
+  if (includeSystemMeta) {
+    // const { data: audit } = await supabaseAdmin.from("audit_log").select("*").eq("user_id", userId);
+    // payload.system = { audit: audit ?? [] };
+  }
+
+  return { payload };
+}
+
 // ===== Express App Setup =====
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -199,79 +325,49 @@ app.get('/assignments-with-events', async (req, res) => {
   }
 });
 
-// OnlyOffice proxy-endpoint
-app.post("/onlyoffice-url", async (req, res) => {
-  const { filsti, filnavn, bruger } = req.body;
-
-  if (!filsti || !filnavn || !bruger) {
-    return res.status(400).json({ error: "Manglende data" });
-  }
-
+// Endpoint: /api/admin/gdpr-export?lookupType=userId|email&lookupValue=...&includeSystemMeta=0|1
+app.get("/api/admin/gdpr-export", requireAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .storage
-      .from("bestyrelse")
-      .createSignedUrl(filsti, 3600);
+    const { lookupType = "userId", lookupValue = "", includeSystemMeta = "0" } = req.query;
+    if (!lookupValue) return res.status(400).json({ error: "lookupValue påkrævet" });
 
-    if (error || !data) {
-      console.error("Fejl i signed URL:", error);
-      return res.status(500).json({ error: "Kunne ikke generere signed URL" });
+    // Slå bruger op i jeres 'users'
+    let subject;
+    if (lookupType === "email") {
+      const { data, error } = await supabaseAdmin
+        .from("users")
+        .select("id, navn, email")
+        .ilike("email", lookupValue) // ilike for case-insensitive match
+        .maybeSingle();
+      if (error || !data) return res.status(404).json({ error: "Bruger (email) ikke fundet" });
+      subject = data;
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("users")
+        .select("id, navn, email")
+        .eq("id", lookupValue)
+        .maybeSingle();
+      if (error || !data) return res.status(404).json({ error: "Bruger (id) ikke fundet" });
+      subject = data;
     }
 
-    const fileType = filnavn.split('.').pop().toLowerCase();
-    const docKey = filsti.replace(/[^\w]/g, "");
-    const documentType = fileType.match(/xls|xlsx/) ? "spreadsheet"
-                          : fileType.match(/ppt|pptx/) ? "presentation"
-                          : "text";
+    const { payload, error } = await buildGdprPayloadByUserId(subject.id, { includeSystemMeta: includeSystemMeta === "1" });
+    if (error) return res.status(400).json({ error });
 
-    const config = {
-      document: {
-        fileType,
-        key: docKey,
-        title: filnavn,
-        url: `https://nglevagter-test.onrender.com/download/${encodeURIComponent(filsti)}`
-      },
-      documentType,
-      editorConfig: {
-        mode: "edit",
-        user: {
-          id: bruger.id,
-          name: bruger.navn
-        }
-      }
-    };
+    // Filnavn
+    const safeName = (subject.navn || "bruger").replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const filename = suggestFilename(`gdpr_${safeName}`);
 
-    res.json({ config });
-  } catch (err) {
-    console.error("Serverfejl:", err);
-    res.status(500).json({ error: "Intern serverfejl" });
-  }
-});
+    // Headers for fil-download
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-store");
 
-// Henter filsti til at redigere OnlyOffice
-app.get('/download/:filsti(*)', async (req, res) => {
-  const filsti = req.params.filsti;
-  console.log("📥 Forsøger at hente fra Supabase:", filsti);
-
-  try {
-    const { data, error } = await supabase
-      .storage
-      .from("bestyrelse")
-      .download(filsti);
-
-    if (error || !data) {
-      console.error("❌ Fejl i download-proxy:", error);
-      return res.status(404).send("Filen blev ikke fundet");
-    }
-
-    const contentType = mime.lookup(filsti) || 'application/octet-stream';
-    res.setHeader("Content-Type", contentType);
-
-    const arrayBuffer = await data.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
-  } catch (err) {
-    console.error("❌ Fejl i download-proxy:", err);
-    res.status(500).send("Serverfejl");
+    // Pæn formattering (2 spaces)
+    res.status(200).send(JSON.stringify(payload, null, 2));
+  } catch (e) {
+    console.error("GDPR eksport fejl:", e);
+    res.status(500).json({ error: "Uventet serverfejl ved GDPR-eksport" });
   }
 });
 
@@ -1104,4 +1200,5 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
