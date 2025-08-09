@@ -12,13 +12,21 @@ import { pipeline } from "stream";
 import { promisify } from "util";
 import mime from "mime-types";
 
-
 const streamPipeline = promisify(pipeline);
 
+// ===== Express App Setup =====
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 // ===== Supabase database =====
+// Brug service key (server-side)
 const supabase = createClient(
   'https://cianxaxaphvrutmstydr.supabase.co',
-  process.env.SUPABASE_SERVICE_KEY
+  process.env.SUPABASE_SERVICE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
 // ===== Google Auth =====
@@ -36,6 +44,43 @@ const sheets = google.sheets({ version: 'v4', auth });
 const calendar = google.calendar({ version: 'v3', auth: calendarAuth });
 const spreadsheetId = process.env.SPREADSHEET_ID;
 const sheetName = 'Sheet1';
+
+// ===== CORS (placeret TIDLIGT) =====
+const tilladteOrigins = [
+  'http://localhost:8080',
+  'https://nglevagter-test.netlify.app',
+  // tilføj jeres evt. prod-domæne(r) her:
+  'https://nkl.dk'
+];
+
+function originMatcher(origin) {
+  if (!origin) return true;                       // tillad curl/webviews
+  if (tilladteOrigins.includes(origin)) return true;
+  try {
+    const u = new URL(origin);
+    if (u.hostname.endsWith('.netlify.app')) return true; // allow deploy previews
+  } catch {}
+  return false;
+}
+
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (originMatcher(origin)) return cb(null, true);
+    return cb(new Error('Ikke tilladt af CORS: ' + origin));
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Disposition'], // så klienten kan læse filnavn
+  optionsSuccessStatus: 204,
+  preflightContinue: false
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // svar altid korrekt på preflight
+
+// Øvrige middleware
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 // ===== Utility: Beregn næste dag i ISO-format =====
 function getNextDate(dateStr) {
@@ -102,170 +147,94 @@ async function updateSheetEntry(day, name) {
   });
 }
 
-// Simpel admin-beskyttelse baseret på dit 'users'-table
+// ===== Admin-beskyttelse (brug SUPABASE SERVICE KEY-klienten) =====
 async function requireAdmin(req, res, next) {
   try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-    if (!token) return res.status(401).json({ error: "Manglende token" });
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: 'Manglende token' });
 
-    // Valider token og find session-bruger
-    const { data: userData, error: getUserErr } = await supabaseAdmin.auth.getUser(token);
-    if (getUserErr || !userData?.user) return res.status(401).json({ error: "Ugyldigt token" });
+    // Valider token og find bruger
+    const { data: userData, error: getUserErr } = await supabase.auth.getUser(token);
+    if (getUserErr || !userData?.user) return res.status(401).json({ error: 'Ugyldigt token' });
 
     const sessionUserId = userData.user.id;
 
-    // Slå admin-rolle op i dit eget 'users' table
-    const { data: me, error: meErr } = await supabaseAdmin
-      .from("users")
-      .select("id, navn, rolle")
-      .eq("id", sessionUserId)
+    const { data: me, error: meErr } = await supabase
+      .from('users')
+      .select('id, navn, rolle')
+      .eq('id', sessionUserId)
       .single();
 
-    if (meErr || !me) return res.status(403).json({ error: "Bruger ikke fundet i users" });
+    if (meErr || !me) return res.status(403).json({ error: 'Bruger ikke fundet i users' });
 
     const roller = Array.isArray(me.rolle) ? me.rolle : (me.rolle ? [me.rolle] : []);
-    if (!roller.includes("admin")) return res.status(403).json({ error: "Kræver admin-rolle" });
+    if (!roller.includes('admin')) return res.status(403).json({ error: 'Kræver admin-rolle' });
 
-    // OK
     req.adminUser = me;
     next();
   } catch (e) {
-    console.error("requireAdmin fejl:", e);
-    res.status(500).json({ error: "Serverfejl i adgangskontrol" });
+    console.error('requireAdmin fejl:', e);
+    res.status(500).json({ error: 'Serverfejl i adgangskontrol' });
   }
 }
 
-// Hjælpere
+// ===== Hjælpere til GDPR =====
 function suggestFilename(base) {
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n) => String(n).padStart(2, '0');
   const d = new Date();
   return `${base}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
 }
 
-// Saml “alt” om en bruger her. Start simpelt → udbyg løbende.
 async function buildGdprPayloadByUserId(userId, { includeSystemMeta }) {
-  // 1) Grundprofil fra dit 'users' table
-  const { data: profile, error: profileErr } = await supabaseAdmin
-    .from("users")
-    .select("*")
-    .eq("id", userId)
+  const { data: profile, error: profileErr } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
     .single();
 
-  if (profileErr || !profile) {
-    return { error: "Bruger ikke fundet i users" };
-  }
+  if (profileErr || !profile) return { error: 'Bruger ikke fundet i users' };
 
-  // 2) Eksempler på relaterede data — udbyg efter jeres DB
-  //    Hvis du ikke har relationer endnu, kan du lade disse være tomme.
-  //    Tilpas feltnavne/foreign keys til jeres schema.
-  //    Nedenfor er eksempler; kommentér dem ud hvis de ikke findes hos jer.
-
-  // const { data: beskeder } = await supabaseAdmin
-  //   .from("beskeder")
-  //   .select("*")
-  //   .eq("user_id", userId);
-
-  // const { data: filer } = await supabaseAdmin
-  //   .from("attachments")
-  //   .select("*")
-  //   .eq("user_id", userId);
-
-  // const { data: eventsTilmeldinger } = await supabaseAdmin
-  //   .from("event_signups")
-  //   .select("*")
-  //   .eq("user_id", userId);
-
-  // 3) (Valgfrit) Eksterne systemer (Render). Hvis I ønsker at medtage nu:
-  //    Matcher på navn. Fjern hvis ikke relevant.
+  // Eksempel: eksterne signups (Render)
   let renderSignups = [];
   try {
     if (profile?.navn) {
-      const resp = await fetch("https://nglevagter-test.onrender.com/signups");
+      const resp = await fetch('https://nglevagter-test.onrender.com/signups');
       if (resp.ok) {
         const all = await resp.json();
-        renderSignups = all.filter((s) => (s.name || "").toLowerCase() === profile.navn.toLowerCase());
+        renderSignups = all.filter((s) => (s.name || '').toLowerCase() === profile.navn.toLowerCase());
       }
     }
-  } catch (_) {
-    // Ignorér netværksfejl mod eksternt system
-  }
+  } catch (_) {}
 
-  // 4) Meta
   const payload = {
     meta: {
       exportGeneratedAt: new Date().toISOString(),
       includeSystemMeta: !!includeSystemMeta,
-      source: "NKL Adminpanel",
+      source: 'NKL Adminpanel',
       version: 1
     },
     subject: {
       id: profile.id,
       navn: profile.navn || null,
-      email: profile.email || null, // fjern/tilpas hvis feltet ikke findes i jeres 'users'
+      email: profile.email || null,
       rolle: profile.rolle ?? null,
       oprettet_dato: profile.oprettet_dato ?? null
     },
-    // data: saml alt herunder i klare grupper
     data: {
-      // beskeder: beskeder ?? [],
-      // filer: filer ?? [],
-      // events: eventsTilmeldinger ?? [],
       renderSignups
     },
-    // Inkludér hele 'users'-rækken (rå) – brugbart for portability
     raw: {
       users_row: profile
     }
   };
 
-  // 5) (Valgfrit) systemfelter / audit (hvis I har)
   if (includeSystemMeta) {
-    // const { data: audit } = await supabaseAdmin.from("audit_log").select("*").eq("user_id", userId);
-    // payload.system = { audit: audit ?? [] };
+    // Tilføj evt. audit-log m.m.
   }
 
   return { payload };
 }
-
-// Tilpas denne liste til DIT/jeres domæner:
-const tilladteOrigins = [
-  "http://localhost:8080",
-  "https://nglevagter-test.netlify.app",
-  // tilføj dit rigtige domæne herunder (fx production):
-  "https://nkl.dk",                      // <- hvis I har eget domæne
-  "https://*.netlify.app"               // <- wildcard håndteres nedenfor
-];
-
-// Egen matcher der håndterer wildcards (*.netlify.app) og null-origin (apps/curl)
-function originMatcher(origin) {
-  if (!origin) return true; // tillad fx curl / mobile webviews
-  if (tilladteOrigins.includes(origin)) return true;
-  try {
-    const url = new URL(origin);
-    // tillad alle subdomæner på netlify.app (build previews mv.)
-    if (url.hostname.endsWith(".netlify.app")) return true;
-  } catch {}
-  return false;
-}
-
-const corsOptions = {
-  origin: (origin, cb) => {
-    if (originMatcher(origin)) return cb(null, true);
-    return cb(new Error("Ikke tilladt af CORS: " + origin));
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Content-Disposition"],     // så vi kan læse filnavn
-  optionsSuccessStatus: 204,                   // nogle browsere forventer 204
-  preflightContinue: false
-};
-
-app.use(cors(corsOptions));
-
-// Ekstra sikkerhed: håndtér OPTIONS tidligt, så preflight altid lykkes
-app.options("*", cors(corsOptions));
-
 
 // ===== Routes =====
 app.get('/assignments', async (req, res) => {
@@ -335,56 +304,61 @@ app.get('/assignments-with-events', async (req, res) => {
   }
 });
 
-app.get("/gdpr-export", requireAdmin, async (req, res) => {
-  const { lookupType = "userId", lookupValue = "", includeSystemMeta = "0" } = req.query;
-  if (!lookupValue) return res.status(400).json({ error: "lookupValue påkrævet" });
+// ===== GDPR-export (Render) =====
+app.get('/gdpr-export', requireAdmin, async (req, res) => {
+  const { lookupType = 'userId', lookupValue = '', includeSystemMeta = '0' } = req.query;
+  if (!lookupValue) return res.status(400).json({ error: 'lookupValue påkrævet' });
 
   let subject;
-  if (lookupType === "email") {
-    const { data, error } = await supabaseAdmin.from("users").select("id, navn, email").ilike("email", lookupValue).maybeSingle();
-    if (error || !data) return res.status(404).json({ error: "Bruger (email) ikke fundet" });
+  if (lookupType === 'email') {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, navn, email')
+      .ilike('email', lookupValue)
+      .maybeSingle();
+    if (error || !data) return res.status(404).json({ error: 'Bruger (email) ikke fundet' });
     subject = data;
   } else {
-    const { data, error } = await supabaseAdmin.from("users").select("id, navn, email").eq("id", lookupValue).maybeSingle();
-    if (error || !data) return res.status(404).json({ error: "Bruger (id) ikke fundet" });
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, navn, email')
+      .eq('id', lookupValue)
+      .maybeSingle();
+    if (error || !data) return res.status(404).json({ error: 'Bruger (id) ikke fundet' });
     subject = data;
   }
 
-  const { payload, error } = await buildGdprPayloadByUserId(subject.id, { includeSystemMeta: includeSystemMeta === "1" });
+  const { payload, error } = await buildGdprPayloadByUserId(subject.id, { includeSystemMeta: includeSystemMeta === '1' });
   if (error) return res.status(400).json({ error });
 
-  const safeName = (subject.navn || "bruger").replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const safeName = (subject.navn || 'bruger').replace(/[^a-zA-Z0-9._-]+/g, '_');
   const filename = suggestFilename(`gdpr_${safeName}`);
 
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
   res.status(200).send(JSON.stringify(payload, null, 2));
 });
 
-app.get("/signups", async (req, res) => {
+// ===== Signups & øvrige ruter (uændret) =====
+app.get('/signups', async (req, res) => {
   try {
     const authClient = await auth.getClient();
-    const sheetsClient = google.sheets({ version: "v4", auth: authClient });
+    const sheetsClient = google.sheets({ version: 'v4', auth: authClient });
 
     const result = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: "Sheet2!A:B", // kolonne A: eventId, B: navn
+      range: 'Sheet2!A:B',
     });
 
     const rows = result.data.values || [];
-    const data = rows.map(([eventId, name]) => ({
-      eventId,
-      name,
-    }));
-
+    const data = rows.map(([eventId, name]) => ({ eventId, name }));
     res.json(data);
   } catch (err) {
-    console.error("Fejl ved hentning af tilmeldinger:", err);
-    res.status(500).json({ error: "Serverfejl ved hentning af tilmeldinger" });
+    console.error('Fejl ved hentning af tilmeldinger:', err);
+    res.status(500).json({ error: 'Serverfejl ved hentning af tilmeldinger' });
   }
 });
-
 
 app.post('/assignments', async (req, res) => {
   const { day, days, name } = req.body;
@@ -395,13 +369,10 @@ app.post('/assignments', async (req, res) => {
 
   try {
     if (Array.isArray(days)) {
-      for (const d of days) {
-        await updateSheetEntry(d, name);
-      }
+      for (const d of days) await updateSheetEntry(d, name);
     } else {
       await updateSheetEntry(day, name);
     }
-
     res.json({ success: true });
   } catch (err) {
     console.error('Fejl ved opdatering:', err);
@@ -411,21 +382,11 @@ app.post('/assignments', async (req, res) => {
 
 app.post('/delete-event', async (req, res) => {
   const { eventId } = req.body;
-
-  if (!eventId) {
-    return res.status(400).json({ error: 'eventId mangler' });
-  }
-
+  if (!eventId) return res.status(400).json({ error: 'eventId mangler' });
   try {
     const authClient = await calendarAuth.getClient();
     const calendarId = process.env.CLUB_CALENDAR_ID;
-
-    await calendar.events.delete({
-      calendarId,
-      eventId,
-      auth: authClient
-    });
-
+    await calendar.events.delete({ calendarId, eventId, auth: authClient });
     res.status(200).json({ success: true, message: 'Begivenhed slettet' });
   } catch (err) {
     console.error('❌ Fejl ved sletning af begivenhed:', err);
@@ -435,29 +396,19 @@ app.post('/delete-event', async (req, res) => {
 
 app.post('/add-event', async (req, res) => {
   const { title, startDate, endDate, description } = req.body;
-
   if (!title || !startDate || !endDate) {
     return res.status(400).json({ error: 'Manglende påkrævede felter' });
   }
-
   try {
     const authClient = await calendarAuth.getClient();
-
     const event = {
       summary: title,
       description: description || '',
       start: { date: startDate },
-      end: { date: getNextDate(endDate) }, // Husk at Google Calendar ikke inkluderer slutdatoen
+      end: { date: getNextDate(endDate) },
     };
-
     const calendarId = process.env.CLUB_CALENDAR_ID;
-
-    await calendar.events.insert({
-      calendarId,
-      resource: event,
-      auth: authClient
-    });
-
+    await calendar.events.insert({ calendarId, resource: event, auth: authClient });
     res.status(200).json({ success: true, message: 'Begivenhed oprettet' });
   } catch (err) {
     console.error('❌ Fejl ved oprettelse af heldagsbegivenhed:', err);
@@ -467,7 +418,6 @@ app.post('/add-event', async (req, res) => {
 
 app.post('/remove-closed-event', async (req, res) => {
   const { date } = req.body;
-
   if (!date) return res.status(400).json({ error: 'Dato mangler' });
 
   try {
@@ -486,18 +436,10 @@ app.post('/remove-closed-event', async (req, res) => {
       auth: authClient
     });
 
-    const matching = events.data.items.find(ev =>
-      ev.summary?.toLowerCase().startsWith('lukket')
-    );
-
+    const matching = events.data.items.find(ev => ev.summary?.toLowerCase().startsWith('lukket'));
     if (matching) {
-      await calendar.events.delete({
-        calendarId,
-        eventId: matching.id,
-        auth: authClient
-      });
+      await calendar.events.delete({ calendarId, eventId: matching.id, auth: authClient });
     }
-
     res.status(200).json({ success: true });
   } catch (err) {
     console.error('Fejl ved sletning af lukket-begivenhed:', err);
@@ -505,112 +447,70 @@ app.post('/remove-closed-event', async (req, res) => {
   }
 });
 
-app.post("/signup", async (req, res) => {
+app.post('/signup', async (req, res) => {
   const { eventId, names } = req.body;
-
-  if (!eventId || !names || (typeof names === "string" && names.trim() === "")) {
-    return res.status(400).json({ error: "eventId og names påkrævet" });
+  if (!eventId || !names || (typeof names === 'string' && names.trim() === '')) {
+    return res.status(400).json({ error: 'eventId og names påkrævet' });
   }
-
   const nameList = Array.isArray(names) ? names : [names];
-
   try {
     const sheets = google.sheets({ version: 'v4', auth });
-
     const values = nameList.map(name => [eventId, name]);
-
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Sheet2!A:B",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: values,
-      },
+      range: 'Sheet2!A:B',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values }
     });
-
     res.json({ success: true, updated: response.data });
   } catch (err) {
-    console.error("Fejl i signup:", err);
-    res.status(500).json({ error: "Serverfejl under tilmelding" });
+    console.error('Fejl i signup:', err);
+    res.status(500).json({ error: 'Serverfejl under tilmelding' });
   }
 });
 
-app.post("/unsign", async (req, res) => {
+app.post('/unsign', async (req, res) => {
   const { eventId, names } = req.body;
-  if (!eventId || !names) {
-    return res.status(400).json({ error: "eventId og names påkrævet" });
-  }
+  if (!eventId || !names) return res.status(400).json({ error: 'eventId og names påkrævet' });
 
   const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: "v4", auth: authClient });
-
-  const sheet = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: "Sheet2!A:B",
-  });
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+  const sheet = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'Sheet2!A:B' });
 
   const rows = sheet.data.values || [];
-
-  const inputNames = names
-    .split(/\n|,/)
-    .map(n => n.trim().toLowerCase())
-    .filter(Boolean);
-
+  const inputNames = names.split(/\n|,/).map(n => n.trim().toLowerCase()).filter(Boolean);
   const signedUp = rows.filter(([id]) => id === eventId);
-  const signedUpNames = signedUp.map(([, name]) => name.trim().toLowerCase());
+  const signedUpNames = signedUp.map(([, name]) => (name || '').trim().toLowerCase());
+  const updated = rows.filter(([id, name]) => !(id === eventId && inputNames.includes((name || '').trim().toLowerCase())));
 
-  const notFound = inputNames.filter(n => !signedUpNames.includes(n));
-
-  const updated = rows.filter(([id, name]) => {
-    const norm = (name || "").trim().toLowerCase();
-    return !(id === eventId && inputNames.includes(norm));
-  });
-
-  while (updated.length < rows.length) {
-    updated.push(["", ""]);
-  }
+  while (updated.length < rows.length) updated.push(['', '']);
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `Sheet2!A1:B`,
-    valueInputOption: "RAW",
-    resource: {
-      values: updated,
-    },
+    spreadsheetId, range: 'Sheet2!A1:B', valueInputOption: 'RAW', resource: { values: updated }
   });
 
   const removed = signedUp.length - updated.filter(([id]) => id === eventId).length;
-
-  res.json({ success: true, removed, notFound });
+  res.json({ success: true, removed, notFound: inputNames.filter(n => !signedUpNames.includes(n)) });
 });
 
-app.get("/signups/:eventId", async (req, res) => {
+app.get('/signups/:eventId', async (req, res) => {
   const { eventId } = req.params;
-  if (!eventId) return res.status(400).json({ error: "eventId mangler" });
-
+  if (!eventId) return res.status(400).json({ error: 'eventId mangler' });
   try {
-    const sheets = google.sheets({ version: "v4", auth });
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "Sheet2!A:B",
-    });
-
+    const sheets = google.sheets({ version: 'v4', auth });
+    const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'Sheet2!A:B' });
     const rows = result.data.values || [];
-    const names = rows
-      .filter(row => row[0] === eventId)
-      .map(row => row[1]);
-
+    const names = rows.filter(row => row[0] === eventId).map(row => row[1]);
     res.json({ eventId, count: names.length, names });
   } catch (err) {
-    console.error("Fejl ved hentning af tilmeldinger:", err);
-    res.status(500).json({ error: "Serverfejl under hentning af tilmeldinger" });
+    console.error('Fejl ved hentning af tilmeldinger:', err);
+    res.status(500).json({ error: 'Serverfejl under hentning af tilmeldinger' });
   }
 });
 
 app.get('/public-events', async (req, res) => {
   try {
     const calendarEvents = await getAllCalendarEvents();
-
     const publicEvents = calendarEvents.map(ev => ({
       id: ev.id,
       summary: ev.summary,
@@ -618,7 +518,6 @@ app.get('/public-events', async (req, res) => {
       start: ev.start.date || ev.start.dateTime,
       end: ev.end.date || ev.end.dateTime
     }));
-
     res.json(publicEvents);
   } catch (err) {
     console.error('Fejl i public-events:', err);
@@ -1191,6 +1090,7 @@ app.post("/kontakt", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server kører på http://localhost:${PORT}`);
 });
+
 
 
 
