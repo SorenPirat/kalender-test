@@ -1,0 +1,177 @@
+/* =========================================================
+   animation.css — mobilvenlig jiggle + glow + konfetti
+   Brug: tilføj klassen "min-raekke" på <tr> for at trigge effekten.
+   Konfetti forventer at dine JS-partikler får class="confetti"
+   og appendes til <body> (se din eksisterende launchConfetti()).
+   ========================================================= */
+
+/* Basis reset til tabellen */
+table { border-collapse: collapse; }
+
+/* ---------------------------------------------------------
+   1) Række-udpegning (animer TDs i stedet for TR for iOS)
+   --------------------------------------------------------- */
+tr.min-raekke { /* ingen animation direkte på <tr> pga. iOS */
+  position: relative;
+}
+
+tr.min-raekke > td {
+  position: relative;               /* anker for pseudo/glow */
+  animation:
+    jiggle 900ms ease-in-out 2,
+    cell-glow 2.5s ease-in-out 1s 2 alternate;
+  will-change: transform;           /* glatter mobil-GPU */
+  transform: translateZ(0);         /* GPU hint */
+}
+
+/* Valgfrit: pænt “omkring-rækken”-glow via første celle */
+tr.min-raekke > td:first-child { position: relative; }
+tr.min-raekke > td:first-child::after {
+  content: "";
+  position: absolute;
+  left: -6px; right: -6px; top: -4px; bottom: -4px;
+  border-radius: 10px;
+  pointer-events: none;
+  animation: row-glow 2.5s ease-in-out 1s 2 alternate;
+}
+
+/* ---------------------------------------------------------
+   2) Konfetti / “fyrværkeri”
+   - pop og fall kører sekventielt (fall er forsinket),
+     så iOS ikke mister transform.
+   - partikler placeres i viewport-koordinater via JS.
+   --------------------------------------------------------- */
+.confetti {
+  position: absolute;               /* appended til <body> */
+  width: 6px; height: 10px;
+  opacity: 0;
+  border-radius: 2px;
+  pointer-events: none;
+  transform: translate(-50%,-50%) rotate(0deg) translateZ(0);
+  animation:
+    pop 900ms ease-out both,
+    fall 1200ms ease-in 900ms forwards;   /* start efter pop */
+  z-index: 1000;
+}
+
+/* Fyrværkeri (core flash + gnister) */
+.fw-core {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 20px rgba(255,255,255,.8);
+  transform: translate(-50%,-50%) translateZ(0);
+  pointer-events: none;
+  animation: fw-core-flash 480ms ease-out both;
+  z-index: 1001;
+}
+
+.fw-spark {
+  position: absolute;
+  width: 4px; height: 10px;
+  border-radius: 2px;
+  opacity: 0;
+  transform: translate(-50%,-50%) rotate(0deg) translateZ(0);
+  pointer-events: none;
+  animation:
+    fw-pop 280ms ease-out both,
+    fw-fly 900ms cubic-bezier(.2,.6,.15,1) 280ms forwards; /* flyv efter pop */
+}
+
+@keyframes fw-core-flash {
+  0%   { transform: translate(-50%,-50%) scale(.6) translateZ(0); opacity: 0; }
+  30%  { transform: translate(-50%,-50%) scale(1.6) translateZ(0); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1)   translateZ(0); opacity: 0; }
+}
+
+@keyframes fw-pop {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(.9) translateZ(0); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1)   translateZ(0); }
+}
+
+@keyframes fw-fly {
+  to {
+    transform:
+      translate(-50%,-50%)
+      translate(var(--sx), var(--sy))
+      rotate(var(--rot))
+      translateZ(0);
+    opacity: 0;
+  }
+}
+
+
+/* ---------------------------------------------------------
+   3) Keyframes
+   --------------------------------------------------------- */
+@keyframes jiggle {
+  0%   { transform: translateZ(0) translateY(0) rotate(0) }
+  15%  { transform: translateZ(0) translateY(-1px) rotate(-1.5deg) }
+  30%  { transform: translateZ(0) translateY(0) rotate(1.5deg) }
+  45%  { transform: translateZ(0) translateY(-1px) rotate(-1deg) }
+  60%  { transform: translateZ(0) translateY(0) rotate(1deg) }
+  100% { transform: translateZ(0) }
+}
+
+@keyframes cell-glow {
+  from { box-shadow: 0 0 0 rgba(0,0,0,0); }
+  to   { box-shadow: 0 0 12px rgba(0,123,255,.45); }
+}
+
+@keyframes row-glow {
+  from { box-shadow: 0 0 0 rgba(0,0,0,0); }
+  to   { box-shadow: 0 0 14px rgba(0,123,255,.35); }
+}
+
+/* pop: gør partikler synlige og “hopper” dem lidt op */
+@keyframes pop {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(.6) translateZ(0) }
+  30%  { opacity: 1; transform: translate(-50%,-70%) scale(1)  translateZ(0) }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1)  translateZ(0) }
+}
+
+/* fall: bevar center-translate og læg displacement ovenpå */
+@keyframes fall {
+  to {
+    transform:
+      translate(-50%,-50%)
+      translate(var(--dx), var(--dy))
+      rotate(var(--rot))
+      translateZ(0);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------
+   4) “Reduce motion” hensyn
+   - Drosler animationer betydeligt når brugeren ønsker færre
+     bevægelser (iOS/Android/desktop).
+   --------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  tr.min-raekke > td {
+    animation: cell-glow 1200ms ease-in-out 1 both;
+  }
+  tr.min-raekke > td:first-child::after {
+    animation: row-glow 1200ms ease-in-out 1 both;
+  }
+  .confetti {
+    animation: none;
+    opacity: 0; /* eller sæt til 1 hvis du stadig vil vise dem statisk */
+  }
+}
+
+/* ---------------------------------------------------------
+   5) Små helpers (valgfrit)
+   --------------------------------------------------------- */
+/* Klassisk “pulse” hvis du vil genbruge til andre elementer */
+.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.03); }
+}
+
+/* Utility til hurtig skjul/vis */
+.hidden { display: none !important; }
