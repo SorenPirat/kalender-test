@@ -249,12 +249,7 @@
   background-color: #f0f0f0;
 }
 
-.skjult {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-}
+.skjult { display: none !important; }
 
 .slet-knap {
   background: none;
@@ -325,8 +320,8 @@
 }
 
 .chart-container canvas {
-  width: 100% 
-  height: auto 
+  width: 100%;
+  height: auto;
 }
 
 .btn-sub {
@@ -347,6 +342,135 @@
   background: #005bb5;
 }
 
+#sektion-knapper { display: flex !important; }
+
+
+/* ---------- ÅRSHJUL ---------- */
+:root{
+  --hjul-bg: #f6f7fb;
+  --hjul-ring: #e2e8f0;
+  --hjul-seg: #ffffff;
+  --hjul-seg-stroke: #cbd5e1;
+  --hjul-seg-hover: #eaf2ff;
+  --hjul-seg-aktiv: #dbeafe;
+  --hjul-text: #0f172a;
+  --hjul-dot: #2563eb;
+  --panel-bg: #fff;
+  --panel-border: #e5e7eb;
+}
+
+#sektion-aarshjul .aarshjul-toolbar{
+  display:flex; gap:.75rem; align-items:center; flex-wrap: wrap;
+  margin: .5rem 0 1rem;
+}
+#sektion-aarshjul .aarshjul-toolbar select,
+#sektion-aarshjul .aarshjul-toolbar input{
+  padding:.5rem .6rem; border:1px solid var(--panel-border); border-radius:8px; background:#fff;
+}
+
+#sektion-aarshjul .aarshjul-layout{
+  display:grid; gap:1rem;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 420px);
+}
+
+.aarshjul-canvas{
+  background: var(--hjul-bg);
+  border:1px solid var(--panel-border);
+  border-radius: 16px;
+  min-height: 360px;
+  display:grid; place-items:center;
+  padding: 10px;
+}
+
+.hjul-ring{
+  fill: #fff;
+  stroke: var(--hjul-ring);
+  stroke-width: 2;
+}
+.hjul-segment{
+  fill: var(--hjul-seg);
+  stroke: var(--hjul-seg-stroke);
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: fill .15s ease, transform .15s ease, filter .15s ease;
+}
+.hjul-segment:hover{
+  fill: var(--hjul-seg-hover);
+  filter: drop-shadow(0 1px 6px rgba(0,0,0,.08));
+}
+.hjul-segment.aktiv{
+  fill: var(--hjul-seg-aktiv);
+  stroke-width: 2;
+}
+.hjul-label{
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--hjul-text);
+  user-select:none;
+  pointer-events:none;
+}
+.hjul-dot{
+  fill: var(--hjul-dot);
+}
+
+.aarshjul-panel{
+  background: var(--panel-bg);
+  border:1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 14px 14px 6px;
+  min-height: 360px;
+  display:flex; flex-direction:column;
+}
+#aarshjul-panel-overskrift{
+  margin: .25rem 0 .75rem;
+}
+.aarshjul-liste{
+  list-style:none; padding:0; margin:0;
+  display:flex; flex-direction:column; gap:.5rem;
+}
+.aarshjul-item{
+  border:1px solid var(--panel-border);
+  border-radius:12px;
+  padding:.6rem .7rem;
+  background:#fff;
+}
+.aarshjul-item .item-title{
+  font-weight:700; line-height:1.2; margin-bottom:.15rem;
+}
+.aarshjul-item .item-meta{
+  font-size:.9rem; color:#475569; margin-bottom:.15rem;
+}
+.aarshjul-item .item-desc{
+  font-size:.95rem; color:#334155;
+}
+.aarshjul-empty{
+  margin-top:.5rem; color:#64748b;
+}
+
+#aarshjul-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+
+#aarshjul-add-form input,
+#aarshjul-add-form textarea {
+  padding: .5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+}
+
+#aarshjul-add-btn {
+  margin-bottom: .5rem;
+}
+
+
+@media (max-width: 900px){
+  #sektion-aarshjul .aarshjul-layout{
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (prefers-color-scheme: dark) {
 
@@ -489,4 +613,76 @@
   .knap-vis:hover {
     background: #0a58ca;
   }
+  
+  /* Skift kun tema via variabler, så alt nedarver korrekt */
+  :root{
+    --hjul-bg: #0f172a;          /* baggrund bag hjulet */
+    --hjul-ring: #1f2937;        /* yderring */
+    --hjul-seg: #111827;         /* segment-fyld */
+    --hjul-seg-stroke: #253048;  /* segment-stroke */
+    --hjul-seg-hover: #16223a;   /* hover på segment */
+    --hjul-seg-aktiv: #0b355f;   /* aktivt segment */
+    --hjul-text: #e5e7eb;        /* labels/tekster i hjulet */
+    --hjul-dot: #60a5fa;         /* prikker (antal events) */
+    --panel-bg: #0f172a;         /* panel-baggrund (højre kolonne) */
+    --panel-border: #243043;     /* panel-kant */
+  }
+
+  /* Canvas + ring/labels bruger allerede variablerne ovenfor */
+  .aarshjul-canvas {
+    border-color: var(--panel-border);
+    background: var(--hjul-bg);
+  }
+  .hjul-ring{
+  fill: #111827;
+  stroke: var(--hjul-ring);
+  stroke-width: 2;
+}
+  .hjul-label { fill: var(--hjul-text); }
+  .hjul-dot   { fill: var(--hjul-dot); }
+
+  /* Toolbar (år-vælger + søg) */
+  #sektion-aarshjul .aarshjul-toolbar select,
+  #sektion-aarshjul .aarshjul-toolbar input {
+    background: #0b1220;
+    color: #e5e7eb;
+    border-color: var(--panel-border);
+  }
+  #sektion-aarshjul .aarshjul-toolbar input::placeholder {
+    color: #8aa0bd;
+  }
+
+  /* Panel (liste med events) */
+  .aarshjul-panel{
+    background: var(--panel-bg);
+    border-color: var(--panel-border);
+  }
+  #aarshjul-panel-overskrift{
+    color: #e5e7eb;
+  }
+
+  /* Selve event-kortene */
+  .aarshjul-item{
+    background: #0b1220;             /* kort-baggrund */
+    border-color: var(--panel-border);
+  }
+  .aarshjul-item .item-title{
+    color: #e5e7eb;                   /* titel */
+  }
+  .aarshjul-item .item-meta{
+    color: #98a6be;                   /* dato + lokation */
+  }
+  .aarshjul-item .item-desc{
+    color: #c9d7ef;                   /* brødtekst */
+  }
+
+  .aarshjul-empty{
+    color: #8aa0bd;
+  }
+
+  /* Lidt mere subtil hover på segmenter i mørkt tema */
+  .hjul-segment:hover{
+    filter: drop-shadow(0 1px 6px rgba(0,0,0,.35));
+  }
+  
 }

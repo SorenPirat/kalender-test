@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <script src="gate.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🏆 Leaderboard – NKL</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="/css/animation.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <h1>🏆 Leaderboard</h1>
+
+  <section class="kort" style="max-width:900px;">
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+      <label>
+        <select id="periode">
+          <option value="all">Alle</option>
+          <option value="30">Sidste 30 dage</option>
+          <option value="7">Sidste 7 dage</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="status" style="margin-top:.75rem;"></div>
+
+    <div style="overflow:auto; margin-top:1rem;">
+      <table id="lb-tabel" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:.5rem; border-bottom:1px solid #ccc;">#</th>
+            <th style="text-align:left; padding:.5rem; border-bottom:1px solid #ccc;">Navn</th>
+            <th style="text-align:left; padding:.5rem; border-bottom:1px solid #ccc;">Ruter/problemer</th>
+          </tr>
+        </thead>
+        <tbody id="lb-body">
+          <tr><td colspan="3" style="padding:.75rem;">Indlæser…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+<script type="module">
+  import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "index.html",
+    efterLogin: async (bruger) => {
+      if (window.releaseAuthGate) window.releaseAuthGate();
+      indsætMenu(bruger);
+      await visLeaderboard();
+    }
+  });
+
+  const statusEl = document.getElementById('status');
+  const tbody    = document.getElementById('lb-body');
+  const periodeEl= document.getElementById('periode');
+  
+  periodeEl.addEventListener('change', () => {
+  visLeaderboard();
+});
+
+  function afgrænsDato(v) {
+    if (v === 'all') return null;
+    const d = new Date(); d.setDate(d.getDate() - parseInt(v,10)); return d;
+  }
+
+async function visLeaderboard() {
+  statusEl.textContent = "⏳ Henter data...";
+  tbody.innerHTML = `<tr><td colspan="3" style="padding:.75rem;">Indlæser…</td></tr>`;
+
+  // Periode → lav evt. server-side filter på logget_dato
+  const v = periodeEl.value; // "all" | "30" | "7"
+  let q = client.from('rutelog').select('user_id, logget_dato');
+
+  if (v !== 'all') {
+    const dage = parseInt(v, 10);
+    const d = new Date();
+    d.setDate(d.getDate() - dage);
+    // ISO uden millisekunder
+    const iso = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    q = q.gte('logget_dato', iso);
+  }
+
+  const { data: logs, error: logErr } = await q;
+  if (logErr) {
+    console.error(logErr);
+    statusEl.textContent = "❌ Kunne ikke hente rutelog.";
+    return;
+  }
+
+  // Optæl pr. user_id
+  const counts = new Map();
+  for (const l of logs) {
+    if (!l.user_id) continue;
+    counts.set(l.user_id, (counts.get(l.user_id) || 0) + 1);
+  }
+
+  if (counts.size === 0) {
+    statusEl.textContent = "";
+    tbody.innerHTML = `<tr><td colspan="3" style="padding:.75rem;">Ingen logs i valgt periode.</td></tr>`;
+    return;
+  }
+
+// Hent navne + deltagelsesflag
+const ids = Array.from(counts.keys());
+const { data: users, error: userErr } = await client
+  .from('users')
+  .select('id, navn, leaderboard_deltagelse')
+  .in('id', ids);
+
+if (userErr) {
+  console.error(userErr);
+  statusEl.textContent = "❌ Kunne ikke hente brugernavne.";
+  return;
+}
+
+// Kun dem der deltager (leaderboard_deltagelse !== false)
+const deltagere = (users || []).filter(u => u.leaderboard_deltagelse !== false);
+
+// Map id -> navn
+const navnMap = new Map(deltagere.map(u => [u.id, u.navn || `Medlem ${u.id}`]));
+
+// INTERSECTION: behold kun ids som både har logs og deltager
+const visibleIds = ids.filter(id => navnMap.has(id));
+
+if (visibleIds.length === 0) {
+  statusEl.textContent = "";
+  tbody.innerHTML = `<tr><td colspan="3" style="padding:.75rem;">Ingen deltagere i valgt periode.</td></tr>`;
+  return;
+}
+
+const rows = visibleIds
+  .map(id => ({
+    id,
+    navn: navnMap.get(id),
+    antal: counts.get(id) || 0
+  }))
+  .sort((a, b) => b.antal - a.antal);
+
+// (valgfrit) medaljer ved navn
+statusEl.textContent = "";
+tbody.innerHTML = rows.map((r, i) => {
+  const medalje = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "";
+  return `
+    <tr data-user-id="${r.id}">
+      <td style="padding:.5rem; border-bottom:1px solid #eee;">${i + 1}</td>
+      <td style="padding:.5rem; border-bottom:1px solid #eee;">${medalje} ${r.navn}</td>
+      <td style="padding:.5rem; border-bottom:1px solid #eee;">${r.antal}</td>
+    </tr>
+  `;
+}).join("");
+
+
+// find nuværende bruger og pynt rækken
+const ls = JSON.parse(localStorage.getItem('bruger') || '{}');
+const myRow = ls?.id ? tbody.querySelector(`tr[data-user-id="${ls.id}"]`) : null;
+
+if (myRow) {
+  myRow.classList.add('min-raekke');
+  launchConfetti(myRow, 28);             // første gang
+  setTimeout(() => launchConfetti(myRow, 28), 1000); // gentag efter 1,5s
+}
+
+function launchConfetti(row, count = 24) {
+  const nameCell = row.querySelector('td:nth-child(2)');
+  if (!nameCell) return;
+
+const rect = nameCell.getBoundingClientRect();
+const centerX = rect.left + window.scrollX + rect.width / 2;
+const centerY = rect.top + window.scrollY + rect.height / 2;
+
+
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('span');
+    p.className = 'confetti';
+
+    // tilfældige farver – kan skiftes til jeres accent palette
+    p.style.background = ['#007bff','#10b981','#f59e0b','#ef4444','#8b5cf6','#36A2EB'][i % 6];
+
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 120;
+    const dx = Math.cos(angle) * dist + 'px';
+    const dy = Math.sin(angle) * dist + 40 + 'px';
+    const rot = (Math.random() * 360 - 180) + 'deg';
+
+    p.style.setProperty('--dx', dx);
+    p.style.setProperty('--dy', dy);
+    p.style.setProperty('--rot', rot);
+
+    p.style.left = centerX + 'px';
+    p.style.top  = centerY + 'px';
+    p.style.zIndex = 1000;
+
+    document.body.appendChild(p);
+
+    setTimeout(() => p.remove(), 1400);
+  }
+}
+
+}
+
+
+  
+</script>
+
+</body>
+</html>

@@ -226,8 +226,8 @@
         const { error: insertError } = await client.from("users").insert({
           id: userId,
           navn: navn,
-          rolle: ["klubmedlem"]
-        });
+          roller: Array.isArray(profile.rolle) ? profile.rolle : [profile.rolle || "klubmedlem"]
+		});
         if (insertError) {
           setStatus("⚠️ Profil kunne ikke gemmes: " + insertError.message, true);
           return;
@@ -256,6 +256,7 @@
       e.currentTarget.classList.add("hidden");
       mountSignupUI();
     });
+  
   </script>
 </body>
 </html>
