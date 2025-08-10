@@ -205,10 +205,14 @@ export async function indsætMenu(bruger) {
 	  </button>
 
       <ul class="submenu" id="aktiviteter-submenu" role="menu">
-        ${aktiviteterLinks.map(l =>
-          `<li role="none"><a role="menuitem" id="${l.id}" href="${l.href}">${l.label}</a></li>`
-        ).join("")}
-      </ul>
+  ${aktiviteterLinks.map(l =>
+    `<li role="none">
+       <a role="menuitem" id="${l.id}" href="${l.href}">
+         ${l.label}
+       </a>
+     </li>`
+  ).join("")}
+</ul>
     </li>
   `;
 
@@ -268,7 +272,7 @@ const profilMarkup = `
 <div id="profil-panel" class="profil-skjult">
   <div class="profil-indhold">
     <h2 id="profil-navn">👤 ${bruger.navn}</h2>
-    <li><a href="beskeder.html" id="besked-link-profil">💬 Gå til beskeder 
+    <li><a href="beskeder.html" id="besked-link-profil">💬 Mine beskeder
       <span id="badge-profil" class="badge ${antalNotifikationer > 0 ? "" : "skjult"}">${antalNotifikationer || ""}</span>
     </a></li>
     <li><a href="minelog.html">📘 Mine logs</a></li>
@@ -318,63 +322,84 @@ const profilMarkup = `
   }, 300);
 
   // Toggle-effekt for hovedmenu + submenu
-  setTimeout(() => {
-    const menuToggleBtn = document.getElementById("menu-toggle");
-    const menuLinks = document.getElementById("menu-links");
-    const menuWrapper = document.getElementById("menu");
+setTimeout(() => {
+  const menuToggleBtn = document.getElementById("menu-toggle");
+  const menuLinks     = document.getElementById("menu-links");
+  const menuWrapper   = document.getElementById("menu");
 
-    const aktiviteterToggle = document.getElementById("aktiviteter-toggle");
-    const aktiviteterSubmenu = document.getElementById("aktiviteter-submenu");
+  const aktiviteterToggle  = document.getElementById("aktiviteter-toggle");
+  const aktiviteterSubmenu = document.getElementById("aktiviteter-submenu");
 
-    if (menuToggleBtn && menuLinks && menuWrapper) {
-      menuToggleBtn.addEventListener("click", () => {
-        const open = menuLinks.classList.toggle("show");
-        menuWrapper.classList.toggle("open", open);
-        menuToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
-      });
+  if (!menuToggleBtn || !menuLinks || !menuWrapper) return;
 
-      // Submenu toggle
-      if (aktiviteterToggle && aktiviteterSubmenu) {
-        const closeSubmenu = () => {
-          aktiviteterSubmenu.classList.remove("show");
-          aktiviteterToggle.setAttribute("aria-expanded", "false");
-        };
-
-        aktiviteterToggle.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const open = aktiviteterSubmenu.classList.toggle("show");
-          aktiviteterToggle.setAttribute("aria-expanded", open ? "true" : "false");
-        });
-
-        // Luk submenu ved klik udenfor
-        document.addEventListener("click", (e) => {
-          if (
-            !aktiviteterSubmenu.contains(e.target) &&
-            e.target !== aktiviteterToggle &&
-            aktiviteterSubmenu.classList.contains("show")
-          ) {
-            closeSubmenu();
-          }
-        });
-
-        // Tastatur: Escape lukker submenu og evt. hovedmenu
-        document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") {
-            if (aktiviteterSubmenu.classList.contains("show")) {
-              closeSubmenu();
-              e.preventDefault();
-              e.stopPropagation();
-            }
-            if (menuLinks.classList.contains("show")) {
-              menuLinks.classList.remove("show");
-              menuWrapper.classList.remove("open");
-              menuToggleBtn.setAttribute("aria-expanded", "false");
-            }
-          }
-        });
-      }
+  // Helpers
+  const closeSubmenu = () => {
+    if (aktiviteterSubmenu) {
+      aktiviteterSubmenu.classList.remove("show");
+      aktiviteterToggle?.setAttribute("aria-expanded", "false");
     }
-  }, 0);
+  };
+
+  const openMainMenu = () => {
+    menuLinks.classList.add("show");
+    menuWrapper.classList.add("open");
+    menuToggleBtn.setAttribute("aria-expanded", "true");
+  };
+
+  const closeMainMenu = () => {
+    menuLinks.classList.remove("show");
+    menuWrapper.classList.remove("open");
+    menuToggleBtn.setAttribute("aria-expanded", "false");
+    closeSubmenu();
+  };
+
+  // Hovedmenu toggle
+  menuToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation(); // undgå at "klik-udenfor" fyrer samtidig
+    const isOpen = menuLinks.classList.contains("show");
+    if (isOpen) closeMainMenu(); else openMainMenu();
+  });
+
+  // Submenu toggle
+  if (aktiviteterToggle && aktiviteterSubmenu) {
+    aktiviteterToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = aktiviteterSubmenu.classList.toggle("show");
+      aktiviteterToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+
+  // Klik inde i menuen skal ikke lukke den
+  menuWrapper.addEventListener("click", (e) => e.stopPropagation());
+
+  // Luk ved klik/touch udenfor
+  const onOutside = (e) => {
+    if (!menuWrapper.contains(e.target)) closeMainMenu();
+  };
+  document.addEventListener("click", onOutside);
+  document.addEventListener("pointerdown", onOutside, { passive: true });
+
+  // Luk når man klikker et link i menuen
+  menuLinks.querySelectorAll("a, button[role='menuitem']").forEach((el) => {
+    el.addEventListener("click", () => closeMainMenu());
+  });
+
+  // Escape lukker
+  const onKey = (e) => {
+    if (e.key === "Escape") closeMainMenu();
+  };
+  document.addEventListener("keydown", onKey);
+
+  // Luk ved scroll (både hoved- og submenu)
+  const onScroll = () => closeMainMenu();
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  // (Valgfrit) Luk hvis vi resizer til desktop
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 900) closeMainMenu();
+  });
+}, 0);
+
 
   // Logout
   setTimeout(() => {

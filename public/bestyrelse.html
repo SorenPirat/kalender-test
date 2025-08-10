@@ -7,9 +7,9 @@
   <title>Bestyrelsesdokumenter – NKL</title>
 
   <!-- CSS -->
-  <link rel="stylesheet" href="base.css" />
-  <link rel="stylesheet" href="menu.css" />
-  <link rel="stylesheet" href="bestyrelse.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <link rel="stylesheet" href="css/bestyrelse.css" />
 
   <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -102,8 +102,6 @@
     <h1>📊 Bestyrelsens statistik</h1>
     <div id="statistik-knapper">
       <button id="rolle-knap" class="btn-sub" type="button">👥 Rollefordeling</button>
-      <button id="begivenhed-knap" class="btn-sub" type="button">📅 Begivenheder pr. måned</button>
-      <button id="kategori-knap" class="btn-sub" type="button">📂 Begivenheder pr. kategori</button>
     </div>
     <div class="chart-container">
       <canvas id="statistik-chart"></canvas>
@@ -122,12 +120,12 @@
       <div class="aarshjul-panel">
         <h2 id="aarshjul-panel-overskrift">Vælg en måned</h2>
 		<button id="aarshjul-add-btn" class="btn-sub" type="button">➕ Tilføj post</button>
-<div id="aarshjul-add-form" class="skjult">
-  <input type="text" id="aarshjul-add-title" placeholder="Titel" required>
-  <textarea id="aarshjul-add-desc" placeholder="Beskrivelse"></textarea>
-  <input type="text" id="aarshjul-add-ansvar" placeholder="Ansvar">
-  <button id="aarshjul-add-save" type="button">Gem</button>
-</div>	
+	<div id="aarshjul-add-form" class="skjult">
+	<input type="text" id="aarshjul-add-title" placeholder="Titel" required>
+	<textarea id="aarshjul-add-desc" placeholder="Beskrivelse"></textarea>
+	<input type="text" id="aarshjul-add-ansvar" placeholder="Ansvar">
+	<button id="aarshjul-add-save" type="button">Gem</button>
+	</div>	
         <ul id="aarshjul-liste" class="aarshjul-liste"></ul>
         <div id="aarshjul-empty" class="aarshjul-empty skjult">Ingen events i denne måned.</div>
       </div>
@@ -517,47 +515,71 @@ if (navn === "dokumenter") {
         });
       }catch(e){ alert("Kunne ikke hente rolledata."); console.error(e); }
     }
-    async function visBegivenhedsStatistik(){
-      const res = await fetch("https://nglevagter-test.onrender.com/public-events");
-      const events = await res.json();
-      const by = {};
-      (events||[]).forEach(ev=>{
-        const d = new Date(ev.start || ev.end);
-        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-        by[key] = (by[key]||0)+1;
-      });
-      renderChart({
-        type:"bar",
-        data:{ labels:Object.keys(by).sort(), datasets:[{ label:"Begivenheder pr. måned", data:Object.values(by) }] },
-        options:{ responsive:true, plugins:{ legend:{display:false}, title:{display:true, text:"📅 Begivenheder pr. måned"}, datalabels:{ color:"#000", font:{weight:"bold", size:14}, formatter:v=>v } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } }
-      });
-    }
-    async function visBegivenhedsEfterKategori(){
-      const res = await fetch("https://nglevagter-test.onrender.com/public-events");
-      const events = await res.json();
-      const k = { "🛠️ Rutebygning":0, "🏆 Konkurrence":0, "🎉 Socialt":0, "🚪 Lukkedag":0, "❓ Andet":0 };
-      (events||[]).forEach(ev=>{
-        const t = (ev.summary||ev.title||ev.short||"").toLowerCase();
-        if(t.includes("rutebyg")) k["🛠️ Rutebygning"]++;
-        else if(t.includes("konkurrence")||t.includes("mesterskab")) k["🏆 Konkurrence"]++;
-        else if(t.includes("grill")||t.includes("hygge")||t.includes("tur")||t.includes("fælles")) k["🎉 Socialt"]++;
-        else if(t.includes("lukket")||t.includes("closed")) k["🚪 Lukkedag"]++;
-        else k["❓ Andet"]++;
-      });
-      renderChart({
-        type:"bar",
-        data:{ labels:Object.keys(k), datasets:[{ data:Object.values(k) }] },
-        options:{ responsive:true, plugins:{ legend:{display:false}, title:{display:true, text:"📂 Begivenheder fordelt på kategori"}, datalabels:{ color:"#000", font:{weight:"bold", size:14}, formatter:v=>v } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } }
-      });
-    }
 
     // ---------- Årshjul ----------
     const MONTHS_DA = ["Jan","Feb","Mar","Apr","Maj","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
-    let aarshjulState = { rawEvents:[], filteredEvents:[], eventsByMonth:new Map(), selectedMonth:null, selectedYear:new Date().getFullYear(), searchQuery:"" };
+	let aarshjulState = {
+	rawEvents: [],
+	filteredEvents: [],
+	eventsByMonth: new Map(),
+	tasksByMonth: new Map(),
+	selectedMonth: null,
+	selectedYear: new Date().getFullYear(),
+	searchQuery: ""
+	};
 
     function parseMaybeDate(v){ if(!v) return null; const d=new Date(v); return isNaN(d)? null : d; }
     function monthIndexFromDate(d){ return d?.getMonth?.() ?? null; }
 
+	// ---------- Årshjul-opgaver i Supabase ----------
+	async function loadTasksForYear(year){
+  // Returnerer Map(0..11 => [task, ...]), hvor task har {id,title,desc,ansvar,createdAt}
+  const map = new Map(Array.from({length:12}, (_,i)=>[i,[]]));
+  const { data, error } = await client
+    .from("aarshjul")
+    .select("id, aar, maaned, title, desc, ansvar, created_at")
+    .eq("aar", year)
+    .order("created_at", { ascending: true });
+
+  if (error) { console.error("Hent aarshjul-fejl:", error); return map; }
+  for (const row of (data || [])){
+    const m = Number(row.maaned);
+    if (!isNaN(m) && m>=0 && m<=11){
+      map.get(m).push({
+        id: row.id,
+        title: row.title || "",
+        desc: row.desc || "",
+        ansvar: row.ansvar || "",
+        createdAt: row.created_at
+      });
+    }
+  }
+  return map;
+}
+	async function addTaskToSupabase({ aar, maaned, title, desc, ansvar }){
+  const { data, error } = await client
+    .from("aarshjul")
+    .insert({ aar, maaned, title, desc, ansvar })
+    .select("id, aar, maaned, title, desc, ansvar, created_at")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    title: data.title || "",
+    desc: data.desc || "",
+    ansvar: data.ansvar || "",
+    createdAt: data.created_at
+  };
+}
+	async function deleteTaskFromSupabase(id){
+  const { error } = await client.from("aarshjul").delete().eq("id", id);
+  if (error) throw error;
+}
+	function saveTasksForYear(year, tasksMap){
+  const obj = {};
+  for(const [m,arr] of tasksMap.entries()) obj[m] = arr;
+  localStorage.setItem(tasksKey(year), JSON.stringify(obj));
+}
     async function fetchAarshjulEvents(year){
       const from = `${year-1}-11-01`, to = `${year+1}-01-31`;
       const { data, error } = await client
@@ -623,38 +645,115 @@ if (navn === "dokumenter") {
         label.setAttribute("x",tx); label.setAttribute("y",ty);
         label.setAttribute("dominant-baseline","middle"); label.setAttribute("text-anchor","middle"); label.setAttribute("class","hjul-label");
         label.textContent = MONTHS_DA[i]; svg.appendChild(label);
-        const count = aarshjulState.eventsByMonth.get(i)?.length || 0;
-        if(count>0){
-          const dots=Math.min(count,4), baseR=rOuter+6;
-          for(let d=0; d<dots; d++){
-            const c=document.createElementNS(svgns,"circle");
-            const off=(d-(dots-1)/2)*9;
-            c.setAttribute("cx", cx + Math.cos(mid)*baseR + Math.cos(mid+Math.PI/2)*off);
-            c.setAttribute("cy", cy + Math.sin(mid)*baseR + Math.sin(mid+Math.PI/2)*off);
-            c.setAttribute("r",3); c.setAttribute("class","hjul-dot"); svg.appendChild(c);
-          }
-        }
+// ----- events (blå prikker, tæt på ydre ring) -----
+const eventCount = aarshjulState.eventsByMonth.get(i)?.length || 0;
+if (eventCount > 0){
+  const dots  = Math.min(eventCount, 4);
+  const baseR = rOuter - 6;        // tæt på ydre ring, men stadig inde
+  const tangentialGap = 7;
+
+  for (let d = 0; d < dots; d++){
+    const c = document.createElementNS(svgns, "circle");
+    const off = (d - (dots - 1)/2) * tangentialGap;
+    c.setAttribute("cx", cx + Math.cos(mid) * baseR + Math.cos(mid + Math.PI/2) * off);
+    c.setAttribute("cy", cy + Math.sin(mid) * baseR + Math.sin(mid + Math.PI/2) * off);
+    c.setAttribute("r", 3);
+    c.setAttribute("class", "hjul-event-dot"); // blå
+    svg.appendChild(c);
+  }
+}
+
+// ----- tasks (orange prikker, længere inde) -----
+const taskCount = aarshjulState.tasksByMonth.get(i)?.length || 0;
+if (taskCount > 0){
+  const dots  = Math.min(taskCount, 4);
+  const baseR = rInner + 10;       // længere inde
+  const tangentialGap = 7;
+
+  for (let d = 0; d < dots; d++){
+    const c = document.createElementNS(svgns, "circle");
+    const off = (d - (dots - 1)/2) * tangentialGap;
+    c.setAttribute("cx", cx + Math.cos(mid) * baseR + Math.cos(mid + Math.PI/2) * off);
+    c.setAttribute("cy", cy + Math.sin(mid) * baseR + Math.sin(mid + Math.PI/2) * off);
+    c.setAttribute("r", 3);
+    c.setAttribute("class", "hjul-task-dot"); // orange
+    svg.appendChild(c);
+  }
+}
+
+
       }
       host.appendChild(svg);
     }
     function renderAarshjulList(){
-      const m = aarshjulState.selectedMonth, list=$("#aarshjul-liste"), empty=$("#aarshjul-empty"), head=$("#aarshjul-panel-overskrift");
-      list.innerHTML = "";
-      if(m==null){ head.textContent="Vælg en måned"; empty.classList.add("skjult"); return; }
-      head.textContent = `Events i ${MONTHS_DA[m]} ${aarshjulState.selectedYear}`;
-      const rows = aarshjulState.eventsByMonth.get(m)||[];
-      if(rows.length===0){ empty.classList.remove("skjult"); return; } else empty.classList.add("skjult");
-      for(const ev of rows){
-        const li=document.createElement("li"); li.className="aarshjul-item";
-        const d= ev.start || ev.slut;
-        const dato = d ? d.toLocaleDateString("da-DK", { day:"2-digit", month:"short" }) : "";
-        const t=document.createElement("div"); t.className="item-title"; t.textContent = ev.titel;
-        const meta=document.createElement("div"); meta.className="item-meta"; meta.textContent = [dato, ev.lokation].filter(Boolean).join(" • ");
-        const desc=document.createElement("div"); desc.className="item-desc"; desc.textContent = ev.beskrivelse || ev.underrubrik || "";
-        li.appendChild(t); li.appendChild(meta); if(desc.textContent) li.appendChild(desc); list.appendChild(li);
-      }
+  const m    = aarshjulState.selectedMonth;
+  const list = document.getElementById("aarshjul-liste");
+  const empty= document.getElementById("aarshjul-empty");
+  const head = document.getElementById("aarshjul-panel-overskrift");
+
+  list.innerHTML = "";
+
+  if (m == null){
+    head.textContent = "Vælg en måned";
+    empty.classList.add("skjult");
+    return;
+  }
+
+  head.textContent = `Events & opgaver i ${MONTHS_DA[m]} ${aarshjulState.selectedYear}`;
+
+  // Events + tasks fra state (kræver at du har sat aarshjulState.tasksByMonth)
+  const events = (aarshjulState.eventsByMonth.get(m) || []).map(e => ({ _kind:"event", ...e }));
+  const tasks  = (aarshjulState.tasksByMonth?.get(m) || []).map(t => ({ _kind:"task", ...t }));
+
+  // Saml i én liste og sorter (events med dato først; opgaver uden dato bagefter)
+  const rows = [...events, ...tasks].sort((a,b)=>{
+    const ad = a.start || a.slut;
+    const bd = b.start || b.slut;
+    if (ad && bd) return ad - bd;             // begge har dato
+    if (ad && !bd) return -1;                 // event før task
+    if (!ad && bd) return 1;                  // task efter event
+    return 0;                                 // ingen dato: behold rækkefølge
+  });
+
+  if (rows.length === 0){
+    empty.classList.remove("skjult");
+    return;
+  }
+  empty.classList.add("skjult");
+
+  for (const it of rows){
+    const li = document.createElement("li");
+    li.className = "aarshjul-item";
+
+    if (it._kind === "event"){
+      const d = it.start || it.slut;
+      const datoTxt = d ? d.toLocaleDateString("da-DK", { day:"2-digit", month:"short" }) : "";
+      li.innerHTML = `
+        <div class="item-title">${it.titel}</div>
+        <div class="item-meta">${[datoTxt, it.lokation].filter(Boolean).join(" • ")}</div>
+        ${it.beskrivelse ? `<div class="item-desc">${it.beskrivelse}</div>` : ""}
+      `;
+    } else {
+      // task/opgave (lokale noter)
+li.innerHTML = `
+  <div class="item-title">🛠️ ${it.title}</div>
+  <div class="item-meta">${it.ansvar ? `Ansvar: ${it.ansvar}` : ""}</div>
+  ${it.desc ? `<div class="item-desc">${it.desc}</div>` : ""}
+  <div class="item-actions">
+    <button type="button" class="btn-sub btn-edit-task"  data-id="${it.id || ""}">✏️ Redigér</button>
+    <button type="button" class="btn-sub btn-delete-task" data-id="${it.id || ""}">🗑️ Slet</button>
+  </div>
+`;
     }
-    function selectMonth(m){ aarshjulState.selectedMonth=m; renderAarshjulSVG(); renderAarshjulList(); }
+
+    list.appendChild(li);
+  }
+}
+    function selectMonth(m){
+		aarshjulState.selectedMonth=m;
+		renderAarshjulSVG();
+		renderAarshjulList();
+		}
     function populateYearDropdown(){
       const sel=$("#aarshjul-year"); sel.innerHTML = "";
       const thisYear=new Date().getFullYear(); const years=[thisYear-1,thisYear,thisYear+1];
@@ -669,6 +768,7 @@ if (navn === "dokumenter") {
     }
     async function loadAndRenderAarshjul(){
       aarshjulState.rawEvents = await fetchAarshjulEvents(aarshjulState.selectedYear);
+	  aarshjulState.tasksByMonth = await loadTasksForYear(aarshjulState.selectedYear);
       filterAndIndex(); renderAarshjulSVG(); renderAarshjulList();
     }
     async function initAarshjul(){
@@ -676,44 +776,147 @@ if (navn === "dokumenter") {
       const nowM=new Date().getMonth();
       if((aarshjulState.eventsByMonth.get(nowM)||[]).length>0) selectMonth(nowM);
       else{ const firstWith=[...aarshjulState.eventsByMonth.entries()].find(([,arr])=>arr.length>0); if(firstWith) selectMonth(firstWith[0]); }
-      let rT; window.addEventListener("resize", ()=>{ clearTimeout(rT); rT=setTimeout(()=>renderAarshjulSVG(), 120); });
+      let rT; window.addEventListener("resize", ()=>{ clearTimeout(rT); rT=setTimeout(()=>renderAarshjulSVG(), 120); });  
+	  // Delegér klik på slet-task
+	document.getElementById("aarshjul-liste")?.addEventListener("click", async (e)=>{
+  // --- SLET ---
+  const delBtn = e.target.closest(".btn-delete-task");
+  if (delBtn){
+    const id = delBtn.getAttribute("data-id");
+    if (!id) return;
+    if (!confirm("Slet denne post?")) return;
+
+    try{
+      await deleteTaskFromSupabase(id);
+      // Fjern fra state
+      const m = aarshjulState.selectedMonth;
+      const arr = aarshjulState.tasksByMonth.get(m) || [];
+      const idx = arr.findIndex(t => t.id === id);
+      if (idx >= 0) arr.splice(idx, 1);
+      aarshjulState.tasksByMonth.set(m, arr);
+      renderAarshjulList();
+      renderAarshjulSVG();
+    }catch(err){
+      alert("Kunne ikke slette posten.");
+      console.error(err);
     }
-document.getElementById("aarshjul-add-btn").addEventListener("click", () => {
-  document.getElementById("aarshjul-add-form").classList.toggle("skjult");
-});
-
-document.getElementById("aarshjul-add-save").addEventListener("click", () => {
-  const title = document.getElementById("aarshjul-add-title").value.trim();
-  const desc = document.getElementById("aarshjul-add-desc").value.trim();
-  const ansvar = document.getElementById("aarshjul-add-ansvar").value.trim();
-
-  if (!title) {
-    alert("Skriv mindst en titel");
-    return;
+    return; // vigtigt: stop her hvis det var en slet
   }
 
-  // Lav et nyt liste-element
-  const li = document.createElement("li");
-  li.className = "aarshjul-item";
-  li.innerHTML = `
-    <div class="item-title">🛠️ ${title}</div>
-    <div class="item-meta">Ansvar: ${ansvar || "—"}</div>
-    <div class="item-desc">${desc || ""}</div>
-  `;
+  // --- REDIGÉR ---
+  const editBtn = e.target.closest(".btn-edit-task");
+  if (editBtn){
+    const id = editBtn.getAttribute("data-id");
+    if (!id) return;
 
-  // Find nuværende måneds liste og indsæt
-  const liste = document.getElementById("aarshjul-liste");
-  liste.appendChild(li);
+    const m   = aarshjulState.selectedMonth;
+    const arr = aarshjulState.tasksByMonth.get(m) || [];
+    const t   = arr.find(x => x.id === id);
+    if (!t){ console.warn("Task ikke i state:", id); return; }
 
-  // Nulstil formular
-  document.getElementById("aarshjul-add-title").value = "";
-  document.getElementById("aarshjul-add-desc").value = "";
-  document.getElementById("aarshjul-add-ansvar").value = "";
-  document.getElementById("aarshjul-add-form").classList.add("skjult");
+    // simple prompts (hurtig løsning). Vi forfylder med eksisterende værdier.
+    const nyTitle  = (prompt("Titel:", t.title ?? "") ?? "").trim();
+    if (!nyTitle){ alert("Titel kan ikke være tom."); return; }
+    const nyAnsvar = (prompt("Ansvar:", t.ansvar ?? "") ?? "").trim();
+    const nyDesc   = (prompt("Beskrivelse:", t.desc ?? "") ?? "").trim();
+
+    try{
+      const updated = await updateTaskInSupabase(id, {
+        title: nyTitle,
+        ansvar: nyAnsvar,
+        desc: nyDesc
+      });
+
+      // opdatér i state (mutér eksisterende obj for at undgå at miste ref)
+      t.title  = updated.title;
+      t.ansvar = updated.ansvar;
+      t.desc   = updated.desc;
+
+      renderAarshjulList();
+      renderAarshjulSVG(); // prikker ændrer sig ikke her, men fint at holde i sync
+    }catch(err){
+      alert("Kunne ikke opdatere posten.");
+      console.error(err);
+    }
+  }
 });
 
+	// ---- BIND ÅRSHJUL-UI ----
+	function bindAarshjulAddHandlers(){
+  const btn  = document.getElementById("aarshjul-add-btn");
+  const form = document.getElementById("aarshjul-add-form");
+  const save = document.getElementById("aarshjul-add-save");
 
-    // ---------- App init ----------
+  // 1) Toggle formularen når man klikker på "➕ Tilføj post"
+  if (btn && form){
+    btn.addEventListener("click", () => {
+      form.classList.toggle("skjult");
+    });
+  }
+
+  // 2) Gem ny post (din eksisterende save-handler, blot sat ind her)
+  if (save){
+    save.addEventListener("click", async ()=>{
+      const m = aarshjulState.selectedMonth;
+      if (m==null){ alert("Vælg en måned i hjulet først."); return; }
+
+      const title  = document.getElementById("aarshjul-add-title").value.trim();
+      const desc   = document.getElementById("aarshjul-add-desc").value.trim();
+      const ansvar = document.getElementById("aarshjul-add-ansvar").value.trim();
+      if (!title){ alert("Skriv mindst en titel."); return; }
+
+      try{
+        const created = await addTaskToSupabase({
+          aar: aarshjulState.selectedYear,
+          maaned: m,
+          title, desc, ansvar
+        });
+
+        // opdater state
+        const map = aarshjulState.tasksByMonth;
+        const arr = map.get(m) || [];
+        arr.push(created);
+        map.set(m, arr);
+
+        // ryd UI + re-render
+        document.getElementById("aarshjul-add-title").value = "";
+        document.getElementById("aarshjul-add-desc").value = "";
+        document.getElementById("aarshjul-add-ansvar").value = "";
+        form.classList.add("skjult");
+
+        renderAarshjulList();
+		renderAarshjulSVG();
+      }catch(e){
+        alert("Kunne ikke gemme posten i årshjul.");
+        console.error(e);
+      }
+    });
+  }
+}
+	
+	async function updateTaskInSupabase(id, patch){
+  // patch kan fx være { title, desc, ansvar }
+  const { data, error } = await client
+    .from("aarshjul")
+    .update(patch)
+    .eq("id", id)
+    .select("id, title, desc, ansvar, created_at")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    title: data.title || "",
+    desc: data.desc || "",
+    ansvar: data.ansvar || "",
+    createdAt: data.created_at
+  };
+}
+
+	
+	bindAarshjulAddHandlers();
+    }
+   
+   // ---------- App init ----------
     document.addEventListener("DOMContentLoaded", ()=>{
       // Knap-bindings
       $("#btn-dok")?.addEventListener("click", ()=> visSektion("dokumenter"));
@@ -722,8 +925,6 @@ document.getElementById("aarshjul-add-save").addEventListener("click", () => {
 
       // Statistik-knapper
       $("#rolle-knap")?.addEventListener("click", visRolleStatistik);
-      $("#begivenhed-knap")?.addEventListener("click", visBegivenhedsStatistik);
-      $("#kategori-knap")?.addEventListener("click", visBegivenhedsEfterKategori);
     });
 
     // Login gate og side-setup

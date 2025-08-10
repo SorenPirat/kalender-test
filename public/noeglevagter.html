@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nøglevagter - NKL</title>
-  <link rel="stylesheet" href="calendar.css" />
-  <link rel="stylesheet" href="base.css" />
-  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="css/calendar.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
 </head>
 <body>
 
@@ -201,25 +201,65 @@ function ruterMobilVisning(content, daysInMonth, month, year, assignments, event
     const kort = document.createElement("div");
     kort.className = "mobil-dag-kort";
 
-    // ➕ Visning af felter
-    const felter = [
-      { label: "Dato", værdi: `${weekdays[dato.getDay()]} d. ${day}. ${months[month]}` },
-      { label: "Nøglebærer", værdi: assignment?.status === "lukket" ? "–" : (assignment?.navn || "Ingen nøglevagt") },
-      { label: "Status", værdi: assignment?.status === "lukket" ? "🔒 Lukket" : (assignment?.status === "tildelt" ? "🔑 Tildelt" : "Ingen nøglevagt") },
-      {
-        label: "Begivenheder",
-        værdi: dagsEvents.length > 0
-          ? dagsEvents.map(e => `📅 ${e.titel}`).join(", ")
-          : "Ingen begivenheder"
-      }
-    ];
+// ➕ Visning af felter (uden Begivenheder-teksten)
+const felter = [
+  { label: "Dato", værdi: `${weekdays[dato.getDay()]} d. ${day}. ${months[month]}` },
+  { label: "Nøglebærer", værdi: assignment?.status === "lukket" ? "–" : (assignment?.navn || "Ingen nøglevagt") },
+  { label: "Status", værdi: assignment?.status === "lukket" ? "🔒 Lukket" : (assignment?.status === "tildelt" ? "🔑 Tildelt" : "Ingen nøglevagt") },
+];
 
-    felter.forEach(f => {
-      const linje = document.createElement("div");
-      linje.className = "mobil-linje";
-      linje.innerHTML = `<strong>${f.label}:</strong> ${f.værdi}`;
-      kort.appendChild(linje);
-    });
+felter.forEach(f => {
+  const linje = document.createElement("div");
+  linje.className = "mobil-linje";
+  linje.innerHTML = `<strong>${f.label}:</strong> ${f.værdi}`;
+  kort.appendChild(linje);
+});
+
+// 🔗 Begivenheder — klikbare chips
+const eventsLinje = document.createElement("div");
+eventsLinje.className = "mobil-linje";
+const labelEl = document.createElement("strong");
+labelEl.textContent = "Begivenheder:";
+eventsLinje.appendChild(labelEl);
+
+const eventsWrap = document.createElement("div");
+eventsWrap.style.display = "flex";
+eventsWrap.style.flexWrap = "wrap";
+eventsWrap.style.gap = "0.35rem";
+eventsWrap.style.marginTop = "0.25rem";
+
+if (dagsEvents.length === 0) {
+  const tom = document.createElement("span");
+  tom.textContent = " Ingen begivenheder";
+  eventsLinje.appendChild(tom);
+} else {
+  dagsEvents.forEach(ev => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = `📅 ${ev.titel}`;
+    chip.style.padding = "0.35rem 0.5rem";
+    chip.style.border = "1px solid rgba(0,0,0,0.15)";
+    chip.style.borderRadius = "999px";
+    chip.style.fontSize = "0.85rem";
+    chip.style.background = "#fff";
+    chip.style.cursor = "pointer";
+    chip.style.lineHeight = "1";
+    chip.onclick = () => åbnEventModal(ev);
+
+    // Dark mode tweak
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      chip.style.background = "#1f1f1f";
+      chip.style.color = "#e0e0e0";
+      chip.style.border = "1px solid rgba(255,255,255,0.2)";
+    }
+
+    eventsWrap.appendChild(chip);
+  });
+  eventsLinje.appendChild(eventsWrap);
+}
+
+kort.appendChild(eventsLinje);
+
 
     // 🔘 Handling-knapper
     const tdHandling = document.createElement("div");

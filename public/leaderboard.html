@@ -5,8 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>🏆 Leaderboard – NKL</title>
-  <link rel="stylesheet" href="base.css" />
-  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
   <link rel="stylesheet" href="css/animation.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -162,6 +162,12 @@ const rows = visibleIds
   if (myRow) {
     myRow.classList.add('min-raekke');
 
+	  // Scroll til rækken (pænt i midten)
+  myRow.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center'
+	});
+	
     // første bølge
     launchConfetti(myRow, 28);
     launchFireworks(myRow, { bursts: 1, particles: 18 });
@@ -270,5 +276,3 @@ const rows = visibleIds
 
 </body>
 </html>
-
-
