@@ -1,0 +1,17 @@
+# Korrekt MIME-type til manifest
+[[headers]]
+  for = "/public/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
+# SW må ikke gemmes længe i CDN/browser
+[[headers]]
+  for = "/public/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# (Valgfrit) Tillad bredere scope end /public/ (brug kun hvis du faktisk sætter bredere scope)
+[[headers]]
+  for = "/public/sw.js"
+  [headers.values]
+    Service-Worker-Allowed = "/public/"
