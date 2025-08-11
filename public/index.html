@@ -264,6 +264,17 @@
     });
   
   </script>
+	
+  <script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/public/sw.js', { scope: '/public/' })
+      .catch(console.error);
+  });
+}
+</script>
+
 </body>
 </html>
+
 
