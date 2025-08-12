@@ -257,6 +257,11 @@ export async function indsætMenu(bruger) {
 
   document.body.insertAdjacentHTML("afterbegin", navMarkup);
 
+if (!window.__hideOnScrollInitDone) {
+  initHideOnScrollMenu();
+  window.__hideOnScrollInitDone = true;
+}
+
 // Hent leaderboard_deltagelse fra brugeren
 const { data: profilData, error: profilError } = await client
   .from("users")
@@ -492,6 +497,43 @@ export function lytTilNotifikationer(brugerId) {
     .subscribe();
 }
 
+function initHideOnScrollMenu() {
+  const menu = document.getElementById('menu');
+  if (!menu) return;
+
+  let lastY = window.scrollY || 0;
+  let ticking = false;
+
+  // Justér følsomhed – start uden dødzone for at teste
+  let DELTA = 0;      // sæt evt. tilbage til 6 når du ser det virker
+  const MIN_TOP = 10; // først skjul når man ikke er helt i top
+
+  const apply = () => {	
+    const y = window.scrollY || 0;
+    if (Math.abs(y - lastY) < DELTA) { ticking = false; return; }
+
+    if (y > lastY && y > MIN_TOP) {
+      menu.classList.add('hide-on-scroll');
+    } else {
+      menu.classList.remove('hide-on-scroll');
+    }
+
+    lastY = y;
+    ticking = false;
+  };
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(apply);
+      ticking = true;
+    }
+  }, { passive: true });
+
+  // Bonus: vis menu igen ved interaktion
+  ['keydown','focus'].forEach(evt =>
+    window.addEventListener(evt, () => menu.classList.remove('hide-on-scroll'), { passive: true })
+  );
+}
 
 
 
