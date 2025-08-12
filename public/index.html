@@ -30,13 +30,19 @@
     <p id="status" role="status" aria-live="polite"></p>
   </div>
 
-<!-- Install-UI bundbar -->
-<div id="install-bar" class="install-bar hidden">
-  <button id="btn-install" class="install-btn">Tilføj som app (Android)</button>
+<!-- Android: kun en almindelig knap -->
+<div id="androidInstall" class="hidden" style="max-width:420px;margin:1rem auto;">
+  <button id="installBtn" class="install-btn">📲 Tilføj som app</button>
+</div>
 
-  <!-- iOS hint (vises kun på iPhone/iPad) -->
-  <div id="ios-hint" class="ios-hint hidden">
-    <strong>iPhone/iPad:</strong> Åbn siden i <em>Safari</em>, tryk <span class="ios-share">Del</span>, vælg <strong>Føj til hjemmeskærm</strong>.
+<!-- iOS: kun den blå bundbar med guide -->
+<div id="iosInstallBar" class="install-bar hidden" role="region" aria-label="Tilføj som app (iPhone/iPad)">
+  <div class="install-bar__content">
+    <span class="install-bar__title">Tilføj NKL som app</span>
+    <div class="ios-hint">
+      Åbn i <em>Safari</em>, tryk <span class="ios-share">Del</span> → <strong>Føj til hjemmeskærm</strong>.
+    </div>
+    <button id="iosDismiss" class="install-dismiss" type="button">Forstået</button>
   </div>
 </div>
 
@@ -262,72 +268,81 @@
   </script>
 
 <script>
-(function() {
-  const installBar   = document.getElementById('install-bar');
-  const btnInstall   = document.getElementById('btn-install');
-  const iosHint      = document.getElementById('ios-hint');
+(function () {
+  const androidWrap = document.getElementById('androidInstall');
+  const installBtn  = document.getElementById('installBtn');
+  const iosBar      = document.getElementById('iosInstallBar');
+  const iosDismiss  = document.getElementById('iosDismiss');
+
   let deferredPrompt = null;
 
-  // Er vi allerede "installeret"/kører som PWA? -> Skjul alt
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                     || window.navigator.standalone === true; // iOS
-
-  // Simpel UA-detektion til iOS (bruges kun til at vise guiden)
-  const ua = window.navigator.userAgent || '';
+  const ua = navigator.userAgent || '';
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const iosDismissed = localStorage.getItem('ios_install_dismissed') === '1';
 
-  // Vises kun hvis: ikke standalone + enten Android med beforeinstallprompt eller iOS
-  function maybeShowBar() {
+  // iOS: vis KUN baren (ingen Android-knap)
+  function showIOSBar() {
+    if (isStandalone || iosDismissed) return;
+    iosBar.classList.remove('hidden');
+    androidWrap.classList.add('hidden');
+  }
+
+  // Android: vis KUN knappen (ingen blå bar)
+  function showAndroidButton(active) {
     if (isStandalone) return;
-
-    // Android: vis bar hvis vi har en deferredPrompt
-    if (deferredPrompt) {
-      installBar.classList.remove('hidden');
-      btnInstall.classList.remove('hidden');
-      iosHint.classList.add('hidden');
-      return;
-    }
-
-    // iOS: vis guide (kun i Safari giver Add to Home Screen fuld PWA-oplevelse)
-    if (isIOS) {
-      installBar.classList.remove('hidden');
-      btnInstall.classList.add('hidden');     // knap er kun til Android
-      iosHint.classList.remove('hidden');
+    iosBar.classList.add('hidden');
+    if (active) {
+      installBtn.disabled = false;
+      installBtn.textContent = '📲 Tilføj som app';
+      androidWrap.classList.remove('hidden');
+    } else {
+      // Hvis eventet ikke er klar, viser vi ingenting (Chrome har "Installér app" i menuen)
+      androidWrap.classList.add('hidden');
     }
   }
 
-  // Fang Androids "før-installations" event og gem det til senere (vores knap)
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();          // vi styrer selv prompten
-    deferredPrompt = e;
-    maybeShowBar();
+  // iOS-guide “forstået”
+  iosDismiss?.addEventListener('click', () => {
+    localStorage.setItem('ios_install_dismissed', '1');
+    iosBar.classList.add('hidden');
   });
 
-  // Klik på Android-knappen -> vis prompt
-  btnInstall?.addEventListener('click', async () => {
+  // Android install flow
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (isAndroid) showAndroidButton(true);
+  });
+
+  installBtn?.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    installBtn.disabled = true;
     try {
-      if (!deferredPrompt) return;
       deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      // Uanset valg skjuler vi baren – viser den igen senere, hvis browseren tillader
-      installBar.classList.add('hidden');
+      await deferredPrompt.userChoice; // accepted/dismissed
+    } finally {
       deferredPrompt = null;
-      // (Valgfrit) Track choice.outcome === 'accepted' / 'dismissed'
-    } catch (err) {
-      console.error('Install prompt error:', err);
+      androidWrap.classList.add('hidden');
+      installBtn.disabled = false;
     }
   });
 
-  // Når app’en er installeret -> skjul baren
   window.addEventListener('appinstalled', () => {
-    installBar.classList.add('hidden');
+    iosBar.classList.add('hidden');
+    androidWrap.classList.add('hidden');
     deferredPrompt = null;
   });
 
-  // Hvis browseren ikke fyrer beforeinstallprompt (fx Chrome kan have “install”-menu),
-  // kan du stadig vise en diskret info – vi viser kun iOS guide by default.
-  document.addEventListener('DOMContentLoaded', maybeShowBar);
+  // Første visning – vælg præcist ÉN af dem
+  document.addEventListener('DOMContentLoaded', () => {
+    if (isIOS) showIOSBar();             // iOS → vis bar
+    // Android-knappen vises først, når beforeinstallprompt faktisk fyrer
+  });
 })();
 </script>
+
 </body>
 </html>
