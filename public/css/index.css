@@ -1,0 +1,45 @@
+/* --- Formular / basis, fra din snippet --- */
+.login-wrapper { max-width: 420px; margin: 2rem auto; padding: 1.5rem; }
+input[type="email"], input[type="password"], input[type="text"], button {
+  display: block; width: 100%; margin-bottom: 1rem; padding: 0.6rem;
+  font-size: 1rem; border-radius: 12px; border: 1px solid #d1d5db;
+}
+button { background-color: #0056b3; color: #fff; font-weight: 700; cursor: pointer; border: none; }
+button[disabled] { opacity: .7; cursor: not-allowed; }
+button:hover:not([disabled]) { background-color: #064d99; }
+.error { color: #d93025; font-weight: 600; margin-top: .5rem; }
+.hidden { display: none !important; }
+.info-text { font-size: .95rem; }
+.input-fejl { border-color: #d93025 !important; }
+.samtykke-tekst { margin: .5rem 0 1rem; }
+
+/* --- Install bar (Android) --- */
+.install-bar {
+  position: fixed; inset-inline: 0; bottom: 0;
+  display: flex; gap: .75rem; align-items: center; justify-content: center;
+  padding: .75rem .9rem; background: #0056b3; color: #fff; z-index: 9999;
+  box-shadow: 0 -6px 16px rgba(0,0,0,.15);
+  flex-wrap: wrap;
+}
+.install-bar__content { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.install-bar__title { font-weight: 700; }
+.install-btn {
+  border: 0; padding: .6rem .9rem; font-weight: 700; border-radius: .75rem;
+  background: #fff; color: #0e7490; cursor: pointer;
+}
+.install-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.install-dismiss {
+  background: transparent; color: #fff; border: 2px solid rgba(255,255,255,.7);
+  padding: .45rem .75rem; border-radius: .75rem; font-weight: 600;
+}
+.install-dismiss:hover { background: rgba(255,255,255,.1); }
+
+/* --- iOS-hint (din guide) --- */
+.ios-hint { font-size: .95rem; }
+.ios-share {
+  display: inline-block; padding: .1rem .4rem; border-radius: .35rem;
+  background: rgba(255,255,255,.2);
+}
+@media (min-width: 640px){
+  .install-bar { justify-content: space-between; }
+}
