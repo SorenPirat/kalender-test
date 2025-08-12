@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html lang="da">
 <head>
-  <link rel="manifest" href="/public/manifest.webmanifest">
-  <meta name="theme-color" content="#0ea5e9">
-  <!-- iOS -->
-  <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0ea5e9">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>NKL Login</title>
@@ -28,6 +27,23 @@
     .info-text { font-size: .95rem; }
     .input-fejl { border-color: #d93025 !important; }
     .samtykke-tekst { margin: .5rem 0 1rem; }
+	
+	.install-bar {
+    position: fixed; inset-inline: 0; bottom: 0;
+    display: flex; gap: .75rem; align-items: center; justify-content: center;
+    padding: .75rem; background: #0ea5e9; color: #fff; z-index: 9999;
+    box-shadow: 0 -6px 16px rgba(0,0,0,.15);
+    flex-wrap: wrap;
+  }
+  .install-btn {
+    border: 0; padding: .6rem .9rem; font-weight: 600; border-radius: .75rem;
+    background: #fff; color: #0e7490; cursor: pointer;
+  }
+  .ios-hint { font-size: .95rem; }
+  .ios-share {
+    display: inline-block; padding: .1rem .4rem; border-radius: .35rem;
+    background: rgba(255,255,255,.2);
+  }
   </style>
 </head>
 <body>
@@ -44,6 +60,17 @@
 
     <p id="status" role="status" aria-live="polite"></p>
   </div>
+
+<!-- Install-UI bundbar -->
+<div id="install-bar" class="install-bar hidden">
+  <button id="btn-install" class="install-btn">Tilføj som app (Android)</button>
+
+  <!-- iOS hint (vises kun på iPhone/iPad) -->
+  <div id="ios-hint" class="ios-hint hidden">
+    <strong>iPhone/iPad:</strong> Åbn siden i <em>Safari</em>, tryk <span class="ios-share">Del</span>, vælg <strong>Føj til hjemmeskærm</strong>.
+  </div>
+</div>
+
 
   <script>
     // ===== Supabase init =====
@@ -264,17 +291,74 @@
     });
   
   </script>
-	
-  <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/public/sw.js', { scope: '/public/' })
-      .catch(console.error);
-  });
-}
-</script>
 
+<script>
+(function() {
+  const installBar   = document.getElementById('install-bar');
+  const btnInstall   = document.getElementById('btn-install');
+  const iosHint      = document.getElementById('ios-hint');
+  let deferredPrompt = null;
+
+  // Er vi allerede "installeret"/kører som PWA? -> Skjul alt
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                    || window.navigator.standalone === true; // iOS
+
+  // Simpel UA-detektion til iOS (bruges kun til at vise guiden)
+  const ua = window.navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // Vises kun hvis: ikke standalone + enten Android med beforeinstallprompt eller iOS
+  function maybeShowBar() {
+    if (isStandalone) return;
+
+    // Android: vis bar hvis vi har en deferredPrompt
+    if (deferredPrompt) {
+      installBar.classList.remove('hidden');
+      btnInstall.classList.remove('hidden');
+      iosHint.classList.add('hidden');
+      return;
+    }
+
+    // iOS: vis guide (kun i Safari giver Add to Home Screen fuld PWA-oplevelse)
+    if (isIOS) {
+      installBar.classList.remove('hidden');
+      btnInstall.classList.add('hidden');     // knap er kun til Android
+      iosHint.classList.remove('hidden');
+    }
+  }
+
+  // Fang Androids "før-installations" event og gem det til senere (vores knap)
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();          // vi styrer selv prompten
+    deferredPrompt = e;
+    maybeShowBar();
+  });
+
+  // Klik på Android-knappen -> vis prompt
+  btnInstall?.addEventListener('click', async () => {
+    try {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      // Uanset valg skjuler vi baren – viser den igen senere, hvis browseren tillader
+      installBar.classList.add('hidden');
+      deferredPrompt = null;
+      // (Valgfrit) Track choice.outcome === 'accepted' / 'dismissed'
+    } catch (err) {
+      console.error('Install prompt error:', err);
+    }
+  });
+
+  // Når app’en er installeret -> skjul baren
+  window.addEventListener('appinstalled', () => {
+    installBar.classList.add('hidden');
+    deferredPrompt = null;
+  });
+
+  // Hvis browseren ikke fyrer beforeinstallprompt (fx Chrome kan have “install”-menu),
+  // kan du stadig vise en diskret info – vi viser kun iOS guide by default.
+  document.addEventListener('DOMContentLoaded', maybeShowBar);
+})();
+</script>
 </body>
 </html>
-
-
