@@ -1,10 +1,10 @@
 {
   "id": "/public/",
-  "name": "Nøglevagter",
-  "short_name": "Nøglevagter",
+  "name": "Næstved Klatreklubs App",
+  "short_name": "NKL",
   "start_url": "/public/?source=pwa",
   "scope": "/public/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#ffffff",
   "theme_color": "#0ea5e9",
   "icons": [
@@ -22,3 +22,4 @@
     }
   ]
 }
+
