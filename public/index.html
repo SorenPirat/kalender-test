@@ -2,10 +2,10 @@
 <html lang="da">
 <head>
   <link rel="manifest" href="/public/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0ea5e9">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>NKL Login</title>
@@ -35,14 +35,20 @@
   <button id="installBtn" class="install-btn">📲 Tilføj som app</button>
 </div>
 
-<!-- iOS: kun den blå bundbar med guide -->
-<div id="iosInstallBar" class="install-bar hidden" role="region" aria-label="Tilføj som app (iPhone/iPad)">
-  <div class="install-bar__content">
-    <span class="install-bar__title">Tilføj NKL som app</span>
-    <div class="ios-hint">
-      Åbn i <em>Safari</em>, tryk <span class="ios-share">Del</span> → <strong>Føj til hjemmeskærm</strong>.
-    </div>
-    <button id="iosDismiss" class="install-dismiss" type="button">Forstået</button>
+
+<!-- iOS-install bar -->
+<div id="iosInstallBar" class="hidden ios-bar" role="region" aria-label="Føj til hjemmeskærm vejledning">
+  <div class="ios-bar-title">📲 Tilføj NKL som app</div>
+
+  <div class="ios-steps">
+    <span class="ios-instr">Åbn i <i>Safari</i>, tryk</span>
+    <svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v8"/><path d="M8.5 6.5L12 3l3.5 3.5"/><path d="M6 10v7a3 3 0 0 0 3 3h6a 3 3 0 0 0 3-3v-7"/>
+      </g>
+    </svg>
+    <span class="ios-instr"><strong>Føj til hjemmeskærm</strong></span>
+
   </div>
 </div>
 
@@ -303,12 +309,6 @@
       androidWrap.classList.add('hidden');
     }
   }
-
-  // iOS-guide “forstået”
-  iosDismiss?.addEventListener('click', () => {
-    localStorage.setItem('ios_install_dismissed', '1');
-    iosBar.classList.add('hidden');
-  });
 
   // Android install flow
   window.addEventListener('beforeinstallprompt', (e) => {
