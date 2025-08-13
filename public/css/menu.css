@@ -24,6 +24,14 @@ body {
   padding: 0.4rem 0.75rem;
   margin: 0.25rem 0.5rem;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 200ms ease;
+  will-change: transform;
+}
+
+/* Brug calc, så den forsvinder HELT (inkl. margin/padding/skyggeslør) */
+#menu.hide-on-scroll {
+  transform: translate3d(0, calc(-100% - 32px), 0) !important;
+  pointer-events: none;
 }
 
 #menu:not(.open) {
@@ -161,6 +169,7 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
 
 #notifikations-badge {
   position: absolute;

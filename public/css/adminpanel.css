@@ -689,7 +689,7 @@ th.sortable.sorted-desc::after {
 
 .ikon-btn:hover {
   background: #2a2a2a;
-
+}
 #bruger-søg {
   background: #2a2a2a;
   color: #eee;
@@ -698,7 +698,7 @@ th.sortable.sorted-desc::after {
 
 #bruger-søg::placeholder {
   color: #999;
-
+}
 #user-autocomplete {
   background: #2a2a2a;
   color: #eee;
