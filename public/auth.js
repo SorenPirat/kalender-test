@@ -396,8 +396,20 @@ setTimeout(() => {
   document.addEventListener("keydown", onKey);
 
   // Luk ved scroll (både hoved- og submenu)
-  const onScroll = () => closeMainMenu();
-  window.addEventListener("scroll", onScroll, { passive: true });
+  const onScroll = () => {
+  // Ignorér scroll lige efter åbning (inerti/efterslip)
+  if (performance.now() < ignoreScrollUntil) return;
+
+  // Luk kun hvis menuen ER åben, og man scroller NED “et stykke”
+  if (menuWrapper.classList.contains("open")) {
+    const y = getY();
+    if (y > openedAtY + 40) { // 40px tolerance; justér efter smag
+      closeMainMenu();
+    }
+  }
+};
+window.addEventListener("scroll", onScroll, { passive: true });
+
 
   // (Valgfrit) Luk hvis vi resizer til desktop
   window.addEventListener("resize", () => {
@@ -534,6 +546,7 @@ function initHideOnScrollMenu() {
     window.addEventListener(evt, () => menu.classList.remove('hide-on-scroll'), { passive: true })
   );
 }
+
 
 
 
