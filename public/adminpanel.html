@@ -30,17 +30,17 @@
     <h3>👤 Brugere fordelt på roller</h3>
     <div id="roller-visning">
       <section class="rolle-sektion">
-        <h4>🛠️ Admin</h4>
+        <h4>🛠️ Admins</h4>
         <ul id="admin-liste"></ul>
       </section>
 
       <section class="rolle-sektion">
-        <h4>🔑 Nøglebærer</h4>
+        <h4>🔑 Nøglebærere</h4>
         <ul id="noeglebaerer-liste"></ul>
       </section>
 
       <section class="rolle-sektion">
-        <h4>🎉 Eventmaker</h4>
+        <h4>🎉 Eventmakers</h4>
         <ul id="eventmaker-liste"></ul>
       </section>
       
@@ -50,8 +50,18 @@
       </section>
 
       <section class="rolle-sektion">
-        <h4>📋 Bestyrelsesmedlem</h4>
+        <h4>📋 Bestyrelsesmedlemmer</h4>
         <ul id="bestyrelsesmedlem-liste"></ul>
+      </section>
+	  
+	  <section class="rolle-sektion">
+        <h4>👨🏻‍🎓 Instruktører</h4>
+        <ul id="instruktør-liste"></ul>
+      </section>
+	  
+	  <section class="rolle-sektion">
+        <h4>💪 Trænere</h4>
+        <ul id="træner-liste"></ul>
       </section>
     </div>
   </section>
@@ -145,6 +155,8 @@
       <label><input type="checkbox" name="roller" value="klubmedlem"> klubmedlem</label>
       <label><input type="checkbox" name="roller" value="eventmaker"> eventmaker</label>
       <label><input type="checkbox" name="roller" value="nøglebærer"> nøglebærer</label>
+	  <label><input type="checkbox" name="roller" value="instruktør"> instruktør</label>
+	  <label><input type="checkbox" name="roller" value="træner"> træner</label>
       <label><input type="checkbox" name="roller" value="admin"> admin</label>
       <label><input type="checkbox" name="roller" value="bestyrelsesmedlem"> bestyrelsesmedlem</label>
       <label><input type="checkbox" name="roller" value="rutebygger"> rutebygger</label>
@@ -219,6 +231,8 @@
     const eventmakers = data.filter(u => u.rolle?.includes('eventmaker'));
     const rutebyggere = data.filter(u => u.rolle?.includes('rutebygger'));
     const bestyrelsesmedlemmer = data.filter(u => u.rolle?.includes('bestyrelsesmedlem'));
+	const instruktører = data.filter(u => u.rolle?.includes('instruktør'));
+	const trænere = data.filter(u => u.rolle?.includes('træner'));
 
     const renderList = (elementId, brugere) => {
       const ul = document.getElementById(elementId);
@@ -230,6 +244,8 @@
     renderList('eventmaker-liste', eventmakers);
     renderList('rutebygger-liste', rutebyggere);
     renderList('bestyrelsesmedlem-liste', bestyrelsesmedlemmer);
+	renderList('instruktør-liste', instruktører);
+	renderList('træner-liste', trænere);
   }
 
   // ====================== MEDLEMMER =======================

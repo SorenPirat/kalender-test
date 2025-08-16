@@ -237,6 +237,7 @@ export async function indsætMenu(bruger) {
     <li><a href="public.html">📅 Kalender</a></li>
     <li><a href="kontakt.html">📞 Kontakt</a></li>
     <li><a href="ruteoversigt.html">🧗 Ruteoversigt</a></li>
+	<li><a href="instructor.html">👨🏻‍🎓 Instruktør</a></li>
 
     ${aktiviteterMarkup}
 
@@ -281,6 +282,7 @@ const profilMarkup = `
       <span id="badge-profil" class="badge ${antalNotifikationer > 0 ? "" : "skjult"}">${antalNotifikationer || ""}</span>
     </a></li>
     <li><a href="minelog.html">📘 Mine logs</a></li>
+	<li><a href="beviser.html">📜 Mine beviser</a></li>
     <li>
       <label>
         <input type="checkbox" id="push-toggle"> 🔔Notifikationer
@@ -345,11 +347,20 @@ setTimeout(() => {
     }
   };
 
-  const openMainMenu = () => {
-    menuLinks.classList.add("show");
-    menuWrapper.classList.add("open");
-    menuToggleBtn.setAttribute("aria-expanded", "true");
-  };
+const openMainMenu = () => {
+  menuLinks.classList.add("show");
+  menuWrapper.classList.add("open");
+  menuToggleBtn.setAttribute("aria-expanded", "true");
+
+  // Undgå hide mens åben
+  menuWrapper.classList.remove('hide-on-scroll');
+
+  // Ignorér scroll fra layout/reflow lige når den åbner
+  userScrolling = false;
+  scrollCloseArmed = false;
+  setTimeout(() => { scrollCloseArmed = true; }, 250); // 250ms buffer
+};
+
 
   const closeMainMenu = () => {
     menuLinks.classList.remove("show");
@@ -375,7 +386,8 @@ setTimeout(() => {
   }
 
   // Klik inde i menuen skal ikke lukke den
-  menuWrapper.addEventListener("click", (e) => e.stopPropagation());
+	menuWrapper.addEventListener("click", (e) => e.stopPropagation());
+	menuWrapper.addEventListener("pointerdown", (e) => e.stopPropagation());
 
   // Luk ved klik/touch udenfor
   const onOutside = (e) => {
@@ -395,20 +407,19 @@ setTimeout(() => {
   };
   document.addEventListener("keydown", onKey);
 
-  // Luk ved scroll (både hoved- og submenu)
-  const onScroll = () => {
-  // Ignorér scroll lige efter åbning (inerti/efterslip)
-  if (performance.now() < ignoreScrollUntil) return;
+// --- Luk ved scroll KUN når brugeren faktisk scroller (wheel/touch), ikke ved reflow ---
+let userScrolling = false;
+let scrollCloseArmed = false;
 
-  // Luk kun hvis menuen ER åben, og man scroller NED “et stykke”
-  if (menuWrapper.classList.contains("open")) {
-    const y = getY();
-    if (y > openedAtY + 40) { // 40px tolerance; justér efter smag
-      closeMainMenu();
-    }
+window.addEventListener('wheel', () => { userScrolling = true; }, { passive: true });
+window.addEventListener('touchmove', () => { userScrolling = true; }, { passive: true });
+
+// Luk kun hvis menu er åben, brugeren scroller, og vi er forbi åbnings-bufferen
+window.addEventListener('scroll', () => {
+  if (menuWrapper.classList.contains('open') && userScrolling && scrollCloseArmed) {
+    closeMainMenu();
   }
-};
-window.addEventListener("scroll", onScroll, { passive: true });
+}, { passive: true });
 
 
   // (Valgfrit) Luk hvis vi resizer til desktop
@@ -448,11 +459,14 @@ window.visProfilMenu = function () {
   const bruger = JSON.parse(localStorage.getItem("bruger"));
   document.getElementById("profil-navn").textContent = `👤 ${bruger?.navn || "Ukendt"}`;
   document.getElementById("push-toggle").checked = localStorage.getItem("push") === "true";
+  panel.classList.remove("profil-skjult");
   panel.classList.add("vis");
 };
 
 window.lukProfilMenu = function () {
-  document.getElementById("profil-panel").classList.remove("vis");
+  const panel = document.getElementById("profil-panel");
+  panel.classList.remove("vis");
+  panel.classList.add("profil-skjult");
 };
 
 // Åben/luk profil-vindue
@@ -481,16 +495,6 @@ setTimeout(() => {
   document.getElementById("push-toggle")?.addEventListener("change", e => {
     localStorage.setItem("push", e.target.checked);
   });
-
-  document.getElementById("dark-toggle")?.addEventListener("change", e => {
-    localStorage.setItem("dark", e.target.checked);
-    document.documentElement.classList.toggle("dark-mode", e.target.checked);
-  });
-
-  document.getElementById("language-select")?.addEventListener("change", e => {
-    localStorage.setItem("language", e.target.value);
-    location.reload();
-  });
 }, 500);
 
 
@@ -517,12 +521,19 @@ function initHideOnScrollMenu() {
   let ticking = false;
 
   // Justér følsomhed – start uden dødzone for at teste
-  let DELTA = 0;      // sæt evt. tilbage til 6 når du ser det virker
+  let DELTA = 6;      // sæt evt. tilbage til 6 når du ser det virker
   const MIN_TOP = 10; // først skjul når man ikke er helt i top
 
   const apply = () => {	
     const y = window.scrollY || 0;
     if (Math.abs(y - lastY) < DELTA) { ticking = false; return; }
+
+ if (menu.classList.contains('open')) {
+   menu.classList.remove('hide-on-scroll'); 
+   lastY = y;
+   ticking = false;
+   return;
+ }
 
     if (y > lastY && y > MIN_TOP) {
       menu.classList.add('hide-on-scroll');
@@ -546,7 +557,6 @@ function initHideOnScrollMenu() {
     window.addEventListener(evt, () => menu.classList.remove('hide-on-scroll'), { passive: true })
   );
 }
-
 
 
 

@@ -56,6 +56,19 @@
 	const frameInterval = 1000 / ønsketFPS;
 
 
+// helpers
+const gradRækkefølge = ["4","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b","7b+","7c"];
+function basePointsForGrad(g){ 
+const k = gradRækkefølge.indexOf((g||"").toLowerCase()); return k<0?0:Math.round(5*Math.pow(1.32,k)); }
+function tryMultiplier(v){
+  v = (v||"").toLowerCase();
+  if (v==="flash") return 1.25;
+  if (v==="2 forsøg") return 1.12;
+  if (v==="3 forsøg") return 1.06;
+  if (v==="+5 forsøg") return 0.85;
+  return 1.00;
+}
+
 async function hentLogbog(user_id) {
 const { data, error } = await client
   .from("rutelog")
@@ -65,6 +78,8 @@ const { data, error } = await client
     kommentar,
     forsøg,
     bedømmelse,
+	egen_grad,
+	earned_points,
     ruter (
       id,
       navn,
@@ -150,6 +165,11 @@ const { data, error } = await client
   });
 }
 
+function hentMinGradering(log) {
+  // Primært: brug kolonnen egen_grad
+  if (log.egen_grad && log.egen_grad.trim()) return log.egen_grad.trim();
+}
+
 async function visGradDetaljer(grad) {
   const container = document.getElementById("gradDetaljer");
   container.innerHTML = `<h3>🧗 Ruter i grad: ${grad}</h3>`;
@@ -160,6 +180,9 @@ async function visGradDetaljer(grad) {
     const div = document.createElement("div");
     div.className = "logpost";
     const rute = log.ruter;
+	const base = basePointsForGrad(rute.grad);
+	const beregnet = Math.max(1, Math.round(base * tryMultiplier(log.forsøg)));
+	const points = Number.isFinite(log.earned_points) ? log.earned_points : beregnet;
     const dato = new Date(log.logget_dato).toLocaleDateString("da-DK");
 
     div.innerHTML = `
@@ -167,7 +190,9 @@ async function visGradDetaljer(grad) {
       🗓️ ${dato}<br/>
       🔁 ${log.forsøg || "-"}<br/>
       💬 ${log.kommentar || ""}<br/>
+	  🏅 Point: <strong>${points}</strong><br/>
       🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
+	  🧮 Min gradering: ${hentMinGradering(log) || "-"}<br/>
        ⭐ Din rating: ${"⭐".repeat(log.bedømmelse)}<br/>
     `;
 
@@ -341,7 +366,6 @@ window.lukRuteModal = function () {
   if (pulsAnimationId) cancelAnimationFrame(pulsAnimationId);
   document.getElementById("rute-modal").classList.add("skjul");
 };
-
 
 
   </script>

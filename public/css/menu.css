@@ -31,7 +31,11 @@ body {
 /* Brug calc, så den forsvinder HELT (inkl. margin/padding/skyggeslør) */
 #menu.hide-on-scroll {
   transform: translate3d(0, calc(-100% - 32px), 0) !important;
-  pointer-events: none;
+}
+
+.profil-skjult {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 #menu:not(.open) {

@@ -61,6 +61,10 @@
 		<option value="">Vælg</option>
 	</select>
 </label>
+<label>Din gradering:
+  <input id="logEgenGrad" type="text" placeholder="fx 6A+ (boulder) eller 6b (rute)" list="gradForslag" />
+  <datalist id="gradForslag"></datalist>
+</label>
 <div id="bedømmelseContainer">
   <span class="star" data-værdi="1">★</span>
   <span class="star" data-værdi="2">★</span>
@@ -78,13 +82,6 @@
     </div>
   </div>
 </div>
-
-
-
-
-
-
-
 
   <script type="module">
 import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
@@ -360,6 +357,11 @@ function visRute(rute) {
     ruteValg.parentNode.insertBefore(logKnap, ruteValg.nextSibling);
   }
   logKnap.onclick = () => logRute(rute.id);
+  
+  // Forbered forsøg-dropdown ud fra den viste rute
+const kategoriTilForsøg = rute?.billede_id || document.getElementById("vægValg")?.value || "sektor-a";
+opdaterForsøgsvalg(kategoriTilForsøg);
+
 }
 
 function tegnGlød(polygon, farve = "white", puls = 1) {
@@ -438,25 +440,80 @@ function hexOrNamedToRgba(color, alpha) {
   }
 }
 
+function erBoulderKategori(id) {
+  return ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(id);
+}
+
+function opdaterGradForslag(kategori, aktuelGrad) {
+  const datalist = document.getElementById("gradForslag");
+  const input = document.getElementById("logEgenGrad");
+  datalist.innerHTML = "";
+
+  const forslagBoulder = ["4","4+","5","5+","6A","6A+","6B","6B+","6C","6C+","7A","7A+","7B","7B+","7C","7C+","8A"];
+  const forslagRute    = ["4","4+","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b","7b+","7c","7c+"];
+
+  const liste = erBoulderKategori(kategori) ? forslagBoulder : forslagRute;
+  for (const g of liste) {
+    const opt = document.createElement("option");
+    opt.value = g;
+    datalist.appendChild(opt);
+  }
+  // Prefill med rute.grad hvis den findes
+  input.value = aktuelGrad || "";
+}
 
 function opdaterForsøgsvalg(kategori) {
   const select = document.getElementById("logForsøg");
+  if (!select) return; // hvis modal ikke er i DOM endnu
+
+  // Reset til kun placeholder
   select.innerHTML = '<option value="">Vælg</option>';
 
-  const boulderKategorier = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"];
-  const muligheder = boulderKategorier.includes(kategori)
+  const erBoulder = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(kategori);
+
+  const muligheder = erBoulder
     ? ["Flash", "2 forsøg", "3 forsøg", "+5 forsøg"]
     : ["Onsight", "Redpoint", "Toprope"];
 
-  muligheder.forEach(valg => {
-    const option = document.createElement("option");
-    option.value = valg.toLowerCase();
-    option.textContent = valg;
-    select.appendChild(option);
-  });
+  for (const tekst of muligheder) {
+    const opt = document.createElement("option");
+    opt.value = tekst.toLowerCase();
+    opt.textContent = tekst;
+    select.appendChild(opt);
+  }
 }
 
+
 let aktivRuteId = null;
+
+const gradRækkefølge = [
+  "4","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+",
+  "7a","7a+","7b","7b+","7c"
+];
+
+function basePointsForGrad(grad){
+  const k = gradRækkefølge.indexOf((grad||"").toLowerCase());
+  if (k < 0) return 0;
+  return Math.round(5 * Math.pow(1.32, k));
+}
+
+function multiplierForAttempt(forsøg, erBoulder){
+  const v = (forsøg||"").toLowerCase();
+  if (erBoulder){
+    // Boulder: Flash/2/3/+5
+    if (v === "flash")      return 1.25;
+    if (v === "2 forsøg")   return 1.12;
+    if (v === "3 forsøg")   return 1.06;
+    if (v === "+5 forsøg")  return 0.85;
+    return 1.00;
+  } else {
+    // Rute: Onsight/Redpoint/Toprope
+    if (v === "onsight")    return 1.25; // svarer til Flash
+    if (v === "redpoint")   return 1.12;
+    if (v === "toprope")    return 0.85;
+    return 1.00;
+  }
+}
 
 window.logRute = async function(ruteId) {
   const bruger = JSON.parse(localStorage.getItem("bruger"));
@@ -492,10 +549,10 @@ window.logRute = async function(ruteId) {
   document.querySelectorAll("#bedømmelseContainer .star").forEach(s => s.classList.remove("selected"));
   document.getElementById("logModal").classList.remove("skjul");
 
-  const rute = alleRuter.find(r => r.id == ruteId);
-  if (rute?.billede_id) {
-    opdaterForsøgsvalg(rute.billede_id);
-  }
+const rute = alleRuter.find(r => r.id == ruteId);
+const kategoriTilForsøg = rute?.billede_id || document.getElementById("vægValg")?.value || "sektor-a";
+opdaterForsøgsvalg(kategoriTilForsøg);
+
 };
 
 document.querySelectorAll("#bedømmelseContainer .star").forEach(stjerne => {
@@ -515,8 +572,8 @@ window.lukLogModal = function() {
 };
 
 document.getElementById("gemLogKnap").addEventListener("click", async () => {
-  const kommentar = document.getElementById("logKommentar").value.trim();
-  const forsøg = document.getElementById("logForsøg").value;
+  const kommentar  = document.getElementById("logKommentar").value.trim();
+  const forsøg     = document.getElementById("logForsøg").value;
   const bedømmelse = document.getElementById("logBedømmelse").value.trim();
 
   const bruger = JSON.parse(localStorage.getItem("bruger"));
@@ -527,6 +584,20 @@ document.getElementById("gemLogKnap").addEventListener("click", async () => {
     return;
   }
 
+  // slå ruten op (for grad/points/kategori)
+  const rute = alleRuter.find(r => r.id == aktivRuteId);
+  const billedeId = rute?.billede_id || "";
+  const erBoulder = ["sektor-a","sektor-b","sektor-c","sektor-d"].includes(billedeId);
+
+  // base points: brug rute.points hvis sat, ellers beregn fra grad
+  const base = Number.isFinite(rute?.points) ? rute.points : basePointsForGrad(rute?.grad);
+
+  // multiplikator ud fra valgt forsøg og disciplin (boulder/rute)
+  const mult = multiplierForAttempt(forsøg, erBoulder);
+
+  // endelige point (mindst 1)
+  const earned_points = Math.max(1, Math.round(base * mult));
+
   const { error } = await client
     .from("rutelog")
     .insert([{
@@ -534,18 +605,16 @@ document.getElementById("gemLogKnap").addEventListener("click", async () => {
       rute_id: aktivRuteId,
       logget_dato: new Date().toISOString(),
       kommentar,
-      forsøg,
-      bedømmelse
+      forsøg,        // "flash"/"2 forsøg"/"3 forsøg"/"+5 forsøg" eller "onsight"/"redpoint"/"toprope"
+      bedømmelse,
+      earned_points  // 👈 gem de beregnede point
     }]);
 
   if (error) {
     console.error("❌ Fejl:", error);
     alert("Kunne ikke gemme log.");
   } else {
-    const rute = alleRuter.find(r => r.id == aktivRuteId);
-    const billedeId = rute?.billede_id || "";
-    const erBoulder = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(billedeId);
-    alert(`✅ ${erBoulder ? "Boulderen" : "Ruten"} blev logget!`);
+    alert(`✅ ${erBoulder ? "Boulderen" : "Ruten"} blev logget! · ${earned_points} point`);
     lukLogModal();
   }
 });

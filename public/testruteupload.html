@@ -138,6 +138,7 @@ if (brugerNavnEl) {
     }
   });
 
+
 async function hentRuter() {
   const { data, error } = await client
     .from("ruter")
@@ -444,6 +445,17 @@ async function konverterOgUpload(fil, kategori) {
   }
 }
 
+const gradRækkefølge = [
+  "4","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+",
+  "7a","7a+","7b","7b+","7c"
+];
+
+function beregnBasePoints(grad) {
+  const k = gradRækkefølge.indexOf((grad||"").toLowerCase());
+  if (k < 0) return 0;
+  return Math.round(5 * Math.pow(1.32, k));
+}
+
 function opdaterOverskrift() {
   const overskrift = document.getElementById("ruteOverskrift");
   const sektor = document.getElementById("billedeIdValg").value;
@@ -596,6 +608,9 @@ const data = {
   rutebygger,
   aktiv: document.getElementById("ruteAktiv").checked
 };
+
+// beregn points automatisk ud fra grad
+data.points = beregnBasePoints(data.grad);
 
     let error;
 

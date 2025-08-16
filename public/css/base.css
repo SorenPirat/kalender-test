@@ -147,6 +147,27 @@ nav a:hover {
   display: none !important;
 }
 
+/* Wrapper */
+.preview-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Begge canvases skalerer pænt i bredde */
+.preview-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Desktop: overlay signatur oven på PDF */
+#signaturePad {
+  position: absolute;
+  inset: 0;            /* top/right/bottom/left: 0 */
+  z-index: 2;
+}
+
 .spinner {
   width: 64px;
   height: 64px;
@@ -642,6 +663,19 @@ td:last-child button:last-child {
   border-radius: 10px;
 }
 
+  .mm-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center; z-index:2000;
+  }
+  .mm-boks{
+    background:#fff; color:#111; max-width:640px; width:min(92vw,640px);
+    border-radius:14px; padding:1rem 1.25rem; box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  .mm-luk{float:right; border:none; background:transparent; font-size:1.1rem; cursor:pointer}
+  .mm-grid{
+    display:grid; gap:.5rem .75rem; grid-template-columns: 1fr 2fr;
+  }
+  .mm-label{opacity:.7}
 
 /* === RESPONSIVT: MOBIL === */
 @media screen and (max-width: 600px) {
@@ -657,6 +691,17 @@ td:last-child button:last-child {
   nav a {
     font-size: 1rem;
     padding: 0.8rem;
+  }
+  
+    #signaturePad {
+    position: static;  /* ud af overlay */
+    width: 100%;
+    /* giv signaturfladen en god højde til fingre */
+    height: 220px;     /* justér efter smag */
+    border: 2px dashed rgba(0,0,0,.25);
+    border-radius: 8px;
+    background: rgba(0,0,0,.02);
+    margin-top: .5rem;
   }
   
   .rute-info {
