@@ -191,7 +191,7 @@ export async function indsætMenu(bruger) {
 			
   // ✅ Nem at udvide: tilføj flere underpunkter her
   const aktiviteterLinks = [
-    { label: "Leaderboard", href: "leaderboard.html", id: "menu-leaderboard" },
+    { label: "Log Wall", href: "leaderboard.html", id: "menu-leaderboard" },
 //    { label: "Slå Klubben", href: "slaa-klubben.html", id: "menu-slaa-klubben" },
 //    { label: "Træningsøvelser", href: "traeningsoevelser.html", id: "menu-traeningsoevelser" },
   ];
@@ -280,11 +280,11 @@ const profilMarkup = `
 <div id="profil-panel" class="profil-skjult">
   <div class="profil-indhold">
     <h2 id="profil-navn">👤 ${bruger.navn}</h2>
-    <li><a href="beskeder.html" id="besked-link-profil">💬 Mine beskeder
+    <li><a href="beskeder.html" id="besked-link-profil">💬 Beskeder
       <span id="badge-profil" class="badge ${antalNotifikationer > 0 ? "" : "skjult"}">${antalNotifikationer || ""}</span>
     </a></li>
-    <li><a href="minelog.html">📘 Mine logs</a></li>
-	<li><a href="beviser.html">📜 Mine beviser</a></li>
+    <li><a href="minelog.html">📘 Logs</a></li>
+	<li><a href="beviser.html">📜 Beviser</a></li>
     <li>
       <label>
         <input type="checkbox" id="push-toggle"> 🔔Notifikationer
@@ -292,7 +292,7 @@ const profilMarkup = `
     </li>
     <li>
       <label>
-        <input type="checkbox" id="leaderboard-toggle" ${profilData?.leaderboard_deltagelse !== false ? "checked" : ""}> 🏆 Leaderboard
+        <input type="checkbox" id="leaderboard-toggle" ${profilData?.leaderboard_deltagelse !== false ? "checked" : ""}> 🏆 Log Wall
       </label>
     </li>
     <p><li><a href="#" id="logout-link">🚪 Log ud</a></li></p>

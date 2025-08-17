@@ -319,6 +319,15 @@ body {
   cursor: pointer;
 }
 
+.knap-slet {
+  background: #333;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 .besked-visning {
   max-height: calc(100vh - 300px); /* Justér alt efter top-menu, knapper osv. */
   overflow-y: auto;

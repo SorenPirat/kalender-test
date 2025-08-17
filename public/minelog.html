@@ -180,9 +180,6 @@ async function visGradDetaljer(grad) {
     const div = document.createElement("div");
     div.className = "logpost";
     const rute = log.ruter;
-	const base = basePointsForGrad(rute.grad);
-	const beregnet = Math.max(1, Math.round(base * tryMultiplier(log.forsøg)));
-	const points = Number.isFinite(log.earned_points) ? log.earned_points : beregnet;
     const dato = new Date(log.logget_dato).toLocaleDateString("da-DK");
 
     div.innerHTML = `
@@ -190,12 +187,12 @@ async function visGradDetaljer(grad) {
       🗓️ ${dato}<br/>
       🔁 ${log.forsøg || "-"}<br/>
       💬 ${log.kommentar || ""}<br/>
-	  🏅 Point: <strong>${points}</strong><br/>
       🔢 Rutens grad: ${rute.grad || "Ukendt"}<br/>
-	  🧮 Min gradering: ${hentMinGradering(log) || "-"}<br/>
-       ⭐ Din rating: ${"⭐".repeat(log.bedømmelse)}<br/>
+      🎯 Min vurdering: ${log.egen_grad || "-"}<br/>
+      ⭐ Din rating: ${"⭐".repeat(log.bedømmelse)}<br/>
     `;
 
+    // 🎯 Vis rute-knap
     const visKnap = document.createElement("button");
     visKnap.className = "knap-vis";
     visKnap.innerHTML = "🎯 Vis rute";
@@ -203,17 +200,37 @@ async function visGradDetaljer(grad) {
       const kopi = { ...rute };
       const sti = rute.billedenavn;
       const publicUrl = hentPublicUrlMedCache(sti, "ruter");
-	  if (!publicUrl) return alert("❌ Kunne ikke hente billede.");
-	  kopi.billede_url = publicUrl;
+      if (!publicUrl) return alert("❌ Kunne ikke hente billede.");
+      kopi.billede_url = publicUrl;
       visRute(kopi);
     };
 
+    // 🗑️ Slet log-knap
+    const sletKnap = document.createElement("button");
+    sletKnap.className = "knap-slet";
+    sletKnap.innerHTML = "🗑️ Slet log";
+    sletKnap.onclick = async () => {
+      if (!confirm("Er du sikker på, at du vil slette denne log?")) return;
+      const { error } = await client.from("rutelog").delete().eq("id", log.id);
+      if (error) {
+        alert("❌ Kunne ikke slette log.");
+        console.error(error);
+      } else {
+        alert("✅ Log slettet.");
+        // Fjern fra array og DOM
+        alleLogs = alleLogs.filter(l => l.id !== log.id);
+        div.remove();
+      }
+    };
+
     div.appendChild(visKnap);
+    div.appendChild(sletKnap);
     container.appendChild(div);
   }
 
   container.classList.remove("skjul");
 }
+
 
 function hexOrNamedToRgba(color, alpha) {
   const dummy = document.createElement("div");

@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <title>Beta Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="css/base.css" /> 
+  <link rel="stylesheet" href="css/menu.css" />
+  <link rel="stylesheet" href="css/betaboard.css" />
+</head>
+<body>
+  <main>
+    <h1>Beta Board</h1>
+
+    <section id="profile">
+      <div><strong>Titel:</strong> <span id="title">…</span></div>
+      <div><strong>Level:</strong> <span id="level">…</span></div>
+      <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+      <div><small>XP: <span id="xp">0</span> / <span id="nextXp">100</span></small></div>
+	  <div id="xpTest" style="margin-top:8px; display:flex; gap:8px;">
+  <button class="btn" id="xpPlus50">+50 XP (test)</button>
+  <button class="btn" id="xpMinus50">-50 XP (test)</button>
+</div>
+    </section>
+
+    <h2>Dagens quests</h2>
+    <div id="daily"></div>
+
+    <h2>Ugens challenges</h2>
+    <div id="weekly"></div>
+  </main>
+
+<dialog id="routeModal" class="beta-dialog" aria-labelledby="routeModalTitle">
+  <form method="dialog" id="routeForm">
+    <h3 id="routeModalTitle">Vælg 5 bouldere</h3>
+
+    <div class="modal-grid">
+      <!-- Venstre: søg + liste -->
+      <div>
+        <input id="routeSearch" class="route-search" placeholder="Søg navn/grad…" />
+        <div id="routeList" class="route-list"></div>
+      </div>
+
+      <!-- Højre: preview -->
+      <div>
+        <div id="previewWrap" class="preview-wrap">
+          <canvas id="previewCanvas" style="display:block;width:100%;height:auto;pointer-events:none;"></canvas>
+        </div>
+        <div id="previewMeta" class="preview-meta"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts">
+        <small>Valgt: <span id="selectedCount">0</span>/<span id="requiredCount">5</span></small>
+      </div>
+      <div class="mini-gap">
+        <button type="button" id="routeCancel" class="btn">Annullér</button>
+        <button type="submit" class="btn" id="routeSubmit" disabled>Bekræft</button>
+      </div>
+    </div>
+
+    <p id="routeError" style="color:#b00;display:none;"></p>
+  </form>
+</dialog>
+
+  <script type="module">
+import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+
+adgangskontrol({
+  tilladteRoller: [],
+  redirectVedFejl: "index.html",
+  efterLogin: bruger => indsætMenu(bruger)
+});
+
+
+// Farver til UI
+const COLOR_HEX = { 'grøn':'#2ecc71','gul':'#f1c40f','blå':'#3498db','lilla':'#9b59b6','rød':'#e74c3c','sort':'#2c3e50' };
+const nice = s => (s||'').charAt(0).toUpperCase() + (s||'').slice(1);
+
+// Konverter #RRGGBB -> rgba(r,g,b,a)
+function hexToRgba(hex, a=1){
+  const h = hex.replace('#','');
+  const v = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  const r = (v>>16)&255, g=(v>>8)&255, b=v&255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+// preview animation handle
+let previewAnimId = null;
+function stopPreviewAnim(){
+ if (previewAnimId) cancelAnimationFrame(previewAnimId); previewAnimId = null; }
+
+// Hvor dine webp-billeder ligger (tilpas stien til dit projekt!)
+const IMAGE_BASE = 'https://cianxaxaphvrutmstydr.supabase.co/storage/v1/object/public/ruter/';   
+const IMG_EXT    = '.webp'; 
+
+// cache af resolved public URLs
+const imageUrlCache = new Map();
+
+async function getImageUrlFor(billede_id) {
+  if (!billede_id) throw new Error('billede_id mangler');
+  if (imageUrlCache.has(billede_id)) return imageUrlCache.get(billede_id); 
+
+  const storage = client.storage.from('ruter');
+  const { data: files, error } = await storage.list('', {
+    limit: 1000,
+    sortBy: { column: 'updated_at', order: 'desc' },
+    search: `${billede_id}_`
+  });
+  if (error) throw error;
+
+  const re = new RegExp(`^${billede_id}_(\\d{4}-\\d{2}-\\d{2})\\.webp$`, 'i');
+  const matches = (files || []).filter(f => re.test(f.name));
+  if (!matches.length) throw new Error(`Ingen matchende .webp for ${billede_id}`);
+
+  // vælg nyeste efter dato i navnet
+  matches.sort((a, b) => {
+    const da = new Date(a.name.match(re)[1]);
+    const db = new Date(b.name.match(re)[1]);
+    return db - da;
+  });
+
+  const latestName = matches[0].name;
+  const { data: pub } = storage.getPublicUrl(latestName);
+  const url = pub.publicUrl;
+  imageUrlCache.set(billede_id, url);
+  return url;
+}
+
+async function loadSectorImage(billede_id) {
+  const url = await getImageUrlFor(billede_id);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// Hent ruter i valgfri farve
+async function fetchRuterByColor(color) {
+  const { data, error } = await client.rpc('ruter_by_color', { p_color: color });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+// Tegn 'greb' oven på canvas
+function drawGreb(canvas, imgEl, greb) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width  = imgEl.clientWidth;
+  const h = canvas.height = imgEl.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  if (!greb) return;
+
+  const drawCircle = (x,y,r=8) => { ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); };
+  const drawLine = (pts) => { if (pts.length<2) return; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); };
+  const drawPoly = (pts) => { if (pts.length<3) return; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.closePath(); ctx.stroke(); };
+
+  // farve & stil
+  ctx.fillStyle   = 'rgba(52, 152, 219, 0.85)'; // blå fyld
+  ctx.strokeStyle = 'rgba(44, 62, 80, 0.9)';    // mørk kant
+  ctx.lineWidth   = 3;
+
+  // Hjælper til at konvertere normaliserede coords -> pixels
+  const toPx = (x,y) => {
+    // hvis værdierne ser normaliserede ud (0..1), skaler til pixels
+    const isNorm = x>=0 && x<=1 && y>=0 && y<=1;
+    return isNorm ? { x: x*w, y: y*h } : { x, y };
+  };
+
+  // Understøt almindelige formater
+  try {
+    if (Array.isArray(greb)) {
+      greb.forEach(g => {
+        if (g.type === 'line' && Array.isArray(g.points)) {
+          const pts = g.points.map(p => toPx(p.x, p.y));
+          drawLine(pts);
+        } else if (g.type === 'polygon' && Array.isArray(g.points)) {
+          const pts = g.points.map(p => toPx(p.x, p.y));
+          drawPoly(pts);
+        } else if (g.type === 'circle' && g.x != null && g.y != null) {
+          const p = toPx(g.x, g.y); drawCircle(p.x, p.y, g.r || 10);
+        } else if (g.x != null && g.y != null) {
+          const p = toPx(g.x, g.y); drawCircle(p.x, p.y, g.r || 8);
+        }
+      });
+    } else if (greb.points) {
+      const pts = greb.points.map(p => toPx(p.x, p.y));
+      (greb.type === 'polygon') ? drawPoly(pts) : drawLine(pts);
+    }
+  } catch(e) {
+    console.warn('Kunne ikke tegne greb:', e);
+  }
+}
+
+// Bind testknapper
+document.addEventListener('DOMContentLoaded', () => {
+  const plusBtn = document.getElementById('xpPlus50');
+  const minusBtn = document.getElementById('xpMinus50');
+  if (plusBtn)  plusBtn.addEventListener('click', () => adjustXp(50));
+  if (minusBtn) minusBtn.addEventListener('click', () => adjustXp(-50));
+});
+
+async function adjustXp(delta) {
+  try {
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    // sørg for en række findes
+    await client.from('user_xp').upsert({ user_id: user.id }).select();
+
+    // læs nuværende XP
+    const { data: ux, error: rErr } = await client
+      .from('user_xp')
+      .select('xp_total')
+      .eq('user_id', user.id)
+      .single();
+    if (rErr) throw rErr;
+
+    const curr = ux?.xp_total ?? 0;
+    const next = Math.max(0, curr + delta); // clamp til 0, så vi ikke går i minus
+    const today = new Date().toISOString().slice(0,10);
+
+    // opdatér XP
+    const { error: uErr } = await client
+      .from('user_xp')
+      .update({ xp_total: next, last_activity_date: today })
+      .eq('user_id', user.id);
+    if (uErr) throw uErr;
+
+    // log event (valgfrit men rart)
+    await client.from('user_xp_events').insert({
+      user_id: user.id,
+      delta_xp: delta,
+      reason: 'debug_adjust'
+    });
+
+    // opdatér UI
+    load();
+  } catch (e) {
+    alert(e.message || 'Kunne ikke justere XP');
+  }
+}
+
+async function openRoutePicker(requiredCount = 5, color = 'gul') {
+  const dlg = document.getElementById('routeModal');
+  const form = document.getElementById('routeForm');
+  const listEl = document.getElementById('routeList');
+  const searchEl = document.getElementById('routeSearch');
+  const err = document.getElementById('routeError');
+  const cancelBtn = document.getElementById('routeCancel');
+  const submitBtn = document.getElementById('routeSubmit');
+  const selCountEl = document.getElementById('selectedCount');
+  const reqCountEl = document.getElementById('requiredCount');
+  const previewCanvas = document.getElementById('previewCanvas');
+  const previewMeta   = document.getElementById('previewMeta');
+
+  err.style.display = 'none';
+  submitBtn.disabled = true; selCountEl.textContent = '0';
+  listEl.innerHTML = 'Indlæser…';
+  const clearPreview = () => {
+  const ctx = previewCanvas.getContext('2d');
+  ctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  previewMeta.textContent = '';
+};
+  
+  reqCountEl.textContent = requiredCount;
+  form.querySelector('h3').textContent = `Vælg ${requiredCount} ${color} ${color==='gul'?'bouldere':'ruter'}`;
+
+  err.style.display = 'none';
+  submitBtn.disabled = true; selCountEl.textContent = '0';
+  listEl.innerHTML = 'Indlæser…';
+
+  const allRaw = await fetchRuterByColor(color);
+  // Hvis vi er i en boulder-quest, filtrér til sektor-*
+  const isBoulderQuest = true; // sæt evt. baseret på quest payload senere
+  const all = isBoulderQuest ? allRaw.filter(r => (r.billede_id||'').startsWith('sektor-')) : allRaw;
+
+  let filtered = all.slice();
+  const selected = new Set();
+
+async function showPreview(route) {
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const meta = document.getElementById('previewMeta');
+
+  stopPreviewAnim(); // stop evt. tidligere loop
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  meta.textContent = '';
+
+  if (!route) return;
+
+  try {
+    // Hent korrekt billede (dato-suffiks) fra Storage
+    const { img } = await loadSectorImage(route.billede_id);
+
+    // Sæt canvas' interne pixelstørrelse = billedets naturlige pixelstørrelse
+    canvas.width  = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+
+    const colorName = (route?.farve || '').toLowerCase(); // hvis du har farvekolonne
+    const uiColor   = COLOR_HEX[colorName] || COLOR_HEX['gul']; // fallback til quest-farve, du kan også give den med
+    const fillCol   = hexToRgba(uiColor, 0.20);
+    const strokeCol = hexToRgba(uiColor, 1.00);
+    const glowCol   = 'white';
+
+    // Tegn-hjælpere (kopi af ruteoversigt-logik)
+    const pathFrom = (p) => {
+      // Støt både polygon og evt. bbox fallback
+      if (p?.points?.length >= 3) {
+        ctx.beginPath();
+        ctx.moveTo(p.points[0].x, p.points[0].y);
+        for (let i=1;i<p.points.length;i++) ctx.lineTo(p.points[i].x, p.points[i].y);
+        ctx.closePath();
+        return true;
+      } else if (Number.isFinite(p?.x) && Number.isFinite(p?.y) && Number.isFinite(p?.width) && Number.isFinite(p?.height)) {
+        ctx.beginPath();
+        ctx.rect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+        return true;
+      }
+      return false;
+    };
+
+    const tegnGlød = (p, farve='white', puls=1) => {
+      if (!pathFrom(p)) return;
+      const maxGlow = 6;
+      for (let i=maxGlow; i>0; i--) {
+        ctx.save();
+        pathFrom(p);
+        ctx.strokeStyle = farve;
+        ctx.globalAlpha = (i / maxGlow) * 0.15 * puls;
+        ctx.lineWidth   = i * 2;
+        ctx.shadowColor = farve;
+        ctx.shadowBlur  = i * 4 * puls;
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+
+    const tegnGreb = (p, farve='#888') => {
+      if (!pathFrom(p)) return;
+
+      // skygge
+      ctx.save();
+      ctx.translate(1,1);
+      pathFrom(p);
+      ctx.fillStyle = hexToRgba('#000', 0.25);
+      ctx.fill();
+      ctx.restore();
+
+      // fyld
+      pathFrom(p);
+      ctx.fillStyle = fillCol;
+      ctx.fill();
+
+      // kant
+      ctx.strokeStyle = strokeCol;
+      ctx.lineWidth = 0.1;
+      ctx.stroke();
+    };
+
+    // RAF-loop (samme effekt som i ruteoversigt)
+    const start = performance.now();
+    const loop = () => {
+      // baggrundsbillede
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      // mørklægning
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      // “vinduer” i mørket = greb-polygoner
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      (route.greb || []).forEach(p => {
+        if (pathFrom(p)) ctx.fill();
+      });
+      ctx.restore();
+
+      // glow-puls
+      const t = (performance.now() - start) / 1000;
+      const puls = Math.sin(t * 2 * Math.PI) * 0.5 + 0.5;
+      (route.greb || []).forEach(p => tegnGlød(p, glowCol, puls));
+
+      // farvefyld
+      (route.greb || []).forEach(p => tegnGreb(p, uiColor));
+
+      previewAnimId = requestAnimationFrame(loop);
+    };
+    loop();
+
+    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
+  } catch (e) {
+    console.warn('Preview fejl:', e);
+    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • (intet billede)`;
+  }
+}
+
+  function render() {
+    listEl.innerHTML = '';
+    filtered.forEach(r => {
+      const row = document.createElement('label');
+      row.className = 'route-item';
+      row.innerHTML = `
+        <input type="checkbox" data-id="${r.id}" ${selected.has(r.id)?'checked':''}/>
+        <span class="swatch" style="background:${COLOR_HEX[color] || '#ccc'}"></span>
+        <div class="txt">
+          <div class="title">${r.navn ? r.navn : '(Uden navn)'}</div>
+          <small>${nice(color)} • ${r.grad || ''} • ${r.billede_id || ''}</small>
+        </div>
+      `;
+      const box = row.querySelector('input[type="checkbox"]');
+      // hover/klik -> preview
+      row.addEventListener('mouseenter', () => showPreview(r));
+      row.addEventListener('click', (e) => {
+        if (e.target === box) return; // checkbox klik handles separat
+        // klik på rækken toggler checkbox
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change'));
+      });
+      box.addEventListener('change', () => {
+        if (box.checked) {
+          if (selected.size >= requiredCount) {
+            box.checked = false; return;
+          }
+          selected.add(r.id);
+        } else {
+          selected.delete(r.id);
+        }
+        selCountEl.textContent = String(selected.size);
+        submitBtn.disabled = selected.size !== requiredCount;
+      });
+
+      listEl.appendChild(row);
+    });
+
+    // auto-preview første i listen
+    if (filtered.length) {
+  showPreview(filtered[0]);
+} else {
+  clearPreview();
+  previewMeta.textContent = `Ingen aktive ${color} at vælge lige nu.`;
+  submitBtn.disabled = true;
+}
+
+  }
+
+  // søg i navn/grad
+  searchEl.oninput = () => {
+    const q = (searchEl.value || '').toLowerCase();
+    filtered = all.filter(r =>
+      (r.navn || '').toLowerCase().includes(q) ||
+      (r.grad || '').toLowerCase().includes(q) ||
+      (r.billede_id || '').toLowerCase().includes(q)
+    );
+    render();
+  };
+
+  render(); dlg.showModal();
+
+return new Promise((resolve, reject) => {
+  const onSubmit = (e) => {
+    e.preventDefault();
+    if (selected.size !== requiredCount) {
+      err.textContent = `Vælg præcis ${requiredCount}.`; 
+      err.style.display = 'block'; 
+      return;
+    }
+    const ids = Array.from(selected);
+    cleanup();
+    dlg.close();        // luk modalen
+    resolve(ids);       // returnér valgte ruter
+  };
+
+  const onCancel = () => {
+    cleanup();
+    dlg.close();        // luk modalen
+    reject(new Error('cancelled'));
+  };
+
+  const onEscCancel = (e) => {
+    // Esc sender et "cancel"-event på <dialog>. Vi vil også lave cleanup.
+    e.preventDefault(); // undgå dobbelt lukning
+    onCancel();
+  };
+
+  function cleanup(){
+    form.removeEventListener('submit', onSubmit);
+    cancelBtn.removeEventListener('click', onCancel);
+    dlg.removeEventListener('cancel', onEscCancel);
+    searchEl.oninput = null;
+    stopPreviewAnim();
+  }
+
+  // ✅ de her to manglede
+  form.addEventListener('submit', onSubmit);
+  cancelBtn.addEventListener('click', onCancel);
+  dlg.addEventListener('cancel', onEscCancel); // gør Esc til "Annullér"
+});
+
+}
+function levelFromXp(xp) {
+  return Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * (xp / 100))) / 2));
+}
+function titleFromXp(xp){
+  if (xp < 600) return 'Chalk Rookie';
+  if (xp < 1800) return 'Beta Seeker';
+  if (xp < 3600) return 'Crux Crusher';
+  if (xp < 6000) return 'Send Master';
+  return 'Wall Legend';
+}
+function nextLevelTotalXp(level){
+  // total XP to reach next level+1: 100*(L+1)*(L+2)/2
+  const L = Math.max(1, level);
+  return 100 * (L+1) * (L+2) / 2;
+}
+function totalXpForLevel(level){
+  return 100 * level * (level + 1) / 2;
+}
+async function load() {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) { window.location.href = '/login.html'; return; }
+
+  await client.from('user_xp').upsert({ user_id: user.id }).select();
+  const { data: ux } = await client.from('user_xp').select('*').eq('user_id', user.id).single();
+
+  const xp = ux?.xp_total || 0;
+  const lvl = levelFromXp(xp);
+  const title = titleFromXp(xp);
+
+  document.getElementById('level').textContent = lvl;
+  document.getElementById('title').textContent = title;
+  document.getElementById('xp').textContent = xp;
+
+function xpToReachLevel(L){           // total XP for at NÅ level L (1 => 0 XP)
+  return 100 * (L - 1) * L / 2;
+}
+const base = xpToReachLevel(lvl);     // baseline for nuværende level
+const next = xpToReachLevel(lvl + 1); // grænse til næste level
+const span = next - base;             // XP der kræves i DETTE level
+const within = xp - base;             // hvor meget du har i DETTE level
+const pct = Math.max(0, Math.min(100, (within / span) * 100));
+
+document.getElementById('xpFill').style.width = pct + '%';
+
+// Vis “inden i level / krav for level”
+document.getElementById('xp').textContent = within;  // fx 80
+document.getElementById('nextXp').textContent = span; // fx 100
+
+  // fetch quests
+  const { data: daily } = await client
+    .from('beta_quests')
+    .select('*')
+    .eq('type','daily')
+    .eq('is_active', true);
+
+  const { data: weekly } = await client
+    .from('beta_quests')
+    .select('*')
+    .eq('type','weekly')
+    .eq('is_active', true);
+
+  // Hent completed quest_ids for brugeren
+  const { data: completedRows } = await client
+    .from('user_quests')
+    .select('quest_id')
+    .eq('user_id', user.id)
+    .eq('status', 'completed');
+
+  const completedSet = new Set((completedRows ?? []).map(r => r.quest_id));
+
+  renderQuests('daily', daily || [], false, completedSet);
+  renderQuests('weekly', weekly || [], true, completedSet);
+
+}
+function renderQuests(containerId, quests, weekly=false, completedSet=new Set()){
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+
+  if (!quests || quests.length === 0) {
+    el.innerHTML = `<div style="opacity:.7"><small>Ingen ${weekly ? 'ugentlige ' : ''}quests lige nu ✨</small></div>`;
+    return;
+  }
+
+  quests.forEach(q=>{
+    const done = completedSet.has(q.id);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div><strong>${q.name}</strong> (${q.xp_reward} XP)</div>
+      <div><small>${q.description || ''}</small></div>
+      <div style="margin-top:8px;">
+        <button class="btn" data-id="${q.id}" ${done ? 'disabled' : ''}>
+          ${done ? 'Allerede fuldført' : 'Markér som fuldført'}
+        </button>
+      </div>
+    `;
+    const btn = card.querySelector('button');
+    if (!done) btn.addEventListener('click', ()=>completeQuest(q, btn));
+    el.appendChild(card);
+  });
+}
+async function completeQuest(q, btnEl){
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return;
+
+  // 1) Saml proof FØR vi opretter noget i DB
+  let proof = {};
+  try {
+    if (q.validation === 'route_selection') {
+      const need  = q.payload?.count ?? 1;
+      const color = q.payload?.color ?? 'gul';
+      const selectedIds = await openRoutePicker(need, color);   // <- kan kaste "cancelled"
+      proof.route_ids = selectedIds;
+    } else if (q.validation === 'video_capture') {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(t => t.stop());
+      proof.video_confirmed = true;
+    } else if (q.validation === 'count_in_session') {
+      proof.count = 10; // din egen logik her
+    }
+  } catch (e) {
+    // Brugeren lukkede modalen (eller afbrød valideringen) -> bare exit uden fejl
+    if (e && e.message === 'cancelled') return;
+    // andet (ægte fejl): vis besked og exit
+    alert(e.message || 'Noget gik galt');
+    return;
+  }
+
+  // 2) Opret user_quests direkte som "completed" med proof
+  const { data: uqRow, error } = await client
+    .from('user_quests')
+    .insert({
+      user_id: user.id,
+      quest_id: q.id,
+      status: 'completed',
+      proof,
+      completed_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+  if (error) { alert(error.message); return; }
+
+  // 3) Award XP
+  const { error: e3 } = await client.rpc('award_xp_for_quest', {
+    p_user_quest_id: uqRow.id
+  });
+  if (e3) { alert(e3.message); return; }
+
+  // 4) Instant UI
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Allerede fuldført'; }
+  alert(`Færdig! Du fik +${q.xp_reward} XP`);
+  load();
+}
+
+load();
+</script>
+</body>
+</html>
