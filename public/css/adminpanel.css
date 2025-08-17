@@ -506,7 +506,6 @@ th.sortable.sorted-desc::after {
   #member-list tr,
   #member-list td {
     display: block;
-    width: 100%;
   }
 
   #member-list tr {

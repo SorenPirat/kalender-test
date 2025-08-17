@@ -575,6 +575,7 @@ document.getElementById("gemLogKnap").addEventListener("click", async () => {
   const kommentar  = document.getElementById("logKommentar").value.trim();
   const forsøg     = document.getElementById("logForsøg").value;
   const bedømmelse = document.getElementById("logBedømmelse").value.trim();
+  const egen_grad  = document.getElementById("logEgenGrad").value.trim();
 
   const bruger = JSON.parse(localStorage.getItem("bruger"));
   const user_id = bruger?.id;
@@ -607,7 +608,8 @@ document.getElementById("gemLogKnap").addEventListener("click", async () => {
       kommentar,
       forsøg,        // "flash"/"2 forsøg"/"3 forsøg"/"+5 forsøg" eller "onsight"/"redpoint"/"toprope"
       bedømmelse,
-      earned_points  // 👈 gem de beregnede point
+      earned_points,
+      egen_grad       
     }]);
 
   if (error) {
