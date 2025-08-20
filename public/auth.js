@@ -193,7 +193,7 @@ export async function indsætMenu(bruger) {
   const aktiviteterLinks = [
     { label: "Log Wall", href: "leaderboard.html", id: "menu-leaderboard" },
 //    { label: "Slå Klubben", href: "slaa-klubben.html", id: "menu-slaa-klubben" },
-//    { label: "Træningsøvelser", href: "traeningsoevelser.html", id: "menu-traeningsoevelser" },
+   { label: "Betaboard", href: "betaboard.html", id: "menu-betaboard" },
   ];
 
   const aktiviteterMarkup = `

@@ -70,10 +70,6 @@
       btns.forEach(b => b && (b.disabled = on));
     }
 
-    // ===== Loop-safe session check =====
-    // Kun redirect til protected.html når:
-    // 1) der ER en gyldig session og
-    // 2) profilen findes i "users".
     async function checkSessionAndRedirect() {
       try {
         const { data: { session } } = await client.auth.getSession();
@@ -284,20 +280,17 @@
   let deferredPrompt = null;
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                    || window.navigator.standalone === true; // iOS
+                    || window.navigator.standalone === true; 
   const ua = navigator.userAgent || '';
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/i.test(ua);
   const iosDismissed = localStorage.getItem('ios_install_dismissed') === '1';
 
-  // iOS: vis KUN baren (ingen Android-knap)
   function showIOSBar() {
     if (isStandalone || iosDismissed) return;
     iosBar.classList.remove('hidden');
     androidWrap.classList.add('hidden');
   }
-
-  // Android: vis KUN knappen (ingen blå bar)
   function showAndroidButton(active) {
     if (isStandalone) return;
     iosBar.classList.add('hidden');
@@ -306,44 +299,61 @@
       installBtn.textContent = '📲 Tilføj som app';
       androidWrap.classList.remove('hidden');
     } else {
-      // Hvis eventet ikke er klar, viser vi ingenting (Chrome har "Installér app" i menuen)
       androidWrap.classList.add('hidden');
     }
   }
 
-  // Android install flow
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     if (isAndroid) showAndroidButton(true);
   });
-
   installBtn?.addEventListener('click', async () => {
     if (!deferredPrompt) return;
     installBtn.disabled = true;
     try {
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice; // accepted/dismissed
+      await deferredPrompt.userChoice;
     } finally {
       deferredPrompt = null;
       androidWrap.classList.add('hidden');
       installBtn.disabled = false;
     }
   });
-
   window.addEventListener('appinstalled', () => {
     iosBar.classList.add('hidden');
     androidWrap.classList.add('hidden');
     deferredPrompt = null;
   });
 
-  // Første visning – vælg præcist ÉN af dem
   document.addEventListener('DOMContentLoaded', () => {
-    if (isIOS) showIOSBar();             // iOS → vis bar
-    // Android-knappen vises først, når beforeinstallprompt faktisk fyrer
+    if (isIOS) showIOSBar();
   });
+
+  let lastScrollY = window.scrollY;
+  const DELTA = 1; 
+
+  window.addEventListener('scroll', () => {
+    if (!isIOS || isStandalone || iosDismissed) return;
+
+    const current = window.scrollY;
+    const diff = current - lastScrollY;
+
+    if (diff > DELTA) {
+      if (!iosBar.classList.contains('hidden')) {
+        iosBar.classList.add('hidden');
+
+
+      }
+    } else if (diff < -DELTA) {
+        iosBar.classList.remove('hidden');
+    }
+
+    lastScrollY = current;
+  }, { passive: true });
 })();
 </script>
+
 
 </body>
 </html>

@@ -17,9 +17,6 @@
       <div><strong>Level:</strong> <span id="level">…</span></div>
       <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
       <div><small>XP: <span id="xp">0</span> / <span id="nextXp">100</span></small></div>
-	  <div id="xpTest" style="margin-top:8px; display:flex; gap:8px;">
-  <button class="btn" id="xpPlus50">+50 XP (test)</button>
-  <button class="btn" id="xpMinus50">-50 XP (test)</button>
 </div>
     </section>
 
@@ -28,8 +25,34 @@
 
     <h2>Ugens challenges</h2>
     <div id="weekly"></div>
+	
+	<h2>BONUS quests</h2>
+    <div id="bonus"></div>
+	
   </main>
 
+<!-- Text Modal -->
+<dialog id="textModal" class="beta-dialog" aria-labelledby="textModalTitle">
+  <form method="dialog" id="textForm">
+    <h3 id="textModalTitle">Skriv dit svar</h3>
+
+    <div class="card">
+      <p id="textPrompt" style="margin:0 0 .5rem 0;"></p>
+      <textarea id="textInput" rows="5" placeholder="Skriv her…" style="width:100%;"></textarea>
+      <p id="textError" style="color:#b00;display:none;margin:.5rem 0 0 0;"></p>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts"><small id="textHelp"></small></div>
+      <div class="mini-gap">
+        <button type="button" class="btn" id="textCancel">Annullér</button>
+        <button type="submit" class="btn" id="textSubmit">Bekræft</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Rute Modal -->
 <dialog id="routeModal" class="beta-dialog" aria-labelledby="routeModalTitle">
   <form method="dialog" id="routeForm">
     <h3 id="routeModalTitle">Vælg 5 bouldere</h3>
@@ -63,6 +86,39 @@
     <p id="routeError" style="color:#b00;display:none;"></p>
   </form>
 </dialog>
+<!-- Video Modal -->
+<dialog id="videoModal" class="beta-dialog" aria-labelledby="videoModalTitle">
+  <form method="dialog" id="videoForm">
+    <h3 id="videoModalTitle">Bekræft med video</h3>
+
+    <div class="modal-grid">
+      <!-- Venstre: kun upload -->
+      <div class="card">
+        <strong>Vælg/optag fra din enhed</strong>
+        <p><small>Vælg en videofil (anbefalet ≥ 3 sek.). Videoen uploades ikke.</small></p>
+        <input id="videoFileInput" type="file" accept="video/*" capture="user" />
+      </div>
+
+      <!-- Højre: preview -->
+      <div>
+        <div class="preview-wrap">
+          <video id="videoPreview" playsinline controls></video>
+        </div>
+        <div id="videoMeta" class="preview-meta"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts"><small>Vælg en video og tryk Bekræft</small></div>
+      <div class="mini-gap">
+        <button type="button" class="btn" id="videoCancel">Annullér</button>
+        <button type="submit" class="btn" id="videoSubmit" disabled>Bekræft</button>
+      </div>
+    </div>
+    <p id="videoError" style="color:#b00;display:none;"></p>
+  </form>
+</dialog>
+
 
   <script type="module">
 import { client, adgangskontrol, indsætMenu } from './auth.js';
@@ -78,7 +134,13 @@ adgangskontrol({
 // Farver til UI
 const COLOR_HEX = { 'grøn':'#2ecc71','gul':'#f1c40f','blå':'#3498db','lilla':'#9b59b6','rød':'#e74c3c','sort':'#2c3e50' };
 const nice = s => (s||'').charAt(0).toUpperCase() + (s||'').slice(1);
+// Hvor dine webp-billeder ligger (tilpas stien til dit projekt!)
+const IMAGE_BASE = 'https://cianxaxaphvrutmstydr.supabase.co/storage/v1/object/public/ruter/';   
+const IMG_EXT    = '.webp'; 
 
+// cache af billeder
+const imageUrlCache = new Map();
+const imageElCache = new Map();
 // Konverter #RRGGBB -> rgba(r,g,b,a)
 function hexToRgba(hex, a=1){
   const h = hex.replace('#','');
@@ -88,15 +150,125 @@ function hexToRgba(hex, a=1){
 }
 // preview animation handle
 let previewAnimId = null;
+let currentPreviewRouteId = null;
+let previewWcss = null;
+let completedSet = new Set();
+
+// --- Collapsible quest groups ---
+const groupMeta = new Map(); // containerId -> {detailsEl, summaryEl, titleEl, rightEl}
+
+function ensureGroupDetails(containerId, label){
+  if (groupMeta.has(containerId)) return groupMeta.get(containerId);
+
+  const listEl = document.getElementById(containerId);
+  if (!listEl) return null;
+
+  // H2 forventes at stå lige før container-div'en
+  const h2 = listEl.previousElementSibling && listEl.previousElementSibling.tagName === 'H2'
+    ? listEl.previousElementSibling
+    : null;
+
+  // Opret <details> + <summary>
+  const details = document.createElement('details');
+  details.className = 'quest-group';
+
+  const summary = document.createElement('summary');
+  summary.className = 'quest-group-summary';
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'sum-title';
+  titleSpan.textContent = label;
+
+  const rightSpan = document.createElement('span');
+  rightSpan.className = 'sum-right';
+  rightSpan.textContent = ''; // udfyldes ved render
+
+  summary.appendChild(titleSpan);
+  summary.appendChild(rightSpan);
+  details.appendChild(summary);
+
+  // Flyt containeren ind i details
+  listEl.parentNode.insertBefore(details, h2 || listEl);
+  details.appendChild(listEl);
+
+  // Fjern den gamle H2, hvis den findes
+  if (h2) h2.remove();
+
+  const meta = { detailsEl: details, summaryEl: summary, titleEl: titleSpan, rightEl: rightSpan };
+  groupMeta.set(containerId, meta);
+  return meta;
+}
+
+// Sæt badge-tekst og fold/åbn automatisk
+function updateGroupHeader(containerId, label, remainingCount){
+  const meta = ensureGroupDetails(containerId, label);
+  if (!meta) return;
+  meta.titleEl.textContent = label;
+  meta.rightEl.textContent = remainingCount > 0 ? `${remainingCount} tilbage` : 'Alle fuldført 🎉';
+  // Fold hvis intet tilbage – åbn hvis der er noget
+  meta.detailsEl.open = remainingCount > 0;
+}
+
+
 function stopPreviewAnim(){
  if (previewAnimId) cancelAnimationFrame(previewAnimId); previewAnimId = null; }
 
-// Hvor dine webp-billeder ligger (tilpas stien til dit projekt!)
-const IMAGE_BASE = 'https://cianxaxaphvrutmstydr.supabase.co/storage/v1/object/public/ruter/';   
-const IMG_EXT    = '.webp'; 
+// Hash af første 64KB (fingeraftryk – ingen upload)
+async function blobFingerprint(blob) {
+  const slice = await blob.slice(0, 65536).arrayBuffer();
+  const hashBuf = await crypto.subtle.digest('SHA-256', slice);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return hashArr.map(b => b.toString(16).padStart(2,'0')).join('');
+}
 
-// cache af resolved public URLs
-const imageUrlCache = new Map();
+// Læs videolængde (sek.) uden at uploade
+async function getVideoDuration(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.src = url;
+    v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(v.duration || 0); };
+    v.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Kunne ikke læse videometadata')); };
+  });
+}
+
+// Sikkert kilde-skift, så vi undgår “abort”-støj
+function safeSetVideoFile(videoEl, blobUrl) {
+  try { videoEl.pause(); } catch {}
+  if (videoEl.srcObject) videoEl.srcObject = null;
+  if (videoEl.src) { try { URL.revokeObjectURL(videoEl.src); } catch {} }
+  videoEl.removeAttribute('src');
+  videoEl.load();
+  videoEl.src = blobUrl;
+  videoEl.play().catch(()=>{});
+}
+
+function decodeImage(url){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function loadSectorImage(billede_id) {
+  if (!billede_id) throw new Error('billede_id mangler');
+
+  // returnér eksisterende promise hvis vi allerede loader/har det
+  let promise = imageElCache.get(billede_id);
+  if (!promise) {
+    promise = (async () => {
+      const url = await getImageUrlFor(billede_id);
+      const img = await decodeImage(url);
+      return { img, url };
+    })();
+    imageElCache.set(billede_id, promise);
+  }
+  return promise;
+}
+
 
 async function getImageUrlFor(billede_id) {
   if (!billede_id) throw new Error('billede_id mangler');
@@ -126,16 +298,6 @@ async function getImageUrlFor(billede_id) {
   const url = pub.publicUrl;
   imageUrlCache.set(billede_id, url);
   return url;
-}
-
-async function loadSectorImage(billede_id) {
-  const url = await getImageUrlFor(billede_id);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ img, url });
-    img.onerror = reject;
-    img.src = url;
-  });
 }
 
 // Hent ruter i valgfri farve
@@ -194,13 +356,255 @@ function drawGreb(canvas, imgEl, greb) {
   }
 }
 
-// Bind testknapper
-document.addEventListener('DOMContentLoaded', () => {
-  const plusBtn = document.getElementById('xpPlus50');
-  const minusBtn = document.getElementById('xpMinus50');
-  if (plusBtn)  plusBtn.addEventListener('click', () => adjustXp(50));
-  if (minusBtn) minusBtn.addEventListener('click', () => adjustXp(-50));
-});
+// Åbn video-proof modal og returnér { ok: true, meta } når brugeren bekræfter
+function openVideoProof({ minSeconds = 3, maxSizeMB = 200 } = {}) {
+  const dlg      = document.getElementById('videoModal');
+  const form     = document.getElementById('videoForm');
+  const fileInput= document.getElementById('videoFileInput');
+  const videoEl  = document.getElementById('videoPreview');
+  const metaEl   = document.getElementById('videoMeta');
+  const errEl    = document.getElementById('videoError');
+  const submit   = document.getElementById('videoSubmit');
+  const cancel   = document.getElementById('videoCancel');
+
+  let chosenBlob = null;
+
+  let resolveFn, rejectFn;
+  const p = new Promise((res, rej) => { resolveFn = res; rejectFn = rej; });
+
+  const resetPreview = () => {
+    if (videoEl.src) { try { URL.revokeObjectURL(videoEl.src); } catch {} }
+    videoEl.removeAttribute('src'); videoEl.load();
+    metaEl.textContent = ''; errEl.style.display = 'none';
+    submit.disabled = true; chosenBlob = null;
+  };
+
+  async function useBlob(blob, label='Valgt video') {
+    try {
+      const sizeMB = blob.size / (1024*1024);
+      if (sizeMB > maxSizeMB) throw new Error(`Videoen er for stor (${sizeMB.toFixed(1)} MB > ${maxSizeMB} MB).`);
+      const dur = await getVideoDuration(blob);
+      if (dur < minSeconds) throw new Error(`Videoen er for kort (${dur.toFixed(1)}s < ${minSeconds}s).`);
+
+      const url = URL.createObjectURL(blob);
+      safeSetVideoFile(videoEl, url);
+
+      metaEl.textContent = `${label} • Varighed ${dur.toFixed(1)}s • ${sizeMB.toFixed(1)} MB`;
+      chosenBlob = blob;
+      submit.disabled = false;
+      errEl.style.display = 'none';
+    } catch(e) {
+      resetPreview();
+      errEl.textContent = e.message || 'Ugyldig videofil';
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function onFile() {
+    if (!fileInput?.files?.length) return;
+    await useBlob(fileInput.files[0], 'Valgt video');
+  }
+
+  function onEscCancel(e) { e.preventDefault(); onCancel(); }
+  function onCancel(){
+    cleanup(); dlg.close();
+    if (typeof rejectFn === 'function') rejectFn(new Error('cancelled'));
+  }
+
+  async function onSubmit(e){
+    e.preventDefault();
+    if (!chosenBlob) {
+      errEl.textContent = 'Vælg en video først.'; errEl.style.display = 'block';
+      return;
+    }
+    try {
+      const [sha256, dur] = await Promise.all([
+        blobFingerprint(chosenBlob),
+        getVideoDuration(chosenBlob)
+      ]);
+      const meta = {
+        mime: chosenBlob.type || 'video/mp4',
+        size_bytes: chosenBlob.size,
+        duration_s: +dur.toFixed(2),
+        sha256_first64kb: sha256
+      };
+      cleanup(); dlg.close();
+      if (typeof resolveFn === 'function') resolveFn({ ok: true, meta });
+    } catch(err) {
+      errEl.textContent = err.message || 'Kunne ikke validere video'; errEl.style.display = 'block';
+    }
+  }
+
+  function cleanup(){
+    resetPreview();
+    if (fileInput) {
+      fileInput.value = '';
+      fileInput.removeEventListener('change', onFile);
+    }
+    form.removeEventListener('submit', onSubmit);
+    cancel.removeEventListener('click', onCancel);
+    dlg.removeEventListener('cancel', onEscCancel);
+  }
+
+  // init & show
+  resetPreview();
+  if (fileInput) fileInput.addEventListener('change', onFile);
+  form.addEventListener('submit', onSubmit);
+  cancel.addEventListener('click', onCancel);
+  dlg.addEventListener('cancel', onEscCancel);
+
+  dlg.showModal();
+  return p;
+}
+// Åbn tekst-proof modal: tjek for krævede nøgleord (case-insensitive, accent-insensitive)
+function openTextProof({
+  prompt = "Skriv dit svar:",
+  keywords = [],           // fx ["crimps","slopers","jugs","underclings"]
+  min_matches = null       // fx 4 (hvis null => alle keywords kræves)
+} = {}) {
+  const dlg   = document.getElementById('textModal');
+  const form  = document.getElementById('textForm');
+  const area  = document.getElementById('textInput');
+  const lab   = document.getElementById('textPrompt');
+  const errEl = document.getElementById('textError');
+  const help  = document.getElementById('textHelp');
+  const cancel= document.getElementById('textCancel');
+
+  const need = Math.max(0, Number(min_matches ?? keywords.length));
+  lab.textContent = prompt || "Skriv dit svar:";
+	help.textContent = keywords.length
+  ? `Krævede nøgleord: 0/${need}`
+  : "";
+
+  area.value = "";
+  errEl.style.display = 'none';
+
+  let resolveFn, rejectFn;
+  const p = new Promise((res, rej) => { resolveFn = res; rejectFn = rej; });
+
+  function normalize(s) {
+    return (s||"")
+      .toLowerCase()
+      .normalize("NFD").replace(/\p{Diacritic}+/gu, ""); // strip accents
+  }
+
+function validate(text) {
+  // normaliser input
+  const norm = s => (s||"")
+    .toLowerCase()
+    .normalize("NFD").replace(/\p{Diacritic}+/gu, "");
+
+  const t = norm(text);
+
+  const hits = [];
+  const missing = [];
+
+  for (const kwRaw of (keywords || [])) {
+    const kw = norm(kwRaw).trim();
+    if (!kw) continue;
+
+    // byg simple varianter: singular/plural (fjern/tilføj s)
+    const variants = new Set([kw]);
+    if (kw.endsWith("s")) variants.add(kw.slice(0, -1));   // "slopers" -> "sloper"
+    else variants.add(kw + "s");                           // "undercling" -> "underclings"
+
+    // ordgrænse‑match for at undgå fx "slopersville"
+    // hvis browser ikke understøtter \b på ikke-latinske, er det stadig OK her
+    let matched = false;
+    for (const v of variants) {
+      // tillad komma/punktum osv. omkring ordet
+      const re = new RegExp(`(^|[^a-z])${v}([^a-z]|$)`, "i");
+      if (re.test(t)) { matched = true; break; }
+    }
+
+    if (matched) hits.push(kwRaw);
+    else missing.push(kwRaw);
+  }
+
+  // hjælpetekst (live eller ved fejl)
+  if (help) help.textContent = `Krævede nøgleord: ${hits.length}/${Math.max(0, Number(min_matches ?? keywords.length))}`;
+
+  return { ok: hits.length >= Math.max(0, Number(min_matches ?? keywords.length)), hits, missing };
+}
+
+  function onSubmit(e){
+    e.preventDefault();
+    const txt = area.value.trim();
+    const { ok, hits } = validate(txt);
+    if (!ok) {
+      errEl.textContent = `Svar mangler nøgleord (${hits.length}/${need}).`;
+      errEl.style.display = 'block';
+      return;
+    }
+    cleanup(); dlg.close();
+    resolveFn({ ok:true, text: txt, matched_keywords: hits });
+  }
+
+  function onCancel(){
+    cleanup(); dlg.close();
+    rejectFn(new Error('cancelled'));
+  }
+
+  function onEsc(e){ e.preventDefault(); onCancel(); }
+
+  function cleanup(){
+    form.removeEventListener('submit', onSubmit);
+    cancel.removeEventListener('click', onCancel);
+    dlg.removeEventListener('cancel', onEsc);
+  }
+
+  form.addEventListener('submit', onSubmit);
+  cancel.addEventListener('click', onCancel);
+  dlg.addEventListener('cancel', onEsc);
+
+  dlg.showModal();
+  return p;
+}
+
+// --- Rotation helpers (deterministisk "tilfældig") ---
+function strHash(s){
+  let h = 2166136261 >>> 0;
+  for (let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(seed){
+  let t = seed >>> 0;
+  return function(){
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function pickDeterministic(arr, n, seedStr){
+  if (!Array.isArray(arr) || !arr.length || n<=0) return [];
+  const rnd = mulberry32(strHash(seedStr));
+  const a = arr.slice();
+  // Fisher–Yates med deterministisk rnd
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, Math.min(n, a.length));
+}
+// Hjælpere til periode-strenge
+function dayKey(d=new Date()){
+  return d.toISOString().slice(0,10); // YYYY-MM-DD
+}
+function isoWeekKey(d=new Date()){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  const week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+// Aktiv-periode filter (active_from/active_to)
+function isActiveNow(q, now = new Date()){
+  const fromOk = !q.active_from || new Date(q.active_from) <= now;
+  const toOk   = !q.active_to   || now <= new Date(q.active_to);
+  return (q.is_active !== false) && fromOk && toOk;
+}
 
 async function adjustXp(delta) {
   try {
@@ -242,7 +646,6 @@ async function adjustXp(delta) {
     alert(e.message || 'Kunne ikke justere XP');
   }
 }
-
 async function openRoutePicker(requiredCount = 5, color = 'gul') {
   const dlg = document.getElementById('routeModal');
   const form = document.getElementById('routeForm');
@@ -282,127 +685,123 @@ async function openRoutePicker(requiredCount = 5, color = 'gul') {
 
 async function showPreview(route) {
   const canvas = document.getElementById('previewCanvas');
-  const ctx = canvas.getContext('2d');
-  const meta = document.getElementById('previewMeta');
+  const ctx    = canvas.getContext('2d');
+  const meta   = document.getElementById('previewMeta');
+  const wrap   = document.getElementById('previewWrap');
 
-  stopPreviewAnim(); // stop evt. tidligere loop
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // undgå unødigt arbejde
+  if (currentPreviewRouteId === route?.id) return;
+  currentPreviewRouteId = route?.id || null;
+
+  // NULSTIL transform før ny tegning
+  if (typeof ctx.resetTransform === 'function') ctx.resetTransform();
+  else ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   meta.textContent = '';
 
   if (!route) return;
 
   try {
-    // Hent korrekt billede (dato-suffiks) fra Storage
     const { img } = await loadSectorImage(route.billede_id);
 
-    // Sæt canvas' interne pixelstørrelse = billedets naturlige pixelstørrelse
-    canvas.width  = img.naturalWidth || img.width;
-    canvas.height = img.naturalHeight || img.height;
+    // 🔒 Mål bredde kun første gang i denne modal-session
+    if (!previewWcss) {
+      const { width } = wrap.getBoundingClientRect();
+      previewWcss = Math.floor(width); // lås til heltal for stabilitet
+    }
 
-    const colorName = (route?.farve || '').toLowerCase(); // hvis du har farvekolonne
-    const uiColor   = COLOR_HEX[colorName] || COLOR_HEX['gul']; // fallback til quest-farve, du kan også give den med
+    const dpr   = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const wCss  = previewWcss;
+    const scale = wCss / img.naturalWidth;
+    const hCss  = Math.max(1, Math.round(img.naturalHeight * scale));
+
+    // Pixelbuffer + DPR (crisp), men CSS-størrelse stabil
+    canvas.width  = Math.round(wCss * dpr);
+    canvas.height = Math.round(hCss * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    canvas.style.width  = wCss + 'px';
+    canvas.style.height = hCss + 'px';
+
+    // Hjælpere: skaler punkter (både normaliserede 0..1 og pixel)
+    const toPx = (x, y) => {
+      const norm = (x>=0 && x<=1 && y>=0 && y<=1);
+      return {
+        x: norm ? x * wCss : x * scale,
+        y: norm ? y * hCss : y * scale
+      };
+    };
+
+    // Byg Path2D én gang (hurtigt at genbruge)
+    const paths = (route.greb || []).map(p => {
+      const path = new Path2D();
+      if (Array.isArray(p.points) && p.points.length >= 2) {
+        const p0 = toPx(p.points[0].x, p.points[0].y);
+        path.moveTo(p0.x, p0.y);
+        for (let i=1; i<p.points.length; i++) {
+          const pi = toPx(p.points[i].x, p.points[i].y);
+          path.lineTo(pi.x, pi.y);
+        }
+        if (p.points.length >= 3) path.closePath();
+      } else if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.width) && Number.isFinite(p.height)) {
+        // bbox fallback
+        const c = toPx(p.x, p.y);
+        const w = (p.width  * scale);
+        const h = (p.height * scale);
+        path.rect(c.x - w/2, c.y - h/2, w, h);
+      }
+      return path;
+    });
+
+    // Farver
+    const colorName = (route?.farve || '').toLowerCase();
+    const uiColor   = COLOR_HEX[colorName] || COLOR_HEX['gul'];
     const fillCol   = hexToRgba(uiColor, 0.20);
     const strokeCol = hexToRgba(uiColor, 1.00);
-    const glowCol   = 'white';
 
-    // Tegn-hjælpere (kopi af ruteoversigt-logik)
-    const pathFrom = (p) => {
-      // Støt både polygon og evt. bbox fallback
-      if (p?.points?.length >= 3) {
-        ctx.beginPath();
-        ctx.moveTo(p.points[0].x, p.points[0].y);
-        for (let i=1;i<p.points.length;i++) ctx.lineTo(p.points[i].x, p.points[i].y);
-        ctx.closePath();
-        return true;
-      } else if (Number.isFinite(p?.x) && Number.isFinite(p?.y) && Number.isFinite(p?.width) && Number.isFinite(p?.height)) {
-        ctx.beginPath();
-        ctx.rect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
-        return true;
-      }
-      return false;
-    };
+    // --- TEGN ÉN GANG (ingen RAF) ---
+    // baggrund
+    ctx.clearRect(0,0,wCss,hCss);
+    ctx.drawImage(img, 0, 0, wCss, hCss);
 
-    const tegnGlød = (p, farve='white', puls=1) => {
-      if (!pathFrom(p)) return;
-      const maxGlow = 6;
-      for (let i=maxGlow; i>0; i--) {
-        ctx.save();
-        pathFrom(p);
-        ctx.strokeStyle = farve;
-        ctx.globalAlpha = (i / maxGlow) * 0.15 * puls;
-        ctx.lineWidth   = i * 2;
-        ctx.shadowColor = farve;
-        ctx.shadowBlur  = i * 4 * puls;
-        ctx.stroke();
-        ctx.restore();
-      }
-    };
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,wCss,hCss);
 
-    const tegnGreb = (p, farve='#888') => {
-      if (!pathFrom(p)) return;
+    // “vinduer” i mørket = greb
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    paths.forEach(path => ctx.fill(path));
+    ctx.restore();
 
-      // skygge
-      ctx.save();
-      ctx.translate(1,1);
-      pathFrom(p);
-      ctx.fillStyle = hexToRgba('#000', 0.25);
-      ctx.fill();
-      ctx.restore();
+    // glød (statisk – hurtig)
+    ctx.save();
+    ctx.shadowColor = 'white';
+    ctx.shadowBlur  = 12;
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth   = 3;
+    paths.forEach(path => ctx.stroke(path));
+    ctx.restore();
 
-      // fyld
-      pathFrom(p);
-      ctx.fillStyle = fillCol;
-      ctx.fill();
+    // farvet fyld + kant
+    ctx.fillStyle = fillCol;
+    paths.forEach(path => ctx.fill(path));
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth   = 1;
+    paths.forEach(path => ctx.stroke(path));
 
-      // kant
-      ctx.strokeStyle = strokeCol;
-      ctx.lineWidth = 0.1;
-      ctx.stroke();
-    };
-
-    // RAF-loop (samme effekt som i ruteoversigt)
-    const start = performance.now();
-    const loop = () => {
-      // baggrundsbillede
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(img, 0, 0);
-
-      // mørklægning
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-
-      // “vinduer” i mørket = greb-polygoner
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      (route.greb || []).forEach(p => {
-        if (pathFrom(p)) ctx.fill();
-      });
-      ctx.restore();
-
-      // glow-puls
-      const t = (performance.now() - start) / 1000;
-      const puls = Math.sin(t * 2 * Math.PI) * 0.5 + 0.5;
-      (route.greb || []).forEach(p => tegnGlød(p, glowCol, puls));
-
-      // farvefyld
-      (route.greb || []).forEach(p => tegnGreb(p, uiColor));
-
-      previewAnimId = requestAnimationFrame(loop);
-    };
-    loop();
-
+    // meta
     meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
   } catch (e) {
     console.warn('Preview fejl:', e);
     meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • (intet billede)`;
   }
 }
-
   function render() {
     listEl.innerHTML = '';
     filtered.forEach(r => {
-      const row = document.createElement('label');
-      row.className = 'route-item';
+	const row = document.createElement('label');
+	row.className = 'route-item';
+	row.tabIndex = 0;
       row.innerHTML = `
         <input type="checkbox" data-id="${r.id}" ${selected.has(r.id)?'checked':''}/>
         <span class="swatch" style="background:${COLOR_HEX[color] || '#ccc'}"></span>
@@ -413,25 +812,26 @@ async function showPreview(route) {
       `;
       const box = row.querySelector('input[type="checkbox"]');
       // hover/klik -> preview
-      row.addEventListener('mouseenter', () => showPreview(r));
-      row.addEventListener('click', (e) => {
-        if (e.target === box) return; // checkbox klik handles separat
-        // klik på rækken toggler checkbox
-        box.checked = !box.checked;
-        box.dispatchEvent(new Event('change'));
-      });
-      box.addEventListener('change', () => {
-        if (box.checked) {
-          if (selected.size >= requiredCount) {
-            box.checked = false; return;
-          }
-          selected.add(r.id);
-        } else {
-          selected.delete(r.id);
-        }
-        selCountEl.textContent = String(selected.size);
-        submitBtn.disabled = selected.size !== requiredCount;
-      });
+row.addEventListener('click', (e) => {
+  if (e.target === box) return;      // lad checkbox selv håndtere
+  showPreview(r);                    // <-- vis preview ved tap/klik
+  // din toggle-logic:
+  box.checked = !box.checked;
+  box.dispatchEvent(new Event('change'));
+});
+box.addEventListener('change', () => {
+  showPreview(r); // <-- vigtig for mobil
+  if (box.checked) {
+    if (selected.size >= requiredCount) {
+      box.checked = false; return;
+    }
+    selected.add(r.id);
+  } else {
+    selected.delete(r.id);
+  }
+  selCountEl.textContent = String(selected.size);
+  submitBtn.disabled = selected.size !== requiredCount;
+});
 
       listEl.appendChild(row);
     });
@@ -486,20 +886,20 @@ return new Promise((resolve, reject) => {
     onCancel();
   };
 
-  function cleanup(){
-    form.removeEventListener('submit', onSubmit);
-    cancelBtn.removeEventListener('click', onCancel);
-    dlg.removeEventListener('cancel', onEscCancel);
-    searchEl.oninput = null;
-    stopPreviewAnim();
-  }
+function cleanup(){
+  form.removeEventListener('submit', onSubmit);
+  cancelBtn.removeEventListener('click', onCancel);
+  dlg.removeEventListener('cancel', onEscCancel);
+  searchEl.oninput = null;
+  stopPreviewAnim();
+  currentPreviewRouteId = null;
+  previewWcss = null; 
+}
 
-  // ✅ de her to manglede
   form.addEventListener('submit', onSubmit);
   cancelBtn.addEventListener('click', onCancel);
   dlg.addEventListener('cancel', onEscCancel); // gør Esc til "Annullér"
 });
-
 }
 function levelFromXp(xp) {
   return Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * (xp / 100))) / 2));
@@ -528,7 +928,9 @@ async function load() {
 
   const xp = ux?.xp_total || 0;
   const lvl = levelFromXp(xp);
+  const minL = 1, maxL = 4;
   const title = titleFromXp(xp);
+  const fitsLevel = q => (q.min_level ?? 1) <= lvl && lvl <= (q.max_level ?? 99);
 
   document.getElementById('level').textContent = lvl;
   document.getElementById('title').textContent = title;
@@ -555,6 +957,12 @@ document.getElementById('nextXp').textContent = span; // fx 100
     .select('*')
     .eq('type','daily')
     .eq('is_active', true);
+	
+  const { data: bonus } = await client
+    .from('beta_quests')
+    .select('*')
+    .eq('type','bonus')
+    .eq('is_active', true);
 
   const { data: weekly } = await client
     .from('beta_quests')
@@ -569,20 +977,50 @@ document.getElementById('nextXp').textContent = span; // fx 100
     .eq('user_id', user.id)
     .eq('status', 'completed');
 
-  const completedSet = new Set((completedRows ?? []).map(r => r.quest_id));
+completedSet = new Set((completedRows || []).map(r => r.quest_id));
+  
+// filtrér på level + active window
+const now = new Date();
+const dailyPool  = (daily  || []).filter(q => fitsLevel(q) && isActiveNow(q, now));
+const weeklyPool = (weekly || []).filter(q => fitsLevel(q) && isActiveNow(q, now));
+const bonusPool  = (bonus  || []).filter(q => /* valgfrit level-gate */ isActiveNow(q, now));
 
-  renderQuests('daily', daily || [], false, completedSet);
-  renderQuests('weekly', weekly || [], true, completedSet);
+// deterministisk seed per bruger
+const uid = user.id;
+
+// vælg 3 daily (roterer dagligt), 1 weekly (roterer pr. uge), 1 bonus (dagligt)
+const dailyPick  = pickDeterministic(dailyPool, 3, `daily:${uid}:${dayKey(now)}`);
+const weeklyPick = pickDeterministic(weeklyPool, 1, `weekly:${uid}:${isoWeekKey(now)}`);
+const bonusPick  = pickDeterministic(bonusPool, 1, `bonus:${uid}:${dayKey(now)}`);
+
+// render
+renderQuests('daily',  dailyPick,  false, completedSet);
+renderQuests('weekly', weeklyPick, true,  completedSet);
+renderQuests('bonus',  bonusPick,  false, completedSet);
 
 }
 function renderQuests(containerId, quests, weekly=false, completedSet=new Set()){
+  const labelMap = {
+    daily: 'Dagens quests',
+    weekly: 'Ugens challenges',
+    bonus: 'BONUS quests'
+  };
+  const label = labelMap[containerId] || 'Quests';
+
+  // Sørg for at gruppen er kollapsbar
+  ensureGroupDetails(containerId, label);
+
   const el = document.getElementById(containerId);
   el.innerHTML = '';
 
   if (!quests || quests.length === 0) {
     el.innerHTML = `<div style="opacity:.7"><small>Ingen ${weekly ? 'ugentlige ' : ''}quests lige nu ✨</small></div>`;
+    updateGroupHeader(containerId, label, 0);
     return;
   }
+
+  // Hvor mange mangler?
+  const remaining = quests.filter(q => !completedSet.has(q.id)).length;
 
   quests.forEach(q=>{
     const done = completedSet.has(q.id);
@@ -598,38 +1036,79 @@ function renderQuests(containerId, quests, weekly=false, completedSet=new Set())
       </div>
     `;
     const btn = card.querySelector('button');
-    if (!done) btn.addEventListener('click', ()=>completeQuest(q, btn));
+
+    if (!done) {
+      btn.addEventListener('click', async () => {
+        if (btn.dataset.busy) return;
+        btn.dataset.busy = "1";
+        const prevText = btn.textContent;
+        btn.textContent = 'Behandler…';
+        btn.disabled = true;
+
+        const ok = await completeQuest(q, btn);
+        if (!ok) { // annulleret/fejl -> rulle tilbage
+          btn.disabled = false;
+          btn.textContent = prevText;
+        } else {
+          // Ved success bliver den disablet i completeQuest og load() re-render
+        }
+        delete btn.dataset.busy;
+      });
+    }
+
     el.appendChild(card);
   });
+
+  updateGroupHeader(containerId, label, remaining);
 }
+
 async function completeQuest(q, btnEl){
   const { data: { user } } = await client.auth.getUser();
-  if (!user) return;
+  if (!user) return false;
 
-  // 1) Saml proof FØR vi opretter noget i DB
   let proof = {};
   try {
     if (q.validation === 'route_selection') {
       const need  = q.payload?.count ?? 1;
       const color = q.payload?.color ?? 'gul';
-      const selectedIds = await openRoutePicker(need, color);   // <- kan kaste "cancelled"
+      const selectedIds = await openRoutePicker(need, color);
       proof.route_ids = selectedIds;
+
     } else if (q.validation === 'video_capture') {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(t => t.stop());
+      const minSek = Math.max(1, Number(q.payload?.min_seconds ?? 3));
+      const { ok, meta } = await openVideoProof({ minSeconds: minSek, maxSizeMB: 200 });
+      if (!ok) return false;
       proof.video_confirmed = true;
-    } else if (q.validation === 'count_in_session') {
-      proof.count = 10; // din egen logik her
+      proof.video_meta = meta;
+
+    } else if (q.validation === 'text') {
+      const category   = q.payload?.category || "grebstyper";
+      const minmatches = Number(q.payload?.min_matches ?? 1);
+      const prompt     = q.payload?.prompt || `Skriv mindst ${minmatches} ord fra ${category}.`;
+
+      let keywords = await getKeywords(category);
+      if ((!keywords || !keywords.length) && Array.isArray(q.payload?.keywords)) {
+        keywords = q.payload.keywords;
+      }
+      if (!keywords || !keywords.length) {
+        alert(`Ingen keywords fundet i 'keywords.${category}'.`);
+        return false;
+      }
+      const { ok, text, matched_keywords } =
+        await openTextProof({ prompt, keywords, min_matches: minmatches });
+      if (!ok) return false;
+
+      proof.text_answer  = text;
+      proof.text_matched = matched_keywords;
     }
+
   } catch (e) {
-    // Brugeren lukkede modalen (eller afbrød valideringen) -> bare exit uden fejl
-    if (e && e.message === 'cancelled') return;
-    // andet (ægte fejl): vis besked og exit
+    if (e && e.message === 'cancelled') return false; // bruger lukkede modalen
     alert(e.message || 'Noget gik galt');
-    return;
+    return false;
   }
 
-  // 2) Opret user_quests direkte som "completed" med proof
+  // Opret completion
   const { data: uqRow, error } = await client
     .from('user_quests')
     .insert({
@@ -641,18 +1120,85 @@ async function completeQuest(q, btnEl){
     })
     .select()
     .single();
-  if (error) { alert(error.message); return; }
 
-  // 3) Award XP
+  if (error) {
+    // Hvis constraint rammer, så opfør dig pænt i UI’et
+    if (String(error.message).includes('uq_user_completed_quest_once')) {
+      if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Allerede fuldført'; }
+      return true; // behandl som success i UI
+    }
+    alert(error.message);
+    return false;
+  }
+
+  // Award XP
   const { error: e3 } = await client.rpc('award_xp_for_quest', {
     p_user_quest_id: uqRow.id
   });
-  if (e3) { alert(e3.message); return; }
+  if (e3) { alert(e3.message); return false; }
 
-  // 4) Instant UI
+  // UI instant + reload
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Allerede fuldført'; }
   alert(`Færdig! Du fik +${q.xp_reward} XP`);
   load();
+  return true;
+}
+
+async function getKeywords(category) {
+  // henter kun den ønskede kategori (case-insensitive)
+  const { data, error } = await client
+    .from("keywords")
+    .select("terms")
+    .ilike("category", category); // 'grebstyper' matcher 'grebstyper' uanset case
+
+  if (error) {
+    console.error("Keyword fetch error", error);
+    return [];
+  }
+  if (!Array.isArray(data) || data.length === 0) return [];
+
+  const out = [];
+
+  for (const row of data) {
+    let val = row?.terms;
+
+    if (Array.isArray(val)) {
+      // ✅ allerede text[] → direkte brug
+      out.push(...val);
+      continue;
+    }
+
+    if (typeof val === "string") {
+      // Eksemplet viser: "\"{...}\"" (dvs. array-litteral pakket som tekst med ekstra "" omkring)
+      let s = val.trim();
+
+      // fjern ydre anførselstegn hvis tilstede:  "\"{...}\""  ->  "{...}"
+      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+        s = s.slice(1, -1);
+      }
+
+      // nu forventer vi Postgres array-litteral: { "a","b","c" } eller {a,b,c}
+      if (s.startsWith("{") && s.endsWith("}")) {
+        // prøv at hente kun elementer i anførselstegn (sikrest)
+        const quoted = [...s.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
+        if (quoted.length) {
+          out.push(...quoted);
+        } else {
+          // fallback: split på komma
+          out.push(...s.slice(1, -1).split(",").map(x => x.trim()).filter(Boolean));
+        }
+      } else {
+        // sidste udvej: forsøg JSON-parse hvis det ligner ["a","b"]
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) out.push(...parsed);
+        } catch {}
+      }
+    }
+  }
+
+  // rens + dedup
+  return Array.from(new Set(out.map(x => (x || "").toString().trim()).filter(Boolean)));
 }
 
 load();

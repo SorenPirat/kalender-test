@@ -727,10 +727,6 @@ td:last-child button:last-child {
     padding-left: 0.5rem;
   }
   
-.beskeder-app {
-    flex-direction: column;
-  }
-
   .tråd-liste {
     width: 100%;
     max-width: none;

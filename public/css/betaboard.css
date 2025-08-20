@@ -126,8 +126,29 @@ dialog.beta-dialog::backdrop{
 }
 .modal-actions .counts{ font-size:12px; opacity:.8; }
 
+.quest-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  padding: .25rem 0;
+  user-select: none;
+}
+.quest-group summary::-webkit-details-marker { display: none; }
+
+.quest-group .sum-title { font-weight: 700; }
+.quest-group .sum-right { opacity: .75; font-size: .9rem; }
+
+/* lidt spacing til indholdet */
+.quest-group > #daily,
+.quest-group > #weekly,
+.quest-group > #bonus {
+  margin-top: .5rem;
+}
+
 /* ====== Mobil-UX ====== */
-@media (max-width: 700px){
+@media (max-width: 600px){
  
   dialog.beta-dialog[open]{
     width:100vw;
@@ -149,7 +170,13 @@ dialog.beta-dialog::backdrop{
     background: var(--bg);
     padding-top:8px; margin-top:8px;
   }
-
+  dialog.beta-dialog video,
+  dialog.beta-dialog canvas,
+  dialog.beta-dialog img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
  dialog.beta-dialog{
     width:100vw;
     height:100dvh;
@@ -175,6 +202,16 @@ dialog.beta-dialog::backdrop{
     background: var(--bg);
     padding-top:8px;
     margin-top:8px;
+  }
+  #videoModal[open] .modal-grid {
+    grid-template-columns: 1fr;    /* stack venstre/højre */
+    grid-template-rows: auto 1fr;  /* venstre (upload) = auto, preview = 1fr */
+    min-height: 0;
+  }
+  /* Overstyr generel regel: allow full height i videomodalen */
+  #videoModal[open] .preview-wrap {
+    height: auto !important;
+    max-height: none !important;
   }
 }
 

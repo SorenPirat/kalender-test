@@ -689,6 +689,11 @@ body {
   font-size: 1.1em;
 }
 
+#menu-betaboard::before {
+  content: "🎖️";
+  font-size: 1.1em;
+}
+
 #aktiviteter-submenu a {
   display: block;
   padding: 0.5rem 1rem;
