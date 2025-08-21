@@ -164,7 +164,6 @@ dialog.beta-dialog::backdrop{
     gap:12px;
   }
   dialog.beta-dialog[open] .route-list{ height: 40dvh; }
-  dialog.beta-dialog[open] .preview-wrap{ height: 38dvh; }
   dialog.beta-dialog[open] .modal-actions{
     position: sticky; bottom: 0;
     background: var(--bg);
@@ -193,9 +192,6 @@ dialog.beta-dialog::backdrop{
   .route-list{
     max-height: none;
     height: 40dvh;   /* scroll område */
-  }
-  .preview-wrap{
-    height: 38dvh;   /* preview-højde */
   }
   .modal-actions{
     position: sticky; bottom: 0;

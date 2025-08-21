@@ -10,7 +10,7 @@
 </head>
 <body>
   <main>
-    <h1>Beta Board</h1>
+    <h1>🎖️Beta Board</h1>
 
     <section id="profile">
       <div><strong>Titel:</strong> <span id="title">…</span></div>
@@ -31,6 +31,39 @@
 	
   </main>
 
+
+<!-- Lead-by-grade Modal -->
+<dialog id="leadGradeModal" class="beta-dialog" aria-labelledby="leadGradeModalTitle">
+  <form method="dialog" id="leadGradeForm">
+    <h3 id="leadGradeModalTitle">Vælg føre-rute</h3>
+
+    <div class="modal-grid">
+      <!-- Venstre: søg + liste -->
+      <div>
+        <input id="leadGradeSearch" class="route-search" placeholder="Søg navn/grad…" />
+        <div id="leadGradeList" class="route-list"></div>
+      </div>
+
+      <!-- Højre: preview (samme stil som routeModal) -->
+      <div>
+        <div id="leadPreviewWrap" class="preview-wrap">
+          <canvas id="leadPreviewCanvas" style="display:block;width:100%;height:auto;pointer-events:none;"></canvas>
+        </div>
+        <div id="leadPreviewMeta" class="preview-meta"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts"><small>Vælg 1 rute i samme grad eller én grad sværere</small></div>
+      <div class="mini-gap">
+        <button type="button" id="leadGradeCancel" class="btn">Annullér</button>
+        <button type="submit" class="btn" id="leadGradeSubmit" disabled>Bekræft</button>
+      </div>
+    </div>
+
+    <p id="leadGradeError" style="color:#b00;display:none;"></p>
+  </form>
+</dialog>
 <!-- Text Modal -->
 <dialog id="textModal" class="beta-dialog" aria-labelledby="textModalTitle">
   <form method="dialog" id="textForm">
@@ -51,7 +84,6 @@
     </div>
   </form>
 </dialog>
-
 <!-- Rute Modal -->
 <dialog id="routeModal" class="beta-dialog" aria-labelledby="routeModalTitle">
   <form method="dialog" id="routeForm">
@@ -118,6 +150,64 @@
     <p id="videoError" style="color:#b00;display:none;"></p>
   </form>
 </dialog>
+<!-- Count-in-session Modal -->
+<dialog id="countModal" class="beta-dialog" aria-labelledby="countModalTitle">
+  <form method="dialog" id="countForm">
+    <h3 id="countModalTitle">Tæl gentagelser</h3>
+
+    <div class="card">
+      <p id="countPrompt" style="margin:0 0 .5rem 0;">
+        Tryk “+1” hver gang du laver en øvelse.
+      </p>
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+        <button type="button" class="btn" id="countMinus">−1</button>
+        <div style="min-width:8ch;text-align:center;font-weight:bold;font-size:1.2rem;">
+          <span id="countCurrent">0</span>/<span id="countTarget">3</span>
+        </div>
+        <button type="button" class="btn" id="countPlus">+1</button>
+        <button type="button" class="btn" id="countReset" style="margin-left:auto;">Nulstil</button>
+      </div>
+      <p id="countError" style="color:#b00;display:none;margin:.5rem 0 0 0;"></p>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts"><small id="countHelp">Lav dine gentagelser og tryk Bekræft</small></div>
+      <div class="mini-gap">
+        <button type="button" class="btn" id="countCancel">Annullér</button>
+        <button type="submit" class="btn" id="countSubmit" disabled>Bekræft</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<!-- Timer Modal -->
+<dialog id="timerModal" class="beta-dialog" aria-labelledby="timerModalTitle">
+  <form method="dialog" id="timerForm">
+    <h3 id="timerModalTitle">Timer</h3>
+
+    <div class="card" style="text-align:center">
+      <div style="font-size:2.5rem; font-variant-tabular-nums: tabular-nums; letter-spacing:.02em;" id="timerDisplay">00:30.0</div>
+      <div aria-hidden="true" style="height:10px; background:#eee; border-radius:8px; overflow:hidden; margin:.75rem 0;">
+        <div id="timerBar" style="height:100%; width:0%; background:#7aa4e6;"></div>
+      </div>
+      <p id="timerHelp" style="margin:.25rem 0 .5rem 0; opacity:.8;">Klar når du er.</p>
+
+      <div style="display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap;">
+        <button type="button" class="btn" id="timerStart">Start</button>
+        <button type="button" class="btn" id="timerPause" disabled>Pause</button>
+        <button type="button" class="btn" id="timerResume" disabled>Fortsæt</button>
+        <button type="button" class="btn" id="timerReset">Nulstil</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <div class="counts"><small id="timerStatus">Mål: <span id="timerTargetLbl">30</span> sek.</small></div>
+      <div class="mini-gap">
+        <button type="button" class="btn" id="timerCancel">Annullér</button>
+        <button type="submit" class="btn" id="timerSubmit" disabled>Bekræft</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 
 
   <script type="module">
@@ -137,6 +227,7 @@ const nice = s => (s||'').charAt(0).toUpperCase() + (s||'').slice(1);
 // Hvor dine webp-billeder ligger (tilpas stien til dit projekt!)
 const IMAGE_BASE = 'https://cianxaxaphvrutmstydr.supabase.co/storage/v1/object/public/ruter/';   
 const IMG_EXT    = '.webp'; 
+const IMG_CACHE_NAME = 'ruter-img-v1';
 
 // cache af billeder
 const imageUrlCache = new Map();
@@ -152,7 +243,926 @@ function hexToRgba(hex, a=1){
 let previewAnimId = null;
 let currentPreviewRouteId = null;
 let previewWcss = null;
+let leadPreviewWcss = null;
 let completedSet = new Set();
+
+// Åbn count-in-session modal: bruger tæller op til target i én session
+function openCountInSession({
+  title = "Tæl gentagelser",
+  prompt = "Tryk “+1” hver gang du laver en øvelse.",
+  target = 1
+} = {}) {
+  const dlg   = document.getElementById('countModal');
+  const form  = document.getElementById('countForm');
+  const minus = document.getElementById('countMinus');
+  const plus  = document.getElementById('countPlus');
+  const reset = document.getElementById('countReset');
+  const cancel= document.getElementById('countCancel');
+  const submit= document.getElementById('countSubmit');
+  const errEl = document.getElementById('countError');
+  const curEl = document.getElementById('countCurrent');
+  const tgtEl = document.getElementById('countTarget');
+  const lab   = document.getElementById('countModalTitle');
+  const pEl   = document.getElementById('countPrompt');
+
+  // klik-historik (valgfrit)
+  const history = [];
+
+  let count = 0;
+  let lock = false;              // <- anti-doubletap-lås
+  const COOLDOWN_MS = 50;       // <- justér hvis nødvendigt
+
+  let resolveFn, rejectFn;
+  const p = new Promise((res, rej)=>{ resolveFn = res; rejectFn = rej; });
+
+  function lockTap(btn){
+    lock = true;
+    btn.disabled = true;
+    setTimeout(()=>{ lock = false; btn.disabled = false; update(); }, COOLDOWN_MS);
+  }
+
+  function update() {
+    const need = Math.max(1, Number(target));
+    curEl.textContent = String(count);
+    tgtEl.textContent = String(need);
+
+    // Disable/enable knapper efter state
+    plus.disabled  = (count >= need) || lock;
+    minus.disabled = (count <= 0)    || lock;
+    reset.disabled = (count === 0)   || lock;
+
+    // Bekræft først når target er nået
+    submit.disabled = (count < need) || lock;
+
+    errEl.style.display = 'none';
+  }
+
+  function onPlus(e){
+    e.preventDefault();
+    if (lock) return;
+    const need = Math.max(1, Number(target));
+    if (count >= need) return;   // <- stop over target
+    count += 1;
+    history.push({ t: new Date().toISOString(), op: "+1" });
+    update();
+    lockTap(plus);               // <- anti-doubletap
+  }
+
+  function onMinus(e){
+    e.preventDefault();
+    if (lock) return;
+    if (count <= 0) return;
+    count -= 1;
+    history.push({ t: new Date().toISOString(), op: "-1" });
+    update();
+    lockTap(minus);              // <- anti-doubletap
+  }
+
+  function onReset(e){
+    e.preventDefault();
+    if (lock) return;
+    if (count === 0) return;
+    count = 0;
+    history.push({ t: new Date().toISOString(), op: "reset" });
+    update();
+    lockTap(reset);              // <- anti-doubletap
+  }
+
+  function onCancel(){
+    cleanup(); dlg.close();
+    rejectFn(new Error('cancelled'));
+  }
+  function onEsc(e){ e.preventDefault(); onCancel(); }
+
+  function onSubmit(e){
+    e.preventDefault();
+    const need = Math.max(1, Number(target));
+    if (count < need) {
+      errEl.textContent = `Du mangler ${need - count} gentagelse(r).`;
+      errEl.style.display = 'block';
+      return;
+    }
+    cleanup(); dlg.close();
+    resolveFn({ ok:true, count, target: need, history });
+  }
+
+  function cleanup(){
+    form.removeEventListener('submit', onSubmit);
+    cancel.removeEventListener('click', onCancel);
+    dlg.removeEventListener('cancel', onEsc);
+    // Brug pointerdown for bedre mobil-klik, men fjern dem rent
+    plus.removeEventListener('pointerdown', onPlus);
+    minus.removeEventListener('pointerdown', onMinus);
+    reset.removeEventListener('pointerdown', onReset);
+  }
+
+  // init & vis
+  lab.textContent = title || "Tæl gentagelser";
+  pEl.textContent = prompt || pEl.textContent;
+  count = 0; lock = false; update();
+
+  form.addEventListener('submit', onSubmit);
+  cancel.addEventListener('click', onCancel);
+  dlg.addEventListener('cancel', onEsc);
+
+  // 🎯 Brug pointerdown i stedet for click for at undgå dobbelte hændelser på mobil
+  plus.addEventListener('pointerdown', onPlus);
+  minus.addEventListener('pointerdown', onMinus);
+  reset.addEventListener('pointerdown', onReset);
+
+  dlg.showModal();
+  return p;
+}
+
+function formatSec(sec) {
+  const s = Math.max(0, sec);
+  const whole = Math.floor(s);
+  const tenths = Math.floor((s - whole) * 10);
+  const m = Math.floor(whole / 60);
+  const ss = String(whole % 60).padStart(2, '0');
+  return `${String(m).padStart(2,'0')}:${ss}.${tenths}`;
+}
+
+// Åbn timer modal
+function openTimerModal({ targetSeconds = 30, vibrateOnDone = true } = {}) {
+  const dlg   = document.getElementById('timerModal');
+  const form  = document.getElementById('timerForm');
+
+  const disp  = document.getElementById('timerDisplay');
+  const bar   = document.getElementById('timerBar');
+  const help  = document.getElementById('timerHelp');
+  const status= document.getElementById('timerStatus');
+  const targetLbl = document.getElementById('timerTargetLbl');
+
+  const btnStart  = document.getElementById('timerStart');
+  const btnPause  = document.getElementById('timerPause');
+  const btnResume = document.getElementById('timerResume');
+  const btnReset  = document.getElementById('timerReset');
+  const btnCancel = document.getElementById('timerCancel');
+  const btnSubmit = document.getElementById('timerSubmit');
+
+  // state
+  let startTs = null;          // performance.now() ved start/fortsæt
+  let acc = 0;                 // akkumuleret tid i sekunder (inkl. tidligere pauser)
+  let raf = null;              // requestAnimationFrame id
+  let reached = false;         // om målet er nået
+  const pauses = [];           // log af pause/resume tidspunkter
+
+  targetSeconds = Math.max(1, Number(targetSeconds) || 30);
+  targetLbl.textContent = targetSeconds;
+
+  function setButtons({ running }) {
+    btnStart.disabled  = running || acc > 0;     // skjul start efter første kørsel
+    btnPause.disabled  = !running;
+    btnResume.disabled = running || (startTs !== null) || (acc === 0) || reached;
+    btnSubmit.disabled = !reached;
+  }
+
+  function updateUI(elapsed) {
+    const t = Math.min(elapsed, targetSeconds);
+    disp.textContent = formatSec(targetSeconds - t);           // countdown‑følelse
+    bar.style.width = `${(t / targetSeconds) * 100}%`;
+    status.innerHTML = `Mål: <span id="timerTargetLbl">${targetSeconds}</span> sek. • Tid: ${elapsed.toFixed(1)}s`;
+  }
+
+  function tick() {
+    const now = performance.now();
+    const elapsed = acc + (startTs ? (now - startTs) / 1000 : 0);
+
+    updateUI(elapsed);
+
+    if (!reached && elapsed >= targetSeconds) {
+      reached = true;
+      stopRunning(); // stop tiden
+      help.textContent = '✅ Tiden er nået! Tryk Bekræft.';
+      btnSubmit.disabled = false;
+      if (vibrateOnDone && navigator.vibrate) navigator.vibrate([80, 60, 80]);
+    } else {
+      raf = requestAnimationFrame(tick);
+    }
+  }
+
+  function startRunning() {
+    if (reached) return;
+    if (startTs == null) {
+      startTs = performance.now();
+      help.textContent = 'Kører…';
+      setButtons({ running: true });
+      if (!raf) raf = requestAnimationFrame(tick);
+    }
+  }
+
+  function stopRunning() {
+    if (startTs != null) {
+      const now = performance.now();
+      acc += (now - startTs) / 1000;
+      startTs = null;
+    }
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    setButtons({ running: false });
+  }
+
+  function resetAll() {
+    stopRunning();
+    acc = 0;
+    reached = false;
+    pauses.length = 0;
+    help.textContent = 'Klar når du er.';
+    updateUI(0);
+    bar.style.width = '0%';
+    setButtons({ running: false });
+    btnStart.disabled = false;
+    btnSubmit.disabled = true;
+  }
+
+  // init visning
+  resetAll();
+
+  // handlers
+  const onStart  = (e) => { e.preventDefault(); startRunning(); };
+  const onPause  = (e) => { e.preventDefault(); pauses.push({ t:new Date().toISOString(), op:'pause' }); stopRunning(); help.textContent = 'Sat på pause.'; btnResume.disabled = reached; };
+  const onResume = (e) => { e.preventDefault(); if (!reached) { pauses.push({ t:new Date().toISOString(), op:'resume' }); startRunning(); } };
+  const onReset  = (e) => { e.preventDefault(); resetAll(); };
+  const onCancel = () => { cleanup(); dlg.close(); rejectFn(new Error('cancelled')); };
+  const onEsc    = (e) => { e.preventDefault(); onCancel(); };
+  const onSubmit = (e) => {
+    e.preventDefault();
+    stopRunning();
+    const elapsed = acc; // sekunder
+    if (elapsed + 1e-6 < targetSeconds) { // floating guard
+      help.textContent = `Du mangler ${(targetSeconds - elapsed).toFixed(1)}s.`;
+      return;
+    }
+    const result = {
+      ok: true,
+      target_s: Number(targetSeconds.toFixed(1)),
+      elapsed_s: Number(elapsed.toFixed(1)),
+      pauses
+    };
+    cleanup(); dlg.close(); resolveFn(result);
+  };
+
+  // attach
+  btnStart.addEventListener('click', onStart);
+  btnPause.addEventListener('click', onPause);
+  btnResume.addEventListener('click', onResume);
+  btnReset.addEventListener('click', onReset);
+  btnCancel.addEventListener('click', onCancel);
+  form.addEventListener('submit', onSubmit);
+  dlg.addEventListener('cancel', onEsc);
+
+  // auto‑focus Start for hurtigt flow
+  dlg.showModal();
+  setTimeout(() => btnStart.focus(), 0);
+
+  // promise
+  let resolveFn, rejectFn;
+  const p = new Promise((res, rej) => { resolveFn = res; rejectFn = rej; });
+
+  function cleanup() {
+    stopRunning();
+    btnStart.removeEventListener('click', onStart);
+    btnPause.removeEventListener('click', onPause);
+    btnResume.removeEventListener('click', onResume);
+    btnReset.removeEventListener('click', onReset);
+    btnCancel.removeEventListener('click', onCancel);
+    form.removeEventListener('submit', onSubmit);
+    dlg.removeEventListener('cancel', onEsc);
+  }
+
+  return p;
+}
+
+function gradeOrderList(){
+  return ['4','5a','5b','5c','6a','6a+','6b','6b+','6c','6c+',
+          '7a','7a+','7b','7b+','7c','7c+','8a','8a+','8b','8b+','8c','8c+',
+          '9a','9a+','9b','9b+'];
+}
+const gradeRank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
+const gradeNext = g => {
+  const list = gradeOrderList(); const i = gradeRank(g);
+  return i >= 0 && i+1 < list.length ? list[i+1] : null;
+};
+
+// Åben hårdeste føregrad
+async function openLeadPickerByGradeRange() {
+  const dlg   = document.getElementById('leadGradeModal');
+  const form  = document.getElementById('leadGradeForm');
+  const listEl= document.getElementById('leadGradeList');
+  const search= document.getElementById('leadGradeSearch');
+  const err   = document.getElementById('leadGradeError');
+  const cancel= document.getElementById('leadGradeCancel');
+  const submit= document.getElementById('leadGradeSubmit');
+
+  const canvas= document.getElementById('leadPreviewCanvas');
+  const meta  = document.getElementById('leadPreviewMeta');
+  const wrap  = document.getElementById('leadPreviewWrap');
+
+  err.style.display = 'none';
+  submit.disabled = true;
+  listEl.innerHTML = 'Indlæser…';
+
+  // 1) Hent din hårdeste føregrad (onsight/redpoint)
+  const hardest = await getUserHardestLeadGrade(['onsight','redpoint']);
+  if (!hardest) {
+    err.textContent = 'Ingen føre‑log fundet (onsight/redpoint).';
+    err.style.display = 'block';
+    return Promise.reject(new Error('no-hardest'));
+  }
+
+  const same  = hardest.grade;
+  const next  = gradeNext(hardest.grade);
+  const allow = [same, ...(next ? [next] : [])].filter(Boolean);
+
+  // 2) Hent aktive føre‑ruter i disse grader (ikke sektor-*)
+  const { data: routes, error: rErr } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id, greb')
+    .eq('aktiv', true)
+    .in('grad', allow);
+
+  if (rErr) { err.textContent = rErr.message; err.style.display = 'block'; return Promise.reject(rErr); }
+
+  // filtrér til føre‑vægge
+  const leadRoutes = (routes||[]).filter(r => !(String(r.billede_id||'').toLowerCase().startsWith('sektor-')));
+
+  let filtered = leadRoutes.slice();
+  let selectedId = null;
+
+  // ——— Preview (samme stil som i routeModal) ———
+async function showPreview(route) {
+  const canvas = document.getElementById('leadPreviewCanvas');
+  const meta   = document.getElementById('leadPreviewMeta');
+  const wrap   = document.getElementById('leadPreviewWrap');
+  const ctx = canvas.getContext('2d');
+
+  // tom preview
+  if (!route) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    meta.textContent = 'Ingen forhåndsvisning.';
+    return;
+  }
+
+  try {
+    const { img } = await loadSectorImage(route.billede_id);
+
+    // 🔒 lås CSS‑bredde første gang (mod "voksende" canvas)
+    if (!leadPreviewWcss) {
+      const { width } = wrap.getBoundingClientRect();
+      leadPreviewWcss = Math.floor(width);
+    }
+    const dpr   = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const wCss  = leadPreviewWcss;
+    const scale = wCss / img.naturalWidth;
+    const hCss  = Math.max(1, Math.round(img.naturalHeight * scale));
+
+    // reset + stabil transform
+    if (typeof ctx.resetTransform === 'function') ctx.resetTransform();
+    else ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    canvas.width  = Math.round(wCss * dpr);
+    canvas.height = Math.round(hCss * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    canvas.style.width  = wCss + 'px';
+    canvas.style.height = hCss + 'px';
+
+    // baggrund
+    ctx.clearRect(0, 0, wCss, hCss);
+    ctx.drawImage(img, 0, 0, wCss, hCss);
+
+    // ——— Tegn greb som i route‑modallen ———
+    const greb = route.greb || [];
+
+    // helper: normaliserede (0..1) → css‑px; ellers skaler pixelkoordinater
+    const toPx = (x, y) => {
+      const norm = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+      return {
+        x: norm ? x * wCss : x * scale,
+        y: norm ? y * hCss : y * scale
+      };
+    };
+
+    // byg Path2D for alle greb (polygon/linje/boks/cirkel)
+    const paths = greb.map(p => {
+      const path = new Path2D();
+      if (Array.isArray(p.points) && p.points.length >= 2) {
+        const p0 = toPx(p.points[0].x, p.points[0].y);
+        path.moveTo(p0.x, p0.y);
+        for (let i = 1; i < p.points.length; i++) {
+          const pi = toPx(p.points[i].x, p.points[i].y);
+          path.lineTo(pi.x, pi.y);
+        }
+        if (p.points.length >= 3) path.closePath();
+      } else if (
+        Number.isFinite(p.x) && Number.isFinite(p.y) &&
+        Number.isFinite(p.width) && Number.isFinite(p.height)
+      ) {
+        const c = toPx(p.x, p.y);
+        const w = p.width * scale;
+        const h = p.height * scale;
+        path.rect(c.x - w / 2, c.y - h / 2, w, h);
+      } else if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+        const c = toPx(p.x, p.y);
+        const r = Number.isFinite(p.r) ? (p.r * scale) : 8;
+        path.arc(c.x, c.y, r, 0, Math.PI * 2);
+      }
+      return path;
+    });
+
+    // halvmørk maske
+    ctx.fillStyle = 'rgba(0,0,0,0.50)';
+    ctx.fillRect(0, 0, wCss, hCss);
+
+    // udskær “vinduer” for greb (destination‑out)
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    paths.forEach(path => ctx.fill(path));
+    ctx.restore();
+
+    // hvid glød rundt om greb
+    ctx.save();
+    ctx.shadowColor = 'white';
+    ctx.shadowBlur  = 12;
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth   = 3;
+    paths.forEach(path => ctx.stroke(path));
+    ctx.restore();
+
+    // farvet overlay på greb (samme gule som i routeModal)
+    const uiColor   = (COLOR_HEX && COLOR_HEX['gul']) || '#f1c40f';
+    const fillCol   = (typeof hexToRgba === 'function') ? hexToRgba(uiColor, 0.20) : 'rgba(241,196,15,0.20)';
+    const strokeCol = (typeof hexToRgba === 'function') ? hexToRgba(uiColor, 1.00)  : '#f1c40f';
+
+    ctx.fillStyle = fillCol;
+    paths.forEach(path => ctx.fill(path));
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth   = 1;
+    paths.forEach(path => ctx.stroke(path));
+
+    // meta‑tekst
+    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
+  } catch (e) {
+    meta.textContent = 'Kunne ikke vise forhåndsvisning.';
+  }
+}
+
+  function renderList(){
+    listEl.innerHTML = '';
+    filtered.forEach(r => {
+      const row = document.createElement('label');
+      row.className = 'route-item';
+      row.tabIndex = 0;
+      row.innerHTML = `
+        <input type="radio" name="leadpick" data-id="${r.id}" ${selectedId===r.id?'checked':''}/>
+        <div class="txt">
+          <div class="title">${r.navn || '(Uden navn)'}</div>
+          <small>${r.grad || ''} • ${r.billede_id || ''}</small>
+        </div>
+      `;
+      const radio = row.querySelector('input[type="radio"]');
+
+      row.addEventListener('click', (e) => {
+        if (e.target === radio) return;
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change'));
+      });
+      radio.addEventListener('change', () => {
+        selectedId = r.id;
+        submit.disabled = !selectedId;
+        renderLeadDialogPreview(r)
+      });
+
+      listEl.appendChild(row);
+    });
+
+    // auto-preview første
+    if (filtered.length) {
+      selectedId = filtered[0].id;
+      submit.disabled = false;
+      renderLeadDialogPreview(filtered[0]);
+      const firstRadio = listEl.querySelector('input[type="radio"]');
+      if (firstRadio) firstRadio.checked = true;
+    } else {
+      submit.disabled = true;
+      meta.textContent = `Ingen aktive føre‑ruter i ${allow.join(' / ')}.`;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+  }
+
+  // søg
+  search.oninput = () => {
+    const q = (search.value||'').toLowerCase();
+    filtered = leadRoutes.filter(r =>
+      (r.navn||'').toLowerCase().includes(q) ||
+      (r.grad||'').toLowerCase().includes(q) ||
+      (r.billede_id||'').toLowerCase().includes(q)
+    );
+    renderList();
+  };
+
+  // initial render
+  renderList();
+  dlg.showModal();
+
+  return new Promise((resolve, reject) => {
+    function cleanup(){
+      form.removeEventListener('submit', onSubmit);
+      cancel.removeEventListener('click', onCancel);
+      dlg.removeEventListener('cancel', onEsc);
+      search.oninput = null;
+    }
+    function onSubmit(e){
+      e.preventDefault();
+      if (!selectedId) { err.textContent='Vælg en rute.'; err.style.display='block'; return; }
+      const picked = leadRoutes.find(r => r.id === selectedId) || null;
+      cleanup(); dlg.close();
+      resolve({ picked, hardest, allowedGrades: allow });
+    }
+    function onCancel(){ cleanup(); dlg.close(); reject(new Error('cancelled')); }
+    function onEsc(e){ e.preventDefault(); onCancel(); }
+
+    form.addEventListener('submit', onSubmit);
+    cancel.addEventListener('click', onCancel);
+    dlg.addEventListener('cancel', onEsc);
+  });
+}
+
+// Find hårdeste TOPROPE-grad (kun rebvægge = ikke 'sektor-*')
+async function getUserHardestTopropeGrade() {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+
+  const { data: logs } = await client
+    .from('rutelog')
+    .select('rute_id, forsøg, egen_grad')
+    .eq('user_id', user.id)
+    .eq('forsøg', 'toprope'); // <- kun toprope
+
+  if (!Array.isArray(logs) || logs.length === 0) return null;
+
+  const ids = Array.from(new Set(logs.map(l => l.rute_id).filter(Boolean)));
+  if (!ids.length) return null;
+
+  const { data: routes } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id')
+    .in('id', ids);
+
+  if (!Array.isArray(routes) || !routes.length) return null;
+
+  const isRopeWall = (billede_id='') => !String(billede_id).toLowerCase().startsWith('sektor-');
+  const byId = new Map(routes.map(r => [r.id, r]));
+  const ropeLogs = logs.map(l => ({...l, route: byId.get(l.rute_id)}))
+                       .filter(x => x.route && isRopeWall(x.route.billede_id));
+  if (!ropeLogs.length) return null;
+
+  const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
+  let best = null;
+  for (const row of ropeLogs) {
+    const g = row.route.grad;
+    const r = rank(g);
+    if (r < 0) continue;
+    if (!best || r > best.rank) {
+      best = { rank:r, grade:g, rute_id: row.rute_id, route_name: row.route.navn || null, style: 'toprope' };
+    }
+  }
+  return best;
+}
+
+// Åbn "vælg TOPROPE-rute" i samme/næste grad (genbrug lead-modal)
+async function openTopropePickerByGradeRange() {
+  const dlg   = document.getElementById('leadGradeModal');
+  const form  = document.getElementById('leadGradeForm');
+  const listEl= document.getElementById('leadGradeList');
+  const search= document.getElementById('leadGradeSearch');
+  const err   = document.getElementById('leadGradeError');
+  const cancel= document.getElementById('leadGradeCancel');
+  const submit= document.getElementById('leadGradeSubmit');
+  const title = document.getElementById('leadGradeModalTitle');
+
+  // skift titel
+  if (title) title.textContent = 'Vælg toprope-rute';
+
+  err.style.display = 'none';
+  submit.disabled = true;
+  listEl.innerHTML = 'Indlæser…';
+
+  // 1) hårdeste toprope
+  const hardest = await getUserHardestTopropeGrade();
+  if (!hardest) { err.textContent = 'Ingen toprope-log fundet.'; err.style.display='block'; return Promise.reject(new Error('no-hardest')); }
+
+  const same = hardest.grade;
+  const next = gradeNext(hardest.grade);
+  const allow = [same, ...(next ? [next] : [])].filter(Boolean);
+
+  // 2) aktive reb-ruter i disse grader (ikke sektor-*)
+  const { data: routes, error: rErr } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id, greb')
+    .eq('aktiv', true)
+    .in('grad', allow);
+
+  if (rErr) { err.textContent = rErr.message; err.style.display='block'; return Promise.reject(rErr); }
+  const ropeRoutes = (routes || []).filter(r => !(String(r.billede_id||'').toLowerCase().startsWith('sektor-')));
+
+  // Lokal kopi af openLeadPickerByGradeRange-rendering, men genbruger preview-funktion
+  let filtered = ropeRoutes.slice();
+  let selectedId = null;
+
+  function renderList(){
+    listEl.innerHTML = '';
+    filtered.forEach(r => {
+      const row = document.createElement('label');
+      row.className = 'route-item';
+      row.tabIndex = 0;
+      row.innerHTML = `
+        <input type="radio" name="ropepick" data-id="${r.id}" ${selectedId===r.id?'checked':''}/>
+        <div class="txt">
+          <div class="title">${r.navn || '(Uden navn)'}</div>
+          <small>${r.grad || ''} • ${r.billede_id || ''}</small>
+        </div>`;
+      const radio = row.querySelector('input[type="radio"]');
+      row.addEventListener('click', (e)=>{ if(e.target===radio) return; radio.checked=true; radio.dispatchEvent(new Event('change')); });
+      radio.addEventListener('change', ()=>{ selectedId = r.id; submit.disabled = !selectedId; /* vis preview */ renderLeadDialogPreview(r) });
+      listEl.appendChild(row);
+    });
+    if (filtered.length) {
+      selectedId = filtered[0].id; submit.disabled = false; renderLeadDialogPreview(filtered[0]);
+      const first = listEl.querySelector('input[type="radio"]'); if (first) first.checked = true;
+    } else {
+      submit.disabled = true;
+      const canvas = document.getElementById('leadPreviewCanvas'); const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      document.getElementById('leadPreviewMeta').textContent = `Ingen aktive ruter i ${allow.join(' / ')}`;
+    }
+  }
+  // søg
+  search.oninput = ()=> {
+    const q = (search.value||'').toLowerCase();
+    filtered = ropeRoutes.filter(r =>
+      (r.navn||'').toLowerCase().includes(q) ||
+      (r.grad||'').toLowerCase().includes(q) ||
+      (r.billede_id||'').toLowerCase().includes(q)
+    );
+    renderList();
+  };
+
+  // init
+  renderList(); dlg.showModal();
+
+  return new Promise((resolve, reject) => {
+    function cleanup(){ form.removeEventListener('submit', onSubmit); cancel.removeEventListener('click', onCancel); dlg.removeEventListener('cancel', onEsc); search.oninput = null; }
+    function onSubmit(e){ e.preventDefault(); if(!selectedId){ err.textContent='Vælg en rute.'; err.style.display='block'; return; } const picked = ropeRoutes.find(r=>r.id===selectedId)||null; cleanup(); dlg.close(); resolve({ picked, hardest, allowedGrades: allow }); }
+    function onCancel(){ cleanup(); dlg.close(); reject(new Error('cancelled')); }
+    function onEsc(e){ e.preventDefault(); onCancel(); }
+    form.addEventListener('submit', onSubmit);
+    cancel.addEventListener('click', onCancel);
+    dlg.addEventListener('cancel', onEsc);
+  });
+}
+
+// Find hårdeste BOULDER-grad (kun boulder-vægge = 'sektor-*'); filtrér evt. på tilladte forsøg/styles
+async function getUserHardestBoulderGrade(acceptedStyles = ['flash','+2 forsøg','+3 forsøg','+5 forsøg']) {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+
+  const styles = (acceptedStyles||[]).map(s => String(s).toLowerCase());
+  const { data: logs } = await client
+    .from('rutelog')
+    .select('rute_id, forsøg, egen_grad')
+    .eq('user_id', user.id)
+    .in('forsøg', styles.length ? styles : ['flash','redpoint','+2 forsøg','+3 forsøg','+5 forsøg']);
+
+  if (!Array.isArray(logs) || logs.length === 0) return null;
+
+  const ids = Array.from(new Set(logs.map(l => l.rute_id).filter(Boolean)));
+  if (!ids.length) return null;
+
+  const { data: routes } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id')
+    .in('id', ids);
+
+  if (!Array.isArray(routes) || !routes.length) return null;
+
+  const isBoulder = (billede_id='') => String(billede_id).toLowerCase().startsWith('sektor-');
+  const byId = new Map(routes.map(r => [r.id, r]));
+  const bLogs = logs.map(l => ({...l, route: byId.get(l.rute_id)})).filter(x => x.route && isBoulder(x.route.billede_id));
+  if (!bLogs.length) return null;
+
+  const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase()); // "6A+" → "6a+"
+  let best = null;
+  for (const row of bLogs) {
+    const g = row.route.grad;
+    const r = rank(g);
+    if (r < 0) continue;
+    if (!best || r > best.rank) {
+      best = { rank:r, grade:g, rute_id: row.rute_id, route_name: row.route.navn || null, style: row.forsøg };
+    }
+  }
+  return best;
+}
+
+// Åbn "vælg BOULDER i grad", inkl. valg af forsøg/style (flash, +2, +3, +5)
+async function openBoulderPickerByGradeRange(acceptedStyles = ['flash','+2 forsøg','+3 forsøg','+5 forsøg']) {
+  const dlg   = document.getElementById('leadGradeModal');
+  const form  = document.getElementById('leadGradeForm');
+  const listEl= document.getElementById('leadGradeList');
+  const search= document.getElementById('leadGradeSearch');
+  const err   = document.getElementById('leadGradeError');
+  const cancel= document.getElementById('leadGradeCancel');
+  const submit= document.getElementById('leadGradeSubmit');
+  const title = document.getElementById('leadGradeModalTitle');
+
+  if (title) title.textContent = 'Vælg boulder';
+
+  err.style.display = 'none';
+  submit.disabled = true;
+  listEl.innerHTML = 'Indlæser…';
+
+  // 1) hårdeste boulder (i de tilladte forsøg/styles)
+  const hardest = await getUserHardestBoulderGrade(acceptedStyles);
+  if (!hardest) { err.textContent = 'Ingen boulder-log fundet.'; err.style.display='block'; return Promise.reject(new Error('no-hardest')); }
+
+  const same = hardest.grade;
+  const next = gradeNext(hardest.grade);
+  const allow = [same, ...(next ? [next] : [])].filter(Boolean);
+
+  // 2) aktive bouldere i disse grader (billede_id starter med 'sektor-')
+  const { data: routes, error: rErr } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id, greb, farve')
+    .eq('aktiv', true)
+    .in('grad', allow);
+
+  if (rErr) { err.textContent = rErr.message; err.style.display='block'; return Promise.reject(rErr); }
+  const boulders = (routes || []).filter(r => String(r.billede_id||'').toLowerCase().startsWith('sektor-'));
+
+  // — style-radios (indsættes dynamisk over knapperne) —
+  const actions = form.querySelector('.modal-actions');
+  const styleWrap = document.createElement('div');
+  styleWrap.className = 'card';
+  styleWrap.style.margin = '.5rem 0';
+  const uniq = Array.from(new Set((acceptedStyles||[]).map(s=>String(s))));
+  styleWrap.innerHTML = `
+    <strong>Vælg stil:</strong>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:.25rem;">
+      ${uniq.map((s,i)=>`
+        <label style="display:flex;gap:.35rem;align-items:center;">
+          <input type="radio" name="boulderStyle" value="${s}" ${i===0?'checked':''}/>
+          <span>${s}</span>
+        </label>
+      `).join('')}
+    </div>`;
+  actions.parentNode.insertBefore(styleWrap, actions);
+
+  // samme list/preview-mønster som i lead
+  let filtered = boulders.slice();
+  let selectedId = null;
+
+  function renderList(){
+    listEl.innerHTML = '';
+    filtered.forEach(r => {
+      const row = document.createElement('label');
+      row.className = 'route-item';
+      row.tabIndex = 0;
+      row.innerHTML = `
+        <input type="radio" name="bouldpick" data-id="${r.id}" ${selectedId===r.id?'checked':''}/>
+        <span class="swatch" style="background:${COLOR_HEX[(r.farve||'').toLowerCase()] || '#f1c40f'}"></span>
+        <div class="txt">
+          <div class="title">${r.navn || '(Uden navn)'}</div>
+          <small>${r.grad || ''} • ${r.billede_id || ''}</small>
+        </div>`;
+      const radio = row.querySelector('input[type="radio"]');
+      row.addEventListener('click', (e)=>{ if(e.target===radio) return; radio.checked = true; radio.dispatchEvent(new Event('change')); });
+      radio.addEventListener('change', ()=>{ selectedId = r.id; submit.disabled = !selectedId; /* vis preview */ renderLeadDialogPreview(r); });
+      listEl.appendChild(row);
+    });
+    if (filtered.length) {
+      selectedId = filtered[0].id; submit.disabled = false; renderLeadDialogPreview(filtered[0]);
+      const first = listEl.querySelector('input[type="radio"]'); if (first) first.checked = true;
+    } else {
+      submit.disabled = true;
+      const canvas = document.getElementById('leadPreviewCanvas'); const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      document.getElementById('leadPreviewMeta').textContent = `Ingen aktive bouldere i ${allow.join(' / ')}`;
+    }
+  }
+
+  // søg
+  search.oninput = ()=> {
+    const q = (search.value||'').toLowerCase();
+    filtered = boulders.filter(r =>
+      (r.navn||'').toLowerCase().includes(q) ||
+      (r.grad||'').toLowerCase().includes(q) ||
+      (r.billede_id||'').toLowerCase().includes(q)
+    );
+    renderList();
+  };
+
+  // init
+  renderList(); dlg.showModal();
+
+  return new Promise((resolve, reject) => {
+    function cleanup(){
+      form.removeEventListener('submit', onSubmit);
+      cancel.removeEventListener('click', onCancel);
+      dlg.removeEventListener('cancel', onEsc);
+      search.oninput = null;
+      // fjern style-wrap igen så lead/toprope ikke får den
+      styleWrap.remove();
+    }
+    function onSubmit(e){
+      e.preventDefault();
+      if (!selectedId) { err.textContent='Vælg en boulder.'; err.style.display='block'; return; }
+      const picked = boulders.find(r=>r.id===selectedId) || null;
+      const chosenStyle = form.elements['boulderStyle']?.value || null;
+      if (!chosenStyle) { err.textContent='Vælg en stil.'; err.style.display='block'; return; }
+      cleanup(); dlg.close();
+      resolve({ picked, hardest, allowedGrades: allow, chosenStyle });
+    }
+    function onCancel(){ cleanup(); dlg.close(); reject(new Error('cancelled')); }
+    function onEsc(e){ e.preventDefault(); onCancel(); }
+
+    form.addEventListener('submit', onSubmit);
+    cancel.addEventListener('click', onCancel);
+    dlg.addEventListener('cancel', onEsc);
+  });
+}
+
+async function getUserHardestLeadGrade(styles = ['redpoint','onsight']) {
+  // 1) Hent bruger
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+
+  // Normalisér styles (små bogstaver)
+  const STYLES = (styles || []).map(s => String(s || '').toLowerCase()).filter(Boolean);
+  if (!STYLES.length) STYLES.push('redpoint','onsight');
+
+  // 2) Hent brugerens log for de ønskede styles
+  const { data: logs, error: logErr } = await client
+    .from('rutelog')
+    .select('rute_id, forsøg, egen_grad')
+    .eq('user_id', user.id)
+    .in('forsøg', STYLES);
+
+  if (logErr || !Array.isArray(logs) || logs.length === 0) return null;
+
+  // 3) Slå tilhørende ruter op
+  const routeIds = Array.from(new Set(logs.map(l => l.rute_id).filter(Boolean)));
+  if (!routeIds.length) return null;
+
+  const { data: routes, error: rErr } = await client
+    .from('ruter')
+    .select('id, navn, grad, billede_id')
+    .in('id', routeIds);
+
+  if (rErr || !Array.isArray(routes) || routes.length === 0) return null;
+
+  // 4) Filtrér til "føre"-ruter (ekskluder bouldere/’sektor-*’)
+  const isLeadWall = (billede_id = '') => !String(billede_id).toLowerCase().startsWith('sektor-');
+  const routeById = new Map(routes.map(r => [r.id, r]));
+  const leadLogs = logs
+    .map(l => ({ ...l, route: routeById.get(l.rute_id) }))
+    .filter(x => x.route && isLeadWall(x.route.billede_id));
+
+  if (!leadLogs.length) return null;
+
+  // 5) Rangér grades og vælg den højeste
+  // (fransk føregrad – udvid/justér hvis du bruger flere trin)
+  const gradeOrder = [
+    '4','5a','5b','5c',
+    '6a','6a+','6b','6b+','6c','6c+',
+    '7a','7a+','7b','7b+','7c','7c+',
+    '8a','8a+','8b','8b+','8c','8c+',
+    '9a','9a+','9b','9b+'
+  ];
+  const rank = (g) => {
+    const i = gradeOrder.indexOf(String(g || '').toLowerCase());
+    return i === -1 ? -1 : i;
+  };
+
+  // Brug rutens officielle grad (ikke egen_grad) som du ønskede
+  let best = null;
+  for (const row of leadLogs) {
+    const g = row.route.grad;
+    const r = rank(g);
+    if (r < 0) continue; // ukendt/blank grad
+    if (!best || r > best.rank) {
+      best = {
+        rank: r,
+        grade: g,
+        rute_id: row.rute_id,
+        route_name: row.route.navn || null,
+        style: String(row.forsøg || '').toLowerCase()
+      };
+    }
+  }
+
+  return best || null;
+}
 
 // --- Collapsible quest groups ---
 const groupMeta = new Map(); // containerId -> {detailsEl, summaryEl, titleEl, rightEl}
@@ -256,17 +1266,232 @@ function decodeImage(url){
 async function loadSectorImage(billede_id) {
   if (!billede_id) throw new Error('billede_id mangler');
 
-  // returnér eksisterende promise hvis vi allerede loader/har det
+  // behold én promise pr. billede_id i RAM
   let promise = imageElCache.get(billede_id);
   if (!promise) {
     promise = (async () => {
+      // find nyeste URL via Supabase (du har allerede versionering i filnavnet)
       const url = await getImageUrlFor(billede_id);
-      const img = await decodeImage(url);
-      return { img, url };
+
+      // hent som blob, men gem i Cache Storage til fremtidige besøg
+      const blob = await fetchAsBlobWithCaching(url);
+
+      // lav et objectURL for <img>, så vi undgår netværk på hver visning
+      const objUrl = blobToImageUrl(blob);
+      const img = await decodeImage(objUrl);
+
+      // gem også den “real” public URL (så vi kan invalidere senere)
+      return { img, url, objUrl };
     })();
     imageElCache.set(billede_id, promise);
   }
   return promise;
+}
+
+async function renderLeadDialogPreview(route) {
+  const canvas = document.getElementById('leadPreviewCanvas');
+  const meta   = document.getElementById('leadPreviewMeta');
+  const wrap   = document.getElementById('leadPreviewWrap');
+  const ctx    = canvas.getContext('2d');
+
+  // tom preview
+  if (!route) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    meta.textContent = 'Ingen forhåndsvisning.';
+    return;
+  }
+
+  try {
+    const { img } = await loadSectorImage(route.billede_id);
+
+    // lås CSS-bredde første gang
+    if (!leadPreviewWcss) {
+      const { width } = wrap.getBoundingClientRect();
+      leadPreviewWcss = Math.floor(width);
+    }
+    const dpr   = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const wCss  = leadPreviewWcss;
+    const scale = wCss / img.naturalWidth;
+    const hCss  = Math.max(1, Math.round(img.naturalHeight * scale));
+
+    if (typeof ctx.resetTransform === 'function') ctx.resetTransform();
+    else ctx.setTransform(1,0,0,1,0,0);
+
+    canvas.width  = Math.round(wCss * dpr);
+    canvas.height = Math.round(hCss * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    canvas.style.width  = wCss + 'px';
+    canvas.style.height = hCss + 'px';
+
+    // baggrund
+    ctx.clearRect(0, 0, wCss, hCss);
+    ctx.drawImage(img, 0, 0, wCss, hCss);
+
+    // greb → paths
+    const greb = route.greb || [];
+    const toPx = (x, y) => {
+      const norm = x>=0 && x<=1 && y>=0 && y<=1;
+      return { x: norm ? x*wCss : x*scale, y: norm ? y*hCss : y*scale };
+    };
+    const paths = greb.map(p => {
+      const path = new Path2D();
+      if (Array.isArray(p.points) && p.points.length >= 2) {
+        const p0 = toPx(p.points[0].x, p.points[0].y);
+        path.moveTo(p0.x, p0.y);
+        for (let i=1;i<p.points.length;i++){
+          const pi = toPx(p.points[i].x, p.points[i].y);
+          path.lineTo(pi.x, pi.y);
+        }
+        if (p.points.length >= 3) path.closePath();
+      } else if (
+        Number.isFinite(p.x) && Number.isFinite(p.y) &&
+        Number.isFinite(p.width) && Number.isFinite(p.height)
+      ) {
+        const c = toPx(p.x, p.y);
+        const w = p.width*scale, h = p.height*scale;
+        path.rect(c.x - w/2, c.y - h/2, w, h);
+      }
+      return path;
+    });
+
+    // mørklægning + udskæring
+    ctx.fillStyle = 'rgba(0,0,0,0.50)';
+    ctx.fillRect(0, 0, wCss, hCss);
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    paths.forEach(p => ctx.fill(p));
+    ctx.restore();
+
+    // glød
+    ctx.save();
+    ctx.shadowColor = 'white';
+    ctx.shadowBlur  = 12;
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth   = 3;
+    paths.forEach(p => ctx.stroke(p));
+    ctx.restore();
+
+    // farvet overlay
+    const uiColor   = (COLOR_HEX[(route.farve||'').toLowerCase()] || COLOR_HEX['gul'] || '#f1c40f');
+    const fillCol   = hexToRgba(uiColor, 0.20);
+    const strokeCol = hexToRgba(uiColor, 1.00);
+    ctx.fillStyle   = fillCol;   paths.forEach(p => ctx.fill(p));
+    ctx.strokeStyle = strokeCol; ctx.lineWidth = 1; paths.forEach(p => ctx.stroke(p));
+
+    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
+  } catch {
+    meta.textContent = 'Kunne ikke vise forhåndsvisning.';
+  }
+}
+
+// Preview til routeModal (route_selection)
+async function renderRouteDialogPreview(route, fallbackColor='gul') {
+  const canvas = document.getElementById('previewCanvas');
+  const meta   = document.getElementById('previewMeta');
+  const wrap   = document.getElementById('previewWrap');
+  const ctx    = canvas.getContext('2d');
+
+  if (!route) { ctx.clearRect(0,0,canvas.width,canvas.height); meta.textContent = 'Ingen forhåndsvisning.'; return; }
+
+  try {
+    const { img } = await loadSectorImage(route.billede_id);
+
+    if (!previewWcss) {
+      let width = wrap?.getBoundingClientRect?.().width || 0;
+      if (!width || width < 10) {
+        width = wrap?.parentElement?.getBoundingClientRect?.().width || (window.innerWidth * 0.9);
+      }
+      previewWcss = Math.max(280, Math.floor(width)); // aldrig 0px
+    }
+
+    const dpr   = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const wCss  = previewWcss;
+    const scale = wCss / img.naturalWidth;
+    const hCss  = Math.max(1, Math.round(img.naturalHeight * scale));
+
+    if (typeof ctx.resetTransform === 'function') ctx.resetTransform(); else ctx.setTransform(1,0,0,1,0,0);
+    canvas.width  = Math.round(wCss * dpr);
+    canvas.height = Math.round(hCss * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    canvas.style.width  = wCss + 'px';
+    canvas.style.height = hCss + 'px';
+
+    // baggrund
+    ctx.clearRect(0,0,wCss,hCss);
+    ctx.drawImage(img, 0, 0, wCss, hCss);
+
+    // greb
+    const greb = route.greb || [];
+    const toPx = (x,y) => {
+      const norm = x>=0 && x<=1 && y>=0 && y<=1;
+      return { x: norm ? x*wCss : x*scale, y: norm ? y*hCss : y*scale };
+    };
+    const paths = greb.map(p => {
+      const path = new Path2D();
+      if (Array.isArray(p.points) && p.points.length >= 2) {
+        const p0 = toPx(p.points[0].x, p.points[0].y);
+        path.moveTo(p0.x, p0.y);
+        for (let i=1;i<p.points.length;i++){
+          const pi = toPx(p.points[i].x, p.points[i].y);
+          path.lineTo(pi.x, pi.y);
+        }
+        if (p.points.length >= 3) path.closePath();
+      } else if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.width) && Number.isFinite(p.height)) {
+        const c = toPx(p.x, p.y);
+        const w = p.width*scale, h = p.height*scale;
+        path.rect(c.x - w/2, c.y - h/2, w, h);
+      }
+      return path;
+    });
+
+    // maske + udskæring
+    ctx.fillStyle = 'rgba(0,0,0,0.50)';
+    ctx.fillRect(0,0,wCss,hCss);
+    ctx.save(); ctx.globalCompositeOperation = 'destination-out'; paths.forEach(p => ctx.fill(p)); ctx.restore();
+
+    // glød
+    ctx.save(); ctx.shadowColor = 'white'; ctx.shadowBlur = 12; ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+    paths.forEach(p => ctx.stroke(p)); ctx.restore();
+
+    // farvet overlay
+    const uiColor = COLOR_HEX[(route.farve || fallbackColor).toLowerCase()] || COLOR_HEX['gul'];
+    ctx.fillStyle   = hexToRgba(uiColor, 0.20); paths.forEach(p => ctx.fill(p));
+    ctx.strokeStyle = hexToRgba(uiColor, 1.00); ctx.lineWidth = 1; paths.forEach(p => ctx.stroke(p));
+
+    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
+  } catch {
+    meta.textContent = 'Kunne ikke vise forhåndsvisning.';
+  }
+}
+
+
+// --- Persistent image cache (Cache Storage) ---
+async function cacheGetBlob(url){
+  const cache = await caches.open(IMG_CACHE_NAME);
+  const hit = await cache.match(url, { ignoreVary: true, ignoreSearch: false });
+  if (!hit) return null;
+  return await hit.blob();
+}
+async function cachePutBlob(url, blob){
+  const cache = await caches.open(IMG_CACHE_NAME);
+  // Sæt content-type så drawImage ikke råber
+  await cache.put(url, new Response(blob, { headers: { 'Content-Type': blob.type || 'image/webp' }}));
+}
+async function fetchAsBlobWithCaching(url){
+  // 1) prøv persistent cache
+  const cached = await cacheGetBlob(url);
+  if (cached) return cached;
+
+  // 2) hent fra net og læg i persistent cache
+  const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
+  if (!res.ok) throw new Error(`Hentede ikke: ${res.status}`);
+  const blob = await res.blob();
+  await cachePutBlob(url, blob);
+  return blob;
+}
+function blobToImageUrl(blob){
+  return URL.createObjectURL(blob);
 }
 
 
@@ -683,119 +1908,6 @@ async function openRoutePicker(requiredCount = 5, color = 'gul') {
   let filtered = all.slice();
   const selected = new Set();
 
-async function showPreview(route) {
-  const canvas = document.getElementById('previewCanvas');
-  const ctx    = canvas.getContext('2d');
-  const meta   = document.getElementById('previewMeta');
-  const wrap   = document.getElementById('previewWrap');
-
-  // undgå unødigt arbejde
-  if (currentPreviewRouteId === route?.id) return;
-  currentPreviewRouteId = route?.id || null;
-
-  // NULSTIL transform før ny tegning
-  if (typeof ctx.resetTransform === 'function') ctx.resetTransform();
-  else ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  meta.textContent = '';
-
-  if (!route) return;
-
-  try {
-    const { img } = await loadSectorImage(route.billede_id);
-
-    // 🔒 Mål bredde kun første gang i denne modal-session
-    if (!previewWcss) {
-      const { width } = wrap.getBoundingClientRect();
-      previewWcss = Math.floor(width); // lås til heltal for stabilitet
-    }
-
-    const dpr   = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const wCss  = previewWcss;
-    const scale = wCss / img.naturalWidth;
-    const hCss  = Math.max(1, Math.round(img.naturalHeight * scale));
-
-    // Pixelbuffer + DPR (crisp), men CSS-størrelse stabil
-    canvas.width  = Math.round(wCss * dpr);
-    canvas.height = Math.round(hCss * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    canvas.style.width  = wCss + 'px';
-    canvas.style.height = hCss + 'px';
-
-    // Hjælpere: skaler punkter (både normaliserede 0..1 og pixel)
-    const toPx = (x, y) => {
-      const norm = (x>=0 && x<=1 && y>=0 && y<=1);
-      return {
-        x: norm ? x * wCss : x * scale,
-        y: norm ? y * hCss : y * scale
-      };
-    };
-
-    // Byg Path2D én gang (hurtigt at genbruge)
-    const paths = (route.greb || []).map(p => {
-      const path = new Path2D();
-      if (Array.isArray(p.points) && p.points.length >= 2) {
-        const p0 = toPx(p.points[0].x, p.points[0].y);
-        path.moveTo(p0.x, p0.y);
-        for (let i=1; i<p.points.length; i++) {
-          const pi = toPx(p.points[i].x, p.points[i].y);
-          path.lineTo(pi.x, pi.y);
-        }
-        if (p.points.length >= 3) path.closePath();
-      } else if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.width) && Number.isFinite(p.height)) {
-        // bbox fallback
-        const c = toPx(p.x, p.y);
-        const w = (p.width  * scale);
-        const h = (p.height * scale);
-        path.rect(c.x - w/2, c.y - h/2, w, h);
-      }
-      return path;
-    });
-
-    // Farver
-    const colorName = (route?.farve || '').toLowerCase();
-    const uiColor   = COLOR_HEX[colorName] || COLOR_HEX['gul'];
-    const fillCol   = hexToRgba(uiColor, 0.20);
-    const strokeCol = hexToRgba(uiColor, 1.00);
-
-    // --- TEGN ÉN GANG (ingen RAF) ---
-    // baggrund
-    ctx.clearRect(0,0,wCss,hCss);
-    ctx.drawImage(img, 0, 0, wCss, hCss);
-
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(0,0,wCss,hCss);
-
-    // “vinduer” i mørket = greb
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    paths.forEach(path => ctx.fill(path));
-    ctx.restore();
-
-    // glød (statisk – hurtig)
-    ctx.save();
-    ctx.shadowColor = 'white';
-    ctx.shadowBlur  = 12;
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth   = 3;
-    paths.forEach(path => ctx.stroke(path));
-    ctx.restore();
-
-    // farvet fyld + kant
-    ctx.fillStyle = fillCol;
-    paths.forEach(path => ctx.fill(path));
-    ctx.strokeStyle = strokeCol;
-    ctx.lineWidth   = 1;
-    paths.forEach(path => ctx.stroke(path));
-
-    // meta
-    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • ${route.billede_id}`;
-  } catch (e) {
-    console.warn('Preview fejl:', e);
-    meta.textContent = `${route.navn || 'Uden navn'} • ${route.grad || ''} • (intet billede)`;
-  }
-}
   function render() {
     listEl.innerHTML = '';
     filtered.forEach(r => {
@@ -814,13 +1926,13 @@ async function showPreview(route) {
       // hover/klik -> preview
 row.addEventListener('click', (e) => {
   if (e.target === box) return;      // lad checkbox selv håndtere
-  showPreview(r);                    // <-- vis preview ved tap/klik
+  renderRouteDialogPreview(r, color)                  // <-- vis preview ved tap/klik
   // din toggle-logic:
   box.checked = !box.checked;
   box.dispatchEvent(new Event('change'));
 });
 box.addEventListener('change', () => {
-  showPreview(r); // <-- vigtig for mobil
+  renderRouteDialogPreview(r, color) // <-- vigtig for mobil
   if (box.checked) {
     if (selected.size >= requiredCount) {
       box.checked = false; return;
@@ -838,7 +1950,7 @@ box.addEventListener('change', () => {
 
     // auto-preview første i listen
     if (filtered.length) {
-  showPreview(filtered[0]);
+  renderLeadDialogPreview(filtered[0]);
 } else {
   clearPreview();
   previewMeta.textContent = `Ingen aktive ${color} at vælge lige nu.`;
@@ -858,7 +1970,12 @@ box.addEventListener('change', () => {
     render();
   };
 
-  render(); dlg.showModal();
+  dlg.showModal(); 
+  render();
+
+requestAnimationFrame(() => {
+  if (filtered.length) renderRouteDialogPreview(filtered[0], color);
+});
 
 return new Promise((resolve, reject) => {
   const onSubmit = (e) => {
@@ -905,10 +2022,10 @@ function levelFromXp(xp) {
   return Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * (xp / 100))) / 2));
 }
 function titleFromXp(xp){
-  if (xp < 600) return 'Chalk Rookie';
-  if (xp < 1800) return 'Beta Seeker';
-  if (xp < 3600) return 'Crux Crusher';
-  if (xp < 6000) return 'Send Master';
+  if (xp < 300) return 'Chalk Rookie';
+  if (xp < 900) return 'Beta Seeker';
+  if (xp < 1800) return 'Crux Crusher';
+  if (xp < 3000) return 'Send Master';
   return 'Wall Legend';
 }
 function nextLevelTotalXp(level){
@@ -983,7 +2100,7 @@ completedSet = new Set((completedRows || []).map(r => r.quest_id));
 const now = new Date();
 const dailyPool  = (daily  || []).filter(q => fitsLevel(q) && isActiveNow(q, now));
 const weeklyPool = (weekly || []).filter(q => fitsLevel(q) && isActiveNow(q, now));
-const bonusPool  = (bonus  || []).filter(q => /* valgfrit level-gate */ isActiveNow(q, now));
+const bonusPool  = (bonus  || []).filter(q => fitsLevel(q) && isActiveNow(q, now));
 
 // deterministisk seed per bruger
 const uid = user.id;
@@ -991,7 +2108,7 @@ const uid = user.id;
 // vælg 3 daily (roterer dagligt), 1 weekly (roterer pr. uge), 1 bonus (dagligt)
 const dailyPick  = pickDeterministic(dailyPool, 3, `daily:${uid}:${dayKey(now)}`);
 const weeklyPick = pickDeterministic(weeklyPool, 1, `weekly:${uid}:${isoWeekKey(now)}`);
-const bonusPick  = pickDeterministic(bonusPool, 1, `bonus:${uid}:${dayKey(now)}`);
+const bonusPick  = pickDeterministic(bonusPool, 2, `bonus:${uid}:${dayKey(now)}`);
 
 // render
 renderQuests('daily',  dailyPick,  false, completedSet);
@@ -1100,8 +2217,115 @@ async function completeQuest(q, btnEl){
 
       proof.text_answer  = text;
       proof.text_matched = matched_keywords;
-    }
+    }  else if (q.validation === 'count_in_session') {
+  // Brug questens payload.target som mål – fallback 1
+  const need = Math.max(1, Number(q.payload?.target ?? 1));
 
+  // Byg en venlig titel/prompt ud fra questens felter
+  const title  = q.name || "Tæl gentagelser";
+  const prompt = q.description || `Lav ${need} gentagelse(r) og tryk “+1” for hver.`;
+
+  const { ok, count, target, history } =
+    await openCountInSession({ title, prompt, target: need });
+  if (!ok) return false;
+
+  proof.count   = count;
+  proof.target  = target;
+  proof.history = history;
+} else if (q.validation === 'hardest_lead_grade') {
+  // Åbn “vælg føre-rute efter grad”
+  const { picked, hardest, allowedGrades } = await openLeadPickerByGradeRange();
+  if (!picked) return false;
+
+  // (valgfrit) hvis du stadig vil tjekke et q.payload.target:
+  const target = q.payload?.target ?? null;
+  if (target) {
+    const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
+    if (rank(picked.grad) < rank(target)) {
+      alert(`Valgte rute er ${picked.grad}, men målet er ${target}.`);
+      return false;
+    }
+  }
+
+  // Gem i proof
+  proof.hardest_lead = {
+    base_grade: hardest.grade,
+    allowed_grades: allowedGrades,
+    chosen_route_id: picked.id,
+    chosen_route_grade: picked.grad,
+    chosen_route_name: picked.navn
+  };
+ } else if (q.validation === 'hardest_toprope_grade') {
+  // Vælg toprope-rute i samme/næste grad som brugerens hårdeste toprope
+  const { picked, hardest, allowedGrades } = await openTopropePickerByGradeRange();
+  if (!picked) return false;
+
+  // Respektér evt. target i payload
+  const target = q.payload?.target ?? null;
+  if (target) {
+    const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
+    if (rank(picked.grad) < rank(target)) {
+      alert(`Valgte rute er ${picked.grad}, men målet er ${target}.`);
+      return false;
+    }
+  }
+
+  proof.hardest_toprope = {
+    base_grade: hardest.grade,
+    allowed_grades: allowedGrades,
+    chosen_route_id: picked.id,
+    chosen_route_grade: picked.grad,
+    chosen_route_name: picked.navn
+  };
+
+} else if (q.validation === 'hardest_boulder_grade') {
+  // Vælg boulder + stil (flash / +2 / +3 / +5) blandt de tilladte
+  const accepted = Array.isArray(q.payload?.accepted_styles) && q.payload.accepted_styles.length
+    ? q.payload.accepted_styles
+    : ['flash','+2 forsøg','+3 forsøg','+5 forsøg'];
+
+  const { picked, hardest, allowedGrades, chosenStyle } = await openBoulderPickerByGradeRange(accepted);
+  if (!picked) return false;
+
+  // Respektér evt. target i payload
+  const target = q.payload?.target ?? null;
+  if (target) {
+    const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
+    if (rank(picked.grad) < rank(target)) {
+      alert(`Valgte boulder er ${picked.grad}, men målet er ${target}.`);
+      return false;
+    }
+  }
+
+  // Valgt stil skal være blandt accepted
+  if (!accepted.includes(chosenStyle)) {
+    alert('Valgt stil er ikke tilladt af questen.');
+    return false;
+  }
+
+  proof.hardest_boulder = {
+    base_grade: hardest.grade,
+    allowed_grades: allowedGrades,
+    chosen_route_id: picked.id,
+    chosen_route_grade: picked.grad,
+    chosen_route_name: picked.navn,
+    chosen_style: chosenStyle
+  };
+
+
+} else if (q.validation === 'timer') {
+  // payload.seconds = antal sekunder (fx 30)
+  const secs = Math.max(1, Number(q.payload?.seconds ?? 30));
+  const { ok, target_s, elapsed_s, pauses } = await openTimerModal({ targetSeconds: secs });
+  if (!ok) return false;
+
+  proof.timer = {
+    target_s,
+    elapsed_s,
+    pauses
+  };
+	
+}
   } catch (e) {
     if (e && e.message === 'cancelled') return false; // bruger lukkede modalen
     alert(e.message || 'Noget gik galt');

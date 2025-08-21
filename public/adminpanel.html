@@ -137,13 +137,103 @@
       </div>
       <p id="admin-signup-feedback"></p>
     </div>
-
     <!-- REDIGÉR/ADMINISTRÉR BRUGERE -->
     <div id="bruger-tool" class="hidden tool-card">
       <h3>👤 Redigér/slet brugere</h3>
       <input type="text" id="bruger-søg" placeholder="Søg efter navn" />
       <ul id="bruger-liste">Indlæser...</ul>
+    </div>	
+<!-- ➕ Questmaker-knap -->
+<button id="questmakerBtn" class="btn-sub" type="button">➕ Opret ny quest</button>
+
+<!-- Modal: Opret Quest -->
+<div id="quest-modal" class="modal" style="display:none;">
+  <div class="modal-wrapper">
+    <div class="modal-content">
+      <h2 style="margin-top:0;">Opret ny quest</h2>
+
+      <form id="questForm">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:820px;">
+          <label class="qm-col-span-2">
+            Navn *
+            <input name="name" required maxlength="120" placeholder="Fx 'Ugens Campus-klatring'">
+          </label>
+
+          <label>
+            Type *
+            <select name="type" required>
+              <option value="daily">daily</option>
+              <option value="weekly">weekly</option>
+              <option value="special">special</option>
+              <option value="bonus">bonus</option>
+            </select>
+          </label>
+
+          <label>
+            Validation *
+            <select name="validation" required>
+              <option value="route_selection">route_selection</option>
+              <option value="count_in_session">count_in_session</option>
+              <option value="video_capture">video_capture</option>
+              <option value="text">text</option>
+              <option value="hardest_lead_grade">hardest_lead_grade</option>
+			  <option value="hardest_toprope_grade">hardest_toprope_grade</option>
+			  <option value="hardest_boulder_grade">hardest_boulder_grade</option>
+              <option value="timer">timer</option>
+			  
+            </select>
+          </label>
+		  
+		  <label>
+		  <div id="payloadFields" class="qm-col-span-2"></div>
+		  </label>
+		  
+          <label>
+            XP reward *
+            <input name="xp_reward" type="number" min="0" step="1" required placeholder="Fx 100">
+          </label>
+
+          <label class="qm-col-span-2">
+            Beskrivelse
+            <textarea name="description" rows="3" placeholder="Kort beskrivelse..."></textarea>
+          </label>
+
+          <label>
+            Aktiv fra
+            <input name="active_from" type="datetime-local">
+          </label>
+
+          <label>
+            Aktiv til (valgfri)
+            <input name="active_to" type="datetime-local">
+          </label>
+
+          <label>
+            Min. level
+            <input name="min_level" type="number" min="1" max="99" step="1" value="1">
+          </label>
+
+          <label>
+            Max. level
+            <input name="max_level" type="number" min="1" max="99" step="1" value="99">
+          </label>
+
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" name="is_active" checked>
+            Aktiv
+          </label>
+        </div>
+
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:12px;">
+          <button type="button" id="questCancel" class="btn">Annuller</button>
+          <button type="submit" class="btn-sub">Opret</button>
+        </div>
+      </form>
+
+      <p id="questFeedback" style="margin-top:.5rem;"></p>
     </div>
+  </div>
+</div>
   </section>
 </div>
 
@@ -167,6 +257,20 @@
     </form>
   </div>
 </div>
+
+<!-- Bekræftelse: Quest oprettet -->
+<div id="questConfirmModal" class="modal skjult" role="dialog" aria-modal="true" aria-labelledby="questConfirmTitle">
+  <div class="modal-wrapper">
+    <div class="modal-content">
+      <h3 id="questConfirmTitle" style="margin-top:0;">✅ Quest oprettet</h3>
+      <p id="questConfirmText">Din quest er blevet oprettet.</p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:12px;">
+        <button type="button" id="questConfirmClose" class="btn">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- ========================= SCRIPTS ========================= -->
 <script type="module">
@@ -440,6 +544,494 @@
   let chartInstance = null;
   let popupAktiveret = false;
 
+// ======================== OPRET QUESTS ===================== 
+  const btn     = document.getElementById('questmakerBtn');
+  const modal   = document.getElementById('quest-modal');
+  const form    = document.getElementById('questForm');
+  const cancel  = document.getElementById('questCancel');
+  const fb      = document.getElementById('questFeedback');
+  const confirmModal = document.getElementById('questConfirmModal');
+  const confirmText  = document.getElementById('questConfirmText');
+  const confirmClose = document.getElementById('questConfirmClose');
+  const payloadWrap   = document.getElementById('payloadFields');
+  const validationSel = form?.querySelector('select[name="validation"]');
+
+  const TYPES      = new Set(['daily','weekly','special','bonus']);
+  const VALIDATION = new Set(['route_selection','count_in_session','video_capture','text','hardest_lead_grade','hardest_toprope_grade','hardest_boulder_grade','timer']);
+
+  const show = () => {  if (!modal) return;  modal.classList.remove('skjult');  modal.style.display = 'flex';  modal.classList.add('show');  if (fb) fb.textContent = ''; };
+  const hide = () => {  if (!modal) return;  modal.style.display = 'none';  modal.classList.remove('show');  modal.classList.add('skjult'); };
+
+  btn?.addEventListener('click', show);
+  cancel?.addEventListener('click', hide);
+
+// Tegn felter pr. validation
+function renderPayloadFields(v){
+  if (!payloadWrap) return;
+  const val = (v || '').trim();
+
+  // Hjælper: små HTML-bygger
+  const label = (text, inner) => `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>${text}</span>
+      ${inner}
+    </label>
+  `;
+  const num = (name, min=0, step=1, ph='') => `<input type="number" name="${name}" min="${min}" step="${step}" placeholder="${ph}">`;
+  const txt = (name, rows=2, ph='') => `<textarea name="${name}" rows="${rows}" placeholder="${ph}"></textarea>`;
+  const sel = (name, opts, multiple=false) => `
+    <select name="${name}" ${multiple?'multiple size="3"':''}>
+      ${opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
+    </select>
+  `;
+  const cb  = (name, checked=false, labelTxt='') => `
+    <label style="display:flex;gap:.5rem;align-items:center;">
+      <input type="checkbox" name="${name}" ${checked?'checked':''}>
+      <span>${labelTxt}</span>
+    </label>
+  `;
+
+  // Farver, stilarter og forsøg/styles
+  const FARVER = ['gul','grøn','blå','lilla','rød','sort']
+    .map(f => ({ value:f, label:f }));
+  const STYLES = [
+    { value:'lead', label:'lead' },
+    { value:'toprope', label:'toprope' },
+    { value:'boulder', label:'boulder' },
+  ];
+  const ACCEPTED = [
+    { value:'onsight',  label:'onsight'  },
+    { value:'redpoint', label:'redpoint' },
+    { value:'toprope',  label:'toprope'  },
+  ];
+
+  // Skift UI pr. type
+  switch (val) {
+    case 'route_selection':
+      payloadWrap.innerHTML = `
+        ${label('Farve', sel('payload_color', FARVER))}
+        ${label('Antal (count)', num('payload_count', 1, 1, 'fx 3 eller 5'))}
+      `;
+      break;
+
+    case 'count_in_session':
+      payloadWrap.innerHTML = `
+        ${label('Mål (target)', num('payload_target', 1, 1, 'fx 1 eller 3'))}
+      `;
+      break;
+
+    case 'timer':
+      payloadWrap.innerHTML = `
+        ${label('Sekunder', num('payload_seconds', 1, 1, 'fx 180'))}
+      `;
+      break;
+
+    case 'video_capture':
+      payloadWrap.innerHTML = `
+        ${label('Minimum sekunder (valgfri)', num('payload_min_seconds', 1, 1, 'fx 10'))}
+      `;
+      break;
+
+    case 'text':
+      payloadWrap.innerHTML = `
+        ${label('Prompt (påkrævet)', txt('payload_prompt', 2, 'fx Nævn fire forskellige grebstyper'))}
+        ${label('Kategori (valgfri)', `<input name="payload_category" placeholder="fx grebstyper">`)}
+        ${label('Min. matches (valgfri)', num('payload_min_matches', 1, 1, 'fx 4'))}
+      `;
+      break;
+
+case 'hardest_lead_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="hlg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6b">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="lead" disabled>
+      <input type="hidden" name="payload_style" value="lead">
+    </label>
+
+    <div class="qm-col-span-2" style="display:flex;gap:16px;align-items:center;">
+      <strong>Tilladte styles:</strong>
+      <label>
+        <input type="checkbox" name="payload_acc_onsight" checked> <span>onsight</span>
+      </label>
+      <label>
+        <input type="checkbox" name="payload_acc_redpoint" checked> <span>redpoint</span>
+      </label>
+    </div>
+  `;
+  // Gør target-feltet visuelt tydeligt kun ved target_mode
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('hlg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+case 'hardest_toprope_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="htg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6a">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="toprope" disabled>
+      <input type="hidden" name="payload_style" value="toprope">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Tilladte styles</span>
+      <input value="toprope" disabled>
+      <!-- ingen checkbox; vi sætter accepted_styles=['toprope'] i builder -->
+    </label>
+  `;
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('htg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+case 'hardest_boulder_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="hbg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6A eller 6A+">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="boulder" disabled>
+      <input type="hidden" name="payload_style" value="boulder">
+    </label>
+
+    <div class="qm-col-span-2" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+      <strong>Tilladte styles:</strong>
+      <label><input type="checkbox" name="payload_acc_flash" checked> <span>flash</span></label>
+      <label><input type="checkbox" name="payload_acc_plus2"> <span>+2 forsøg</span></label>
+      <label><input type="checkbox" name="payload_acc_plus3"> <span>+3 forsøg</span></label>
+      <label><input type="checkbox" name="payload_acc_plus5"> <span>+5 forsøg</span></label>
+    </div>
+  `;
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('hbg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+    default:
+      payloadWrap.innerHTML = `<small>Ingen særlige felter for denne validering.</small>`;
+  }
+}
+
+// Læs værdier og byg JSON klar til DB
+function buildPayloadFromForm(val){
+  const f = form;
+  const v = (val||'').trim();
+  const get = (n) => f?.elements?.[n]?.value ?? '';
+  const getInt = (n) => {
+    const x = parseInt(get(n), 10);
+    return Number.isFinite(x) ? x : undefined;
+  };
+  const getBool = (n) => !!f?.elements?.[n]?.checked;
+  const getMulti = (n) => {
+    const el = f?.elements?.[n];
+    if (!el || !el.options) return [];
+    return Array.from(el.options).filter(o => o.selected).map(o => o.value);
+  };
+
+  switch (v) {
+    case 'route_selection': {
+      const color = get('payload_color') || undefined;
+      const count = getInt('payload_count');
+      return { color, count };
+    }
+    case 'count_in_session': {
+      const target = getInt('payload_target');
+      return { target };
+    }
+    case 'timer': {
+      const seconds = getInt('payload_seconds');
+      return { seconds };
+    }
+    case 'video_capture': {
+      const min_seconds  = getInt('payload_min_seconds');
+      const store_video  = getBool('payload_store_video');
+      const out = {};
+      if (min_seconds !== undefined) out.min_seconds = min_seconds;
+      if (store_video) out.store_video = true; 
+      return out;
+    }
+    case 'text': {
+      const prompt       = (get('payload_prompt')||'').trim();
+      const category     = (get('payload_category')||'').trim() || undefined;
+      const min_matches  = getInt('payload_min_matches');
+      const out = { prompt };
+      if (category) out.category = category;
+      if (min_matches !== undefined) out.min_matches = min_matches;
+      return out;
+    }
+case 'hardest_lead_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'lead';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  const accepted_styles = [
+    form?.elements?.['payload_acc_onsight']?.checked ? 'onsight' : null,
+    form?.elements?.['payload_acc_redpoint']?.checked ? 'redpoint' : null,
+  ].filter(Boolean);
+
+  return {
+    mode,
+    style,
+    target,
+    accepted_styles: accepted_styles.length ? accepted_styles : ['onsight','redpoint']
+  };
+}
+
+case 'hardest_toprope_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'toprope';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  return {
+    mode,
+    style,
+    target,
+    accepted_styles: ['toprope']
+  };
+}
+
+case 'hardest_boulder_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'boulder';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  const accepted_styles = [
+    form?.elements?.['payload_acc_flash']?.checked  ? 'flash'      : null,
+    form?.elements?.['payload_acc_plus2']?.checked  ? '+2 forsøg'  : null,
+    form?.elements?.['payload_acc_plus3']?.checked  ? '+3 forsøg'  : null,
+    form?.elements?.['payload_acc_plus5']?.checked  ? '+5 forsøg'  : null,
+  ].filter(Boolean);
+
+  return { mode, style, target, accepted_styles };
+}
+
+  }
+}
+
+// Init payload-UI ved load og ved skift af validation
+validationSel?.addEventListener('change', () => renderPayloadFields(validationSel.value));
+renderPayloadFields(validationSel?.value || 'route_selection');
+
+  function isoOrNull(dtLocalValue){
+    if(!dtLocalValue) return null;
+    const dt = new Date(dtLocalValue);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  }
+  function clamp(n, min, max){
+    n = Number(n);
+    if (Number.isNaN(n)) return min;
+    return Math.max(min, Math.min(max, n));
+  }
+
+form?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const fd = new FormData(form);
+  const v  = (fd.get('validation') || '').trim();
+
+  // Byg payload fra UI
+  const questPayload = buildPayloadFromForm(v);
+
+  // ----- Basal record -----
+  const record = {
+    name: (fd.get('name') || '').trim(),
+    type: (fd.get('type') || '').trim(),
+    validation: v,
+    xp_reward: Number(fd.get('xp_reward')),
+    is_active: fd.get('is_active') !== null,
+    description: (fd.get('description') || '').trim(),
+    payload: questPayload, // <— brug nyt navn
+    active_from: isoOrNull(fd.get('active_from')) || new Date().toISOString(),
+    active_to: isoOrNull(fd.get('active_to')),
+    min_level: clamp(fd.get('min_level') || 1, 1, 99),
+    max_level: clamp(fd.get('max_level') || 99, 1, 99)
+  };
+
+  // ----- Basal validering -----
+  if (!record.name) return alert('Navn er påkrævet.');
+  if (!TYPES.has(record.type)) return alert('Ugyldig type.');
+  if (!VALIDATION.has(record.validation)) return alert('Ugyldig validation.');
+  if (!Number.isInteger(record.xp_reward) || record.xp_reward < 0) return alert('XP reward skal være et ikke-negativt heltal.');
+  if (record.min_level > record.max_level) return alert('Min. level må ikke være større end max. level.');
+
+  // ----- Payload-specifik validering -----
+  switch (record.validation) {
+    case 'route_selection':
+      if (!questPayload?.color) return alert('Vælg en farve til route_selection.');
+      if (!Number.isInteger(questPayload?.count) || questPayload.count < 1) return alert('Angiv et antal (count) ≥ 1.');
+      break;
+    case 'count_in_session':
+      if (!Number.isInteger(questPayload?.target) || questPayload.target < 1) return alert('Angiv target ≥ 1.');
+      break;
+    case 'timer':
+      if (!Number.isInteger(questPayload?.seconds) || questPayload.seconds < 1) return alert('Angiv seconds ≥ 1.');
+      break;
+    case 'video_capture':
+      if (questPayload.min_seconds === undefined && questPayload.min_pullups === undefined)
+        return alert('Angiv enten minimum sekunder eller minimum pull-ups.');
+      break;
+    case 'text':
+      if (!questPayload?.prompt) return alert('Prompt er påkrævet til text-validation.');
+      if (questPayload.min_matches !== undefined && (!Number.isInteger(questPayload.min_matches) || questPayload.min_matches < 1))
+        return alert('min_matches skal være ≥ 1.');
+      break;
+
+    case 'hardest_lead_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'lead') return alert('Style skal være lead.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.length === 0)
+        return alert('Vælg mindst én accepted_style (onsight/redpoint).');
+      break;
+
+    case 'hardest_toprope_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'toprope') return alert('Style skal være toprope.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.join(',') !== 'toprope')
+        return alert('accepted_styles skal være ["toprope"].');
+      break;
+
+    case 'hardest_boulder_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'boulder') return alert('Style skal være boulder.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.length === 0)
+        return alert('Vælg mindst én accepted_style.');
+      {
+        const allowed = new Set(['flash','+2 forsøg','+3 forsøg','+5 forsøg']);
+        const invalid = questPayload.accepted_styles.filter(s => !allowed.has(s));
+        if (invalid.length) return alert('Ugyldige accepted_styles: ' + invalid.join(', '));
+      }
+      break;
+  }
+
+  // ----- Insert til DB -----
+  try {
+    const { data, error } = await client
+      .from('beta_quests')
+      .insert([record])
+      .select()
+      .single();
+
+    if (error) {
+      showQuestConfirm('❌ Kunne ikke oprette quest: ' + (error.message || 'Ukendt fejl'));
+    } else {
+      showQuestConfirm(`✅ Quest '${data?.name || record.name}' er oprettet!`);
+      try { document.getElementById('questForm')?.reset(); } catch (e) {}
+      renderPayloadFields(validationSel?.value || 'route_selection');
+      hide();
+    }
+  } catch (err) {
+    showQuestConfirm('❌ Kunne ikke oprette quest: ' + (err?.message || 'Ukendt fejl'));
+  }
+});
+
+
+function showModal(el){
+  if (!el) return;
+  el.classList.remove('skjult');   
+  el.style.display = 'flex';
+  el.classList.add('show');
+}
+function hideModal(el){
+  if (!el) return;
+  el.style.display = 'none';
+  el.classList.remove('show');
+  el.classList.add('skjult');        
+}
+
+function showQuestConfirm(msg = "Din quest er blevet oprettet.") {
+  if (confirmText) confirmText.textContent = msg;
+  if (!confirmModal) return;
+  confirmModal.classList.remove('skjult');
+  confirmModal.style.display = 'flex';
+  confirmModal.classList.add('show');
+
+  // auto-luk efter 2 sek. så UI ikke blokeres
+  clearTimeout(confirmModal._autoTimer);
+  confirmModal._autoTimer = setTimeout(() => hideQuestConfirm(), 2000);
+}
+function hideQuestConfirm() {
+  if (!confirmModal) return;
+  confirmModal.style.display = 'none';
+  confirmModal.classList.remove('show');
+  confirmModal.classList.add('skjult');
+}
+confirmClose?.addEventListener('click', hideQuestConfirm);
+
+// Luk ved klik uden for boksen + ESC
+confirmModal?.addEventListener('click', (e) => {
+  if (e.target === confirmModal) hideQuestConfirm();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideQuestConfirm();
+});
+
+
   function renderChart(config) {
     const canvas = document.getElementById('stats-chart');
     const ctx = canvas.getContext('2d');
@@ -512,7 +1104,6 @@ document.getElementById('visNoglebaererStatistik').addEventListener('click', asy
     }
   });
 });
-
 
 
   // --------- Begivenheder fra SUPABASE ---------
