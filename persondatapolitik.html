@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Persondatapolitik – NKL</title>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <style>
+    .politik-container {
+      max-width: 800px;
+      margin: 2rem auto;
+      background: var(--kort-baggrund, #fff);
+      color: var(--tekst, #111);
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .politik-container h1,
+    .politik-container h2 {
+      color: var(--accent, #007bff);
+      margin-top: 1.5rem;
+    }
+
+    .politik-container p {
+      margin-bottom: 1rem;
+    }
+
+    .politik-container ul {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .politik-container {
+        background: #1e1e1e;
+        color: #ddd;
+        box-shadow: 0 2px 6px rgba(255, 255, 255, 0.05);
+      }
+
+      .politik-container h1,
+      .politik-container h2 {
+        color: var(--accent-dark, #81cfff);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="politik-container">
+    <h1>📄 Persondatapolitik</h1>
+
+    <p>Vi passer på dine data og bruger kun det, vi har brug for, så appen fungerer.</p>
+
+    <h2>🔐 Hvad gemmer vi?</h2>
+    <p>Når du opretter en bruger i appen, gemmer vi:</p>
+    <ul>
+      <li>Dit <strong>navn</strong></li>
+      <li>Din <strong>e-mailadresse</strong></li>
+      <li>Din <strong>rolle i klubben</strong> (f.eks. medlem, nøglebærer, eventmaker, bestyrelse)</li>
+    </ul>
+    <p>Hvis du sender beskeder via kontaktformularen, gemmer vi også:</p>
+    <ul>
+      <li>Din tekstbesked</li>
+      <li>Et billede (hvis du vedhæfter det)</li>
+      <li>En lydoptagelse (hvis du vælger det)</li>
+    </ul>
+
+    <h2>📌 Hvad bruger vi data til?</h2>
+    <p>Vi bruger dine oplysninger til at:</p>
+    <ul>
+      <li>Give dig adgang til relevante funktioner i appen</li>
+      <li>Vise dit navn ved tilmelding til begivenheder</li>
+      <li>Muliggøre kommunikation med klubben via beskedsystemet</li>
+    </ul>
+    <p>Vi deler ikke dine data med andre og bruger dem kun til klubrelaterede formål.</p>
+
+    <h2>🗑️ Dine rettigheder</h2>
+    <p>Du har ret til at:</p>
+    <ul>
+      <li>Få indsigt i, hvilke oplysninger vi har om dig</li>
+      <li>Få dine oplysninger slettet</li>
+      <li>Få rettet dine oplysninger, hvis de er forkerte</li>
+    </ul>
+    <p>📬 Ønsker du dette, kan du kontakte bestyrelsen i klubben.</p>
+
+    <h2>🔒 Sikkerhed</h2>
+    <p>Dine oplysninger gemmes sikkert i vores database hos <a href="https://supabase.com" target="_blank">Supabase</a>, som overholder gældende databeskyttelsesregler.</p>
+
+    <p style="font-size: 0.9rem; color: gray;">📅 Senest opdateret: juli 2025</p>
+  </div>
+
+</body>
+</html>

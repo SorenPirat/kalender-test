@@ -1,0 +1,966 @@
+:root {
+  --accent: #007bff;
+  --accent-dark: #81cfff;
+}
+
+body {
+  font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* === STICKY MENU === */
+#menu {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  background-color: rgba(255, 255, 255, 0.15); /* meget gennemsigtig */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 0.4rem 0.75rem;
+  margin: 0.25rem 0.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 200ms ease;
+  will-change: transform;
+}
+
+/* Brug calc, så den forsvinder HELT (inkl. margin/padding/skyggeslør) */
+#menu.hide-on-scroll {
+  transform: translate3d(0, calc(-100% - 32px), 0) !important;
+}
+
+.profil-skjult {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+#menu:not(.open) {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+#menu:not(.open) .menu-header {
+  padding-bottom: 0.2rem;
+}
+
+#menu:not(.open) #user-name {
+  opacity: 0.9;
+}
+
+/* Toplinje: menu-knap + brugernavn */
+.menu-header {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding: 0.25rem 0.5rem;
+  z-index: 999;
+}
+
+/* Hamburger-knap */
+#menu-toggle {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Brugernavn */
+#user-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+  font-size: 0.95rem;
+  font-weight: bold;
+  white-space: nowrap;
+  color: #333;
+  gap: 0.5rem;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+#user-name .navn-linje {
+  line-height: 1.2;
+  font-size: 1rem;
+}
+
+#user-name .rolle-linje {
+  font-size: 0.8rem;
+  color: #666;
+  line-height: 1.1;
+}
+
+#user-name #profil-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+/* Links */
+#menu-links {
+  top: 100%;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  list-style: none;
+  margin: 0;
+  padding-top: 0;
+  padding: 0;
+  transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
+  text-align: left;
+  z-index: 999;
+}
+
+#menu-links.show {
+  max-height: 800px;
+  opacity: 1;
+  visibility: visible;
+}
+
+#menu-links li {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 0.5rem;
+}
+
+#menu-links li a {
+  display: block;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: transparent;
+  color: #007bff;
+}
+
+/* Når menuen er åben */
+#menu.open {
+  background-color: rgba(255, 255, 255, 0.85); /* frostet stil */
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-radius: 12px 12px 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+#user-name a {
+  all: unset;
+  color: inherit;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  display: inline;
+}
+
+#user-name a:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+
+#notifikations-badge {
+  position: absolute;
+  top: -0.5rem;
+  left: -0.6rem;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: bold;
+  min-width: 1.2rem;
+  text-align: center;
+  box-shadow: 0 0 0 2px white;
+  display: inline-block;
+  line-height: 1.4;
+  z-index: 2;
+}
+
+#notifikations-badge:hover {
+  transform: scale(1.1);
+  cursor: pointer;
+}
+#tråd-tabs button {
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  background: #ddd;
+  font-weight: bold;
+  cursor: pointer;
+}
+#tråd-tabs .aktiv-fane {
+  background: #007bff;
+  color: white;
+}
+
+.besked-visning {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+.skjult {
+  display: none;
+}
+.besked-visning div {
+  margin-bottom: 0.5rem;
+}
+.besked-visning textarea {
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+.billede-preview {
+  max-width: 200px;
+  max-height: 150px;
+  cursor: pointer;
+  border: 1px solid #555;
+  margin-top: 0.5rem;
+}
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.fullscreen-overlay img {
+  max-width: 95%;
+  max-height: 95%;
+  border: 3px solid white;
+}
+.fullscreen-overlay:hover {
+  cursor: zoom-out;
+}
+#tråd-søg {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.5rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.tråd-preview {
+  background: #f0f4f8;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  transition: transform 0.2s ease;
+}
+
+.tråd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.tråd-info {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#mine-tråde {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#tråde-liste {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
+.teaser {
+  font-style: italic;
+  color: #666;
+  margin: 0.5rem 0;
+}
+
+.knap-vis {
+  background: #333;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.knap-slet {
+  background: #333;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.besked-visning {
+  max-height: calc(100vh - 300px); /* Justér alt efter top-menu, knapper osv. */
+  overflow-y: auto;
+  padding-bottom: 1rem;
+}
+
+
+.besked {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background-color: #ffffff;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 0.95rem;
+}
+
+.besked strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #007bff;
+}
+
+.besked audio {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.besked img {
+  max-width: 120px;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+  box-shadow: 0 0 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.skjult {
+  display: none !important;
+}
+
+.modal {
+  position: fixed;
+  z-index: 9999;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.6);
+}
+
+.modal-indhold {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+
+.modal.skjult {
+  display: none;
+}
+
+#profil-modal .badge {
+  background: crimson;
+  color: white;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 12px;
+  margin-left: 6px;
+}
+
+#profil-panel {
+  position: fixed;
+  top: 1rem;
+  right: -100%;
+  width: 80%;
+  max-width: 400px;
+  height: auto%;
+  background-color: white;
+  color: #111;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+  transition: right 0.3s ease;
+  z-index: 9999;
+}
+
+#profil-panel.vis {
+  right: 0;
+}
+
+#profil-panel li {
+  list-style-type: none;
+}
+
+.profil-indhold {
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+#luk-profil-knap {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.kort {
+  background: var(--bg-light, #fff);
+  color: var(--text-light, #111);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem auto;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  max-width: 800px;
+}
+
+
+
+.kort h2 {
+  font-size: 1.5rem;
+  color: var(--accent, #007bff);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kort input,
+.kort select {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.kort label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.kort input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tool-actions button {
+  background-color: var(--accent, #007bff);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tool-actions button:hover {
+  background-color: #0056b3;
+}
+
+#canvas {
+  margin: 2rem auto;
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 2px solid #ccc;
+}
+
+#ruteListe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.rute-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f0f0f0;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid #ccc;
+}
+
+.rute-knapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.rute-knapper button {
+  background-color: var(--accent, #007bff);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.rute-knapper button:hover {
+  background-color: #0056b3;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: var(--modal-bg, #fff);
+  color: var(--modal-text, #000);
+  padding: 1rem;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+.modal-box input,
+.modal-box select,
+.modal-box textarea {
+  width: 100%;
+  margin: 0;
+  margin-bottom: 0.6rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: var(--input-bg, #fff);
+  color: var(--input-text, #000);
+}
+
+.modal-box label {
+  display: block;
+  margin-top: 0.25rem;
+  margin-bottom: 0.3rem;
+  font-weight: bold;
+}
+
+
+.modal-box .tool-actions {
+  margin-top: 0.8rem;
+  justify-content: space-between;
+}
+
+.modal-box .tool-actions button {
+  flex: 1 1 auto;
+  min-width: 40%;
+}
+
+
+.modal-box button:last-child {
+  margin-right: 0;
+}
+
+/* Submenu (Aktiviteter) */
+.has-submenu { position: relative; }
+.submenu-toggle { background: none; border: 0; cursor: pointer; font: inherit; display: flex; align-items: center; gap: .4rem; }
+.submenu { display: none; position: absolute; left: 0; top: 100%; min-width: 220px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); border-radius: 12px; padding: .4rem 0; z-index: 20; }
+.submenu.show { display: block; }
+.submenu a { display: block; padding: .6rem 1rem; }
+.submenu a:hover { background: rgba(0,0,0,.05); }
+
+/* --- Ens look på links og Aktiviteter-knap --- */
+#menu #menu-links > li > a,
+#menu #menu-links > li > .submenu-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: .6rem 1rem;         /* match de andre punkter */
+  font: inherit;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;          /* samme afrunding som de andre (justér hvis I bruger andet) */
+}
+
+/* Nulstil knap */
+.submenu-toggle {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Hover/focus-states – brug samme farver som jeres links */
+#menu #menu-links > li > a:hover,
+#menu #menu-links > li > a:focus,
+#menu #menu-links > li > .submenu-toggle:hover,
+#menu #menu-links > li > .submenu-toggle:focus {
+  background: rgba(255,255,255,.08); /* eller den du allerede bruger */
+  outline: none;                     /* hvis du har egen focus-ring */
+}
+
+/* Lidt spacing til emoji-ikonet, så det matcher de andre */
+#menu #menu-links > li > a > .icon,
+#menu #menu-links > li > .submenu-toggle > .icon {
+  margin-right: .5rem;
+}
+
+/* Chevron og layout */
+.submenu-toggle {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  justify-content: space-between;    /* tekst til venstre, pil til højre */
+}
+.submenu-toggle .chevron { opacity: .8; transform: translateY(1px); }
+#menu.open .submenu-toggle[aria-expanded="true"] .chevron { transform: translateY(1px) rotate(180deg); }
+
+/* Når submenu bruges i sidebar/vertical menu, skal den være i flow */
+#menu #menu-links .submenu {
+  position: static;        /* i stedet for absolute */
+  left: auto;              /* nulstil absolute-positioner */
+  top: auto;
+  min-width: 0;            /* brug fuld bredde som de andre punkter */
+  width: 100%;
+  margin-top: .25rem;
+  box-shadow: none;        /* valgfrit: mere ens med øvrige punkter */
+  border-radius: 8px;
+}
+
+/* Vis/skjul som før */
+#menu #menu-links .submenu.show { display: block; }
+
+#menu-leaderboard {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#menu-leaderboard::before {
+  content: "🏆";
+  font-size: 1.1em;
+}
+
+#menu-betaboard::before {
+  content: "🎖️";
+  font-size: 1.1em;
+}
+
+#aktiviteter-submenu a {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+#aktiviteter-submenu a:hover {
+  background-color: rgba(255,255,255,0.08); /* eller din hover-farve */
+}
+
+/* === MOBIL === */
+@media screen and (max-width: 600px) {
+  #menu-toggle {
+    background-color: var(--accent);
+    color: white;
+  }
+
+#user-name {
+  font-weight: bold;
+  margin-left: auto;
+  margin-right: 0;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+#user-name #profil-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+  #menu.open {
+    background-color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  #menu-links li a {
+    color: #007bff;
+  }
+ 
+ /* === PROFILLINK-STYLING === */
+
+#user-name a:hover {
+    text-decoration: underline;
+  cursor: pointer;
+	}
+
+  #profil-panel {
+    width: 50%;
+    max-width: 320px;
+    font-size: 0.95rem;
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+    box-shadow: -2px 0 12px rgba(0,0,0,0.4);
+  }
+
+.profil-indhold {
+  position: relative;
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+
+#luk-profil-knap {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 10;
+}
+}
+
+/* === DARK MODE === */
+@media (prefers-color-scheme: dark) {
+
+  .modal-box {
+    --modal-bg: #1e1e1e;
+    --modal-text: #fff;
+    --input-bg: #2c2c2c;
+    --input-text: #fff;
+    --knap-bg: #444;
+    --knap-text: #fff;
+  }
+
+  .modal-box input,
+  .modal-box select,
+  .modal-box textarea {
+    border: 1px solid #555;
+  }
+
+  .modal-box button {
+    border: 1px solid #666;
+  }
+
+  .rute-item {
+    background: #1f1f1f;
+    border-color: #444;
+    color: #eee;
+  }
+
+  .rute-knapper button {
+    background-color: #444;
+    color: #fff;
+  }
+
+  .rute-knapper button:hover {
+    background-color: #666;
+  }
+ 
+ #menu {
+    background-color: rgba(30, 30, 30, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+  
+    #notifikations-badge {
+    background-color: #ff5555;
+    color: white;
+    box-shadow: 0 0 0 2px #1e1e1e;
+  }
+
+  #menu-toggle {
+    background-color: #444;
+    color: white;
+  }
+
+  #user-name {
+    color: #eee;
+  }
+
+  #user-name .rolle-linje {
+    color: #aaa;
+  }
+
+  #menu.open {
+    background-color: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  #menu-links li a {
+    color: var(--accent-dark);
+  }
+  #menu-links {
+  background-color: rgba(30, 30, 30, 0.95);
+  }
+  
+  .tråd-preview {
+    background: #1e1e1e;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .tråd-info {
+    color: #aaa;
+  }
+  .teaser {
+    color: #bbb;
+  }
+
+  .besked {
+    background-color: #222;
+    box-shadow: 0 1px 3px rgba(255,255,255,0.05);
+  }
+  .besked strong {
+    color: #81cfff;
+  }
+
+  .besked-visning {
+    background: #1e1e1e;
+    border: 1px solid #444;
+  }
+  .besked-visning div {
+    border-color: #333;
+    color: #ddd;
+  }
+  .besked-visning textarea {
+    background-color: #2a2a2a;
+    color: #eee;
+    border: 1px solid #555;
+  }
+  .besked-visning button {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+  }
+  .besked-visning button:hover {
+    background-color: #444;
+  }
+    #tråd-tabs button {
+    background: #333;
+    color: #ccc;
+  }
+  #tråd-tabs .aktiv-fane {
+    background: #007bff;
+    color: white;
+  }
+    #profil-panel {
+    background-color: #1e1e1e;
+    color: #ddd;
+  }
+.kort {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  box-shadow: 0 1px 4px rgba(255, 255, 255, 0.05);
+  color: #f0f0f0;
+}
+
+  .kort input,
+  .kort select {
+    background: #2b2b2b;
+    color: #fff;
+    border: 1px solid #444;
+  }
+
+  .tool-actions button {
+    background-color: var(--accent-dark, #81cfff);
+  }
+
+  #canvas {
+    border-color: #444;
+  }
+  
+    button,
+  .tool-actions button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    border-radius: 8px !important;
+    background-color: #2d2d2d;
+    color: #fff;
+    border: 1px solid #444;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  button:hover,
+  .tool-actions button:hover {
+    background-color: #3a3a3a;
+  }
+  
+  #menu #menu-links .submenu {
+    position: static;
+    left: auto;
+    top: auto;
+    min-width: 0;
+    width: 100%;
+    margin-top: .25rem;
+    box-shadow: none;
+    border-radius: 8px;
+    background: rgba(30,30,30,0.95); /* samme som #menu-links baggrund */
+  }
+  #menu #menu-links .submenu.show { display: block; }
+}
+
+.submenu.show { display: block; }
+.submenu a { padding: .6rem 1rem; color: inherit; text-decoration: none; display: block; }
+.submenu a:hover { background: rgba(255,255,255,.08); }
+  
+}

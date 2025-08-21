@@ -1,0 +1,1250 @@
+<html lang="da">
+<head>
+  <script src="gate.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rutebygger - NKL</title>
+  <link rel="stylesheet" href="css/base.css" /> 
+  <link rel="stylesheet" href="css/menu.css" />
+</head>
+<body>
+<div class="kort">
+  <h2>🧗 Upload billede og opret rute</h2>
+
+  <label for="imgInput">📷 Vælg nyt billede</label>
+  <input type="file" id="imgInput" accept="image/*" />
+
+  <label for="eksisterendeBilleder">📁 Eller vælg eksisterende billede</label>
+  <select id="eksisterendeBilleder">
+    <option value="">📁 Vælg eksisterende billede</option>
+  </select>
+
+  <p id="status">Ingen billede valgt endnu</p>
+</div>
+
+<div class="kort" id="ruteForm">
+  <h2>🧗 Opret ny rute</h2>
+
+  <label for="rutenavn">Navn på rute</label>
+  <input type="text" id="rutenavn" placeholder="Navn på rute" />
+  
+  <div class="navn-generator">
+  <button type="button" id="foreslå-navn" class="primary">🎲 Foreslå navn</button>
+  <div id="navneforslag" class="forslagscontainer hidden"></div>
+  </div>
+
+
+  <label for="rutefarve">Farve</label>
+  <select id="rutefarve">
+    <option value="grey">Grå</option>
+    <option value="red">Rød</option>
+    <option value="green">Grøn</option>
+    <option value="blue">Blå</option>
+    <option value="orange">Orange</option>
+    <option value="purple">Lilla</option>
+    <option value="black">Sort</option>
+    <option value="yellow">Gul</option>
+    <option value="white">Hvid</option>
+    <option value="pink">Pink</option>
+    <option value="mint">Mint</option>
+  </select>
+
+  <label for="rutegrad">Grad</label>
+  <select id="rutegrad">
+    <option value="">Grad</option>
+    <option>4</option>
+    <option>5a</option>
+    <option>5b</option>
+    <option>5c</option>
+    <option>6a</option>
+    <option>6a+</option>
+    <option>6b</option>
+    <option>6b+</option>
+    <option>6c</option>
+    <option>6c+</option>
+    <option>7a</option>
+    <option>7a+</option>
+    <option>7b</option>
+    <option>7b+</option>
+    <option>7c</option>
+  </select>
+
+  <label for="rutebygger">Rutebygger</label>
+  <input type="text" id="rutebygger" placeholder="Navn på rutebygger" />
+
+  <label for="billedeIdValg">Vælg væg/sektor</label>
+  <select id="billedeIdValg">
+    <!-- Bouldere -->
+    <option value="sektor-a">Sektor A</option>
+    <option value="sektor-b">Sektor B</option>
+    <option value="sektor-c">Sektor C</option>
+    <option value="sektor-d">Sektor D</option>
+    <!-- Højvæg -->
+    <option value="anker-a">Anker 1-2-3-4</option>
+    <option value="anker-b">Anker 5-6-7</option>
+    <option value="anker-c">Anker 8-9-10</option>
+	<option value="anker-d">Anker 11-12-13</option>
+	<option value="anker-e">Anker 14-15-16-17</option>
+	<option value="anker-f">Anker 18-19-20-21-22</option>
+  </select>
+
+  <label>
+    <input type="checkbox" id="ruteAktiv" checked />
+    Aktiv rute (synlig i oversigt)
+  </label>
+
+  <div class="tool-actions">
+    <button id="gemKnap">✅ Gem rute</button>
+    <button id="deaktiverAlleKnap">🚫 Gør alle ruter inaktive</button>
+    <button onclick="fortrydSidste()">↩️ Fortryd sidste greb</button>
+    <button onclick="rydValg()">🗑️ Ryd valg</button>
+	<button id="visAlleRuterKnap">👁️ Vis alle gemte ruter</button>
+    <button id="toggleGrebKnap">🔍 Vis alle greb</button>
+	<button id="nulstilZoomKnap">🔄 Nulstil visning</button>
+  </div>
+</div>
+
+<div id="canvas-loader" class="canvas-loader hidden">
+  <div class="spinner"></div>
+</div>
+
+<div id="canvas-container">
+  <div id="redigerStatus" class="rediger-boks skjult"></div>
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="kort">
+  <h2 id="ruteOverskrift"></h2>
+  <div id="ruteListe"></div>
+</div>
+
+
+<script type="module">
+	import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "index.html",
+    efterLogin: (bruger) => {
+	  if (window.releaseAuthGate) window.releaseAuthGate();
+      indsætMenu(bruger);
+	  udfyldEksisterendeBillederDropdown();
+	  aktuelBruger = bruger;
+	  udfyldBilledeDropdownFraRuter();
+      const brugerNavnEl = document.getElementById("bruger-navn");
+if (brugerNavnEl) {
+  brugerNavnEl.textContent = (bruger?.navn || "Ukendt");
+}
+    }
+  });
+
+
+async function hentRuter() {
+  const { data, error } = await client
+    .from("ruter")
+    .select("*");
+
+  if (error) {
+    console.error("❌ Kunne ikke hente ruter:", error);
+    return;
+  }
+
+  gemteRuter = data;
+  opdaterRuteListe();
+}
+
+  let aktuelBruger = null;
+  let allPredictions = [];
+  let valgtRute = [];
+  let gemteRuter = [];
+  let img, canvas, ctx;
+  let visAlleGreb = false;
+  let baseNavn = "";
+  let redigeretRuteId = null;
+  let zoom = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  let isDragging = false;
+  let dragStart = { x: 0, y: 0 };
+
+
+function hexToRgba(color, alpha = 0.3) {
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.fillStyle = color;
+  const computed = ctx.fillStyle;
+
+  // Nu har vi farven som rgb(...) – vi udskifter 'rgb' med 'rgba'
+  return computed.replace("rgb(", "rgba(").replace(")", `, ${alpha})`);
+}
+
+document.getElementById("eksisterendeBilleder").addEventListener("change", async function (e) {
+  const valgtFil = e.target.value;
+  baseNavn = valgtFil.replace(/\.[^/.]+$/, "");
+
+  const billedeUrl = hentPublicUrlMedCache(valgtFil);
+  if (!billedeUrl) {
+  alert("❌ Kunne ikke hente billedet.");
+  return;
+  }
+
+  // Hent billedet som blob
+  const response = await fetch(billedeUrl);
+  const blob = await response.blob();
+
+  // Konverter til base64
+  const reader = new FileReader();
+  reader.onloadend = async function () {
+  // Vis loading
+  document.getElementById("canvas-loader")?.classList.remove("hidden");
+
+  const base64Image = reader.result.split(",")[1];
+
+  const roResponse = await fetch("https://serverless.roboflow.com/infer/workflows/climbing-holds-etzec/findgrebpolygon", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: "rmYgUFzqbYEM2ziXw75d",
+      inputs: {
+        image: { type: "base64", value: base64Image }
+      }
+    })
+  });
+
+  const result = await roResponse.json();
+  allPredictions = result.outputs?.[0]?.predictions?.predictions || [];
+
+  // Vis billedet
+  img = new Image();
+  img.src = billedeUrl;
+  await img.decode();
+
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  ctx.drawImage(img, 0, 0);
+
+  valgtRute = [];
+
+  // Opdater dropdown
+  const idValg = document.getElementById("billedeIdValg");
+  const match = Array.from(idValg.options).find(opt => opt.value === baseNavn);
+  if (match) idValg.value = baseNavn;
+
+  drawSelection();
+  await hentRuter();
+
+  document.getElementById("status").textContent = `✅ Greb læst for ${valgtFil} – klik for at markere`;
+
+  // Skjul loading
+  document.getElementById("canvas-loader")?.classList.add("hidden");
+};
+
+  reader.readAsDataURL(blob);
+});
+
+document.getElementById("imgInput").addEventListener("change", async function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const filnavnOriginal = file.name.toLowerCase().replace(/\s+/g, "-");
+  const matchKategori = filnavnOriginal.match(/^(sektor-[a-d]|anker-[a-f]|tagruter)/);
+
+  if (!matchKategori) {
+    alert("❌ Filnavnet skal starte med en kendt kategori som 'sektor-a', 'anker-a' eller 'tagruter'");
+    return;
+  }
+
+  const kategori = matchKategori[1];
+  const webpFilnavn = await konverterOgUpload(file, kategori);
+  if (!webpFilnavn) return;
+
+  baseNavn = webpFilnavn.replace(".webp", "");
+
+  // Opdater dropdown og status
+  await udfyldEksisterendeBillederDropdown();
+  document.getElementById("eksisterendeBilleder").value = webpFilnavn;
+  document.getElementById("status").textContent = `✅ Billede uploadet som ${webpFilnavn} – læser greb...`;
+
+  // Hent billede fra Supabase som .webp
+	const billedeUrl = hentPublicUrlMedCache(webpFilnavn);
+	if (!billedeUrl) {
+	alert("❌ Kunne ikke hente det uploadede billede.");
+	return;
+	}
+
+  const response = await fetch(billedeUrl);
+  const blob = await response.blob();
+
+  // Konverter til base64 for Roboflow
+  const reader = new FileReader();
+  reader.onloadend = async function () {
+    document.getElementById("canvas-loader")?.classList.remove("hidden");
+
+    const base64Image = reader.result.split(',')[1];
+    const roResponse = await fetch("https://serverless.roboflow.com/infer/workflows/climbing-holds-etzec/findgrebpolygon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: "rmYgUFzqbYEM2ziXw75d",
+        inputs: { image: { type: "base64", value: base64Image } }
+      })
+    });
+
+    const result = await roResponse.json();
+    allPredictions = result.outputs?.[0]?.predictions?.predictions || [];
+
+    // Vis billede i canvas
+    img = new Image();
+    img.src = billedeUrl;
+    await img.decode();
+
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    // Marker ruten og opdater status
+    valgtRute = [];
+
+    const dropdown = document.getElementById("billedeIdValg");
+    const mulighed = Array.from(dropdown.options).find(opt => opt.value === kategori);
+    if (mulighed) dropdown.value = kategori;
+
+    drawSelection();
+    await hentRuter();
+
+    document.getElementById("status").textContent = `✅ Greb læst – klar til at oprette rute på ${baseNavn}`;
+    document.getElementById("canvas-loader")?.classList.add("hidden");
+  };
+
+  reader.readAsDataURL(blob);
+});
+
+// Brugeren skal vælge kategori manuelt (via dropdown)
+// const kategori = document.getElementById("billedeIdValg").value; // f.eks. "tagruter"
+const bruger = JSON.parse(localStorage.getItem("bruger")); // eller `aktuelBruger`
+
+async function udfyldEksisterendeBillederDropdown() {
+  const { data, error } = await client
+    .storage
+    .from("ruter")
+    .list("", { limit: 100 });
+
+  if (error) {
+    console.error("❌ Kunne ikke hente eksisterende billeder:", error);
+    return;
+  }
+
+  const dropdown = document.getElementById("eksisterendeBilleder");
+  dropdown.innerHTML = '<option value="">📁 Vælg eksisterende billede</option>';
+
+  const senestePerKategori = {};
+
+  data
+    .filter(f => f.name.match(/\.webp$/i))
+    .forEach(f => {
+      const navnUdenExt = f.name.replace(/\.[^/.]+$/, "");
+      const [kategori, dato] = navnUdenExt.split("_");
+
+      if (!dato || !kategori) return;
+
+      if (!senestePerKategori[kategori] || dato > senestePerKategori[kategori].dato) {
+        senestePerKategori[kategori] = { navn: f.name, dato };
+      }
+    });
+
+  // Sortér alfabetisk efter kategori
+  const sorterede = Object.entries(senestePerKategori).sort(([a], [b]) => a.localeCompare(b));
+
+  sorterede.forEach(([, { navn }]) => {
+    const option = document.createElement("option");
+    option.value = navn;
+    option.textContent = navn;
+    dropdown.appendChild(option);
+  });
+}
+
+async function udfyldBilledeDropdownFraRuter() {
+  const { data, error } = await client
+    .from("ruter")
+    .select("billede_id")
+    .neq("billede_id", "")
+    .order("billede_id", { ascending: true });
+
+  if (error) {
+    console.error("❌ Kunne ikke hente billede_id fra ruter:", error);
+    return;
+  }
+
+  // 🧩 Ekstra: kendte kategorier der skal vises som fallback
+  const fallbackKategorier = [
+    "sektor-a", "sektor-b", "sektor-c", "sektor-d",
+    "anker-a", "anker-b", "anker-c", "anker-d", "anker-e", "anker-f",
+    "tagruter"
+  ];
+
+  // Kombiner ruter fra databasen med fallback-kategorier
+  const unikke = [...new Set([
+    ...data.map(r => r.billede_id),
+    ...fallbackKategorier
+  ])].sort();
+
+  const dropdown = document.getElementById("billedeIdValg");
+  dropdown.innerHTML = '<option value="">Vælg væg</option>';
+
+  unikke.forEach(id => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = id;
+    dropdown.appendChild(option);
+  });
+}
+
+async function konverterOgUpload(fil, kategori) {
+  try {
+    // 1. Konverter til .webp
+    const bitmap = await createImageBitmap(fil);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+
+    const webpBlob = await new Promise(resolve =>
+      canvas.toBlob(resolve, 'image/webp', 0.85)
+    );
+
+    // 2. Navngivning: eks. sektor-a_2025-08-02.webp
+    const dato = new Date().toISOString().split("T")[0];
+    const filnavn = `${kategori}_${dato}.webp`;
+    const sti = `${filnavn}`;
+
+    // 3. Upload til Supabase Storage
+    const { error: uploadError } = await client.storage
+      .from('ruter')
+      .upload(sti, webpBlob, {
+        contentType: 'image/webp',
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 4. (Valgfrit) Slet original filnavn hvis uploadet manuelt
+    const originalNavn = fil.name;
+    const originalSti = `${originalNavn}`;
+    await client.storage.from('ruter').remove([originalSti]);
+
+    console.log(`✅ Webp-billede uploadet som ${filnavn}`);
+    return filnavn; // vigtigt: skal gemmes i din rute med feltet billede_url
+  } catch (err) {
+    console.error("❌ Fejl ved billedkonvertering:", err);
+    alert("Kunne ikke konvertere billede.");
+    return null;
+  }
+}
+
+const gradRækkefølge = [
+  "4","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+",
+  "7a","7a+","7b","7b+","7c"
+];
+
+function beregnBasePoints(grad) {
+  const k = gradRækkefølge.indexOf((grad||"").toLowerCase());
+  if (k < 0) return 0;
+  return Math.round(5 * Math.pow(1.32, k));
+}
+
+function opdaterOverskrift() {
+  const overskrift = document.getElementById("ruteOverskrift");
+  const sektor = document.getElementById("billedeIdValg").value;
+
+  if (["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(sektor)) {
+    overskrift.textContent = "📋 Gemte bouldere";
+  } else {
+    overskrift.textContent = "📋 Gemte ruter";
+  }
+}
+
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+
+    const intersect = ((yi > y) !== (yj > y)) &&
+                      (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-10) + xi);
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function drawPolygon(ctx, points, color = "cyan") {
+  if (!points || points.length < 3) return;
+
+  // Konverter fra {x, y} til [x, y] hvis nødvendigt
+  if (typeof points[0] === "object" && points[0].x !== undefined) {
+    points = points.map(p => [p.x, p.y]);
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // Start midt mellem første og andet punkt
+  ctx.moveTo((points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2);
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const xc = (points[i][0] + points[i + 1][0]) / 2;
+    const yc = (points[i][1] + points[i + 1][1]) / 2;
+    ctx.quadraticCurveTo(points[i][0], points[i][1], xc, yc);
+  }
+
+  // Slut af med kurve til første punkt
+  ctx.quadraticCurveTo(
+    points[points.length - 1][0],
+    points[points.length - 1][1],
+    (points[0][0] + points[points.length - 1][0]) / 2,
+    (points[0][1] + points[points.length - 1][1]) / 2
+  );
+
+  ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  
+  ctx.restore();
+}
+
+function drawSelection() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(img, 0, 0);
+
+  if (visAlleGreb) {
+    allPredictions.forEach(p => drawSingleHold(p));
+  }
+
+  valgtRute.forEach(p => drawSingleHold(p, "magenta"));
+  ctx.restore();
+}
+
+function drawSingleHold(p, overrideColor = null) {
+  const { points } = p;
+
+  let strokeColor = overrideColor;
+
+  if (!strokeColor) {
+  strokeColor = visAlleGreb ? "lime" : "magenta";
+  }
+
+
+  const isMobile = window.innerWidth <= 600;
+  ctx.save();
+
+  ctx.lineWidth = isMobile ? 4 : 2;
+  ctx.strokeStyle = strokeColor;
+
+  // Shadow kun hvis det ikke er "vis alle greb"
+  ctx.shadowColor = visAlleGreb ? "transparent" : "black";
+  ctx.shadowBlur = visAlleGreb ? 0 : (isMobile ? 4 : 2);
+
+  // === Tegn polygon ===
+  if (Array.isArray(points) && points.length >= 3) {
+    ctx.beginPath();
+
+    if (Array.isArray(points[0])) {
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+      }
+    } else {
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+    }
+
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+document.getElementById("gemKnap").addEventListener("click", async () => {
+  redigeretRuteId = document.getElementById("gemKnap").dataset?.redigerId || null;
+  const erRedigering = !!redigeretRuteId;
+
+  const navn = document.getElementById("rutenavn").value.trim();
+  const farve = document.getElementById("rutefarve").value;
+  const grad = document.getElementById("rutegrad").value;
+  const rutebygger = document.getElementById("rutebygger").value.trim();
+  const billedeId = document.getElementById("billedeIdValg").value;
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const user_id = bruger?.id || null;
+
+  if (!navn || (!erRedigering && valgtRute.length === 0)) {
+    return alert("Vælg greb og skriv et rutenavn først.");
+  }
+
+  try {
+
+const ruteDerRedigeres = gemteRuter.find(r => r.id === redigeretRuteId);
+const grebData = valgtRute.length > 0 ? valgtRute : ruteDerRedigeres?.greb || [];
+
+const data = {
+  navn,
+  greb: grebData,
+  farve,
+  grad,
+  rutebygger,
+  aktiv: document.getElementById("ruteAktiv").checked
+};
+
+// beregn points automatisk ud fra grad
+data.points = beregnBasePoints(data.grad);
+
+    let error;
+
+    if (redigeretRuteId) {
+      // 🔁 OPDATER
+      ({ error } = await client
+        .from("ruter")
+        .update(data)
+        .eq("id", redigeretRuteId));
+    } else {
+      // ➕ OPRET NY
+      data.billede_id = billedeId;
+      data.billedenavn = `${baseNavn}.webp`;
+      data.user_id = user_id;
+
+      ({ error } = await client
+        .from("ruter")
+        .insert([data]));
+    }
+
+    if (error) throw error;
+
+    console.log("✅ Rute gemt:", navn);
+    await hentRuter();
+    valgtRute = [];
+    drawSelection();
+    redigeretRuteId = null;
+	
+	// Fjerner redigérbjælken
+	document.getElementById("redigerStatus").classList.add("skjult"); // 🧹 skjul rediger-bjælke
+	document.getElementById("gemKnap").dataset.redigerId = ""; // ryd evt. ID
+
+    // Nulstil felter
+    document.getElementById("rutenavn").value = "";
+    document.getElementById("rutefarve").value = "";
+    document.getElementById("rutegrad").value = "";
+    document.getElementById("rutebygger").value = "";
+    document.getElementById("ruteAktiv").checked = true;
+	
+
+    alert("✅ Ruten blev gemt og sat som aktiv for billedet.");
+  } catch (err) {
+    console.error("❌ Fejl:", err);
+    alert("❌ Der skete en fejl under gemning.");
+  }
+});
+
+function visRute(rute) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(zoom, zoom);
+
+  ctx.drawImage(img, 0, 0);
+
+  const farve = rute.farve || "cyan";
+  rute.greb.forEach(p => drawSingleHold(p, farve));
+
+ctx.font = "30px Arial";
+ctx.lineWidth = 6;
+ctx.strokeStyle = "black";
+ctx.fillStyle = "white";
+ctx.lineJoin = "round";
+
+const startX = 20;
+let startY = 60;     
+const linjeAfstand = 48; 
+
+ctx.strokeText(`📌 ${rute.navn}`, startX, startY);
+ctx.fillText(`📌 ${rute.navn}`, startX, startY);
+
+startY += linjeAfstand;
+ctx.strokeText(`🎯 ${rute.grad || "?"}`, startX, startY);
+ctx.fillText(`🎯 ${rute.grad || "?"}`, startX, startY);
+
+startY += linjeAfstand;
+ctx.strokeText(`👷 ${rute.rutebygger || "Ukendt"}`, startX, startY);
+ctx.fillText(`👷 ${rute.rutebygger || "Ukendt"}`, startX, startY);
+
+
+  ctx.restore();
+}
+
+
+function redigérRute(rute) {
+  document.getElementById("rutenavn").value = rute.navn || "";
+  document.getElementById("rutefarve").value = rute.farve || "";
+  document.getElementById("rutegrad").value = rute.grad || "";
+  document.getElementById("rutebygger").value = rute.rutebygger || "";
+  document.getElementById("ruteAktiv").checked = rute.aktiv || false;
+  document.getElementById("gemKnap").dataset.redigerId = rute.id;
+  redigeretRuteId = rute.id;
+  valgtRute = [...rute.greb]; 
+
+  // 👇 Vis status øverst
+  const statusEl = document.getElementById("redigerStatus");
+  statusEl.classList.remove("skjult");
+  statusEl.innerHTML = `
+    ✏️ Redigerer: <strong>${rute.navn}</strong> (${rute.grad || "?"}, ${rute.farve}) 
+    <button class="annuller" onclick="annullerRedigering()">❌ Annuller</button>
+  `;
+
+  drawSelection();
+}
+
+window.annullerRedigering = function () {
+  redigeretRuteId = null;
+  document.getElementById("gemKnap").dataset.redigerId = "";
+  valgtRute = [];
+  document.getElementById("rutenavn").value = "";
+  document.getElementById("rutefarve").value = "";
+  document.getElementById("rutegrad").value = "";
+  document.getElementById("rutebygger").value = "";
+  document.getElementById("ruteAktiv").checked = true;
+
+  // Skjul status
+  document.getElementById("redigerStatus").classList.add("skjult");
+
+  drawSelection();
+};
+
+
+async function sletRute(id) {
+	
+  // Tjek først om ruten er logget i rutelog
+  const { data: logs, error: logError } = await client
+    .from("rutelog")
+    .select("id")
+    .eq("rute_id", id);
+	
+  if (logError) {
+    console.error("❌ Fejl ved tjek af log:", logError);
+    return alert("Kunne ikke tjekke om ruten er logget.");
+  }
+
+const logsFound = Array.isArray(logs) && logs.length > 0;
+
+if (logsFound) {
+  return alert("❌ Ruten er logget af en eller flere brugere og kan ikke slettes.");
+}
+
+  if (!confirm("Vil du slette denne rute permanent?")) return;
+
+  const { error } = await client
+    .from("ruter")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("❌ Fejl ved sletning:", error);
+    alert("Kunne ikke slette ruten.");
+  } else {
+    alert("✅ Rute slettet.");
+    await hentRuter();
+    drawSelection();
+  }
+}
+
+window.sletRute = sletRute;
+
+function opdaterRuteListe() {
+  const listeEl = document.getElementById("ruteListe");
+  listeEl.innerHTML = "";
+
+  const aktivtBilledeId = document.getElementById("billedeIdValg")?.value;
+  if (!aktivtBilledeId) {
+    listeEl.innerHTML = "<p>Vælg en væg/sektor for at se gemte ruter.</p>";
+    return;
+  }
+
+  const filtreredeRuter = gemteRuter.filter(r => r.billede_id === aktivtBilledeId && r.aktiv);
+
+  if (filtreredeRuter.length === 0) {
+    listeEl.innerHTML = "<p>Ingen ruter fundet for denne sektion.</p>";
+    return;
+  }
+
+  filtreredeRuter.forEach(rute => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "rute-item";
+
+    const navn = document.createElement("span");
+
+    const knapContainer = document.createElement("div");
+    knapContainer.className = "rute-knapper";
+
+    const btn = document.createElement("button");
+    btn.innerHTML = `📌 ${rute.navn}`;
+    btn.style.opacity = rute.aktiv ? "1" : "0.4";
+    btn.title = rute.aktiv ? "Aktiv" : "Inaktiv";
+    btn.addEventListener("click", () => visRute(rute));
+
+    const redigér = document.createElement("button");
+    redigér.innerHTML = "✏️";
+    redigér.title = "Redigér";
+    redigér.addEventListener("click", () => redigérRute(rute));
+
+    const toggle = document.createElement("button");
+    toggle.innerHTML = rute.aktiv ? "🔕 Skjul" : "✅ Vis";
+    toggle.title = "Skift aktiv-status";
+    toggle.addEventListener("click", async () => {
+      const { error } = await client
+        .from("ruter")
+        .update({ aktiv: !rute.aktiv })
+        .eq("id", rute.id);
+
+      if (error) {
+        alert("Kunne ikke opdatere aktiv-status");
+        console.error(error);
+      } else {
+        await hentRuter();
+        drawSelection();
+      }
+    });
+
+    const slet = document.createElement("button");
+    slet.innerHTML = "🗑️";
+    slet.title = "Slet";
+	slet.addEventListener("click", () => {
+	sletRute(rute.id);
+	});
+	
+    // Tilføj knapper til knap-container
+    knapContainer.appendChild(btn);
+    knapContainer.appendChild(redigér);
+    knapContainer.appendChild(toggle);
+    knapContainer.appendChild(slet);
+
+    // Tilføj alt til wrapper
+    wrapper.appendChild(navn);          // evt. drop denne hvis du kun vil bruge knappen som navn
+    wrapper.appendChild(knapContainer);
+
+    listeEl.appendChild(wrapper);
+  });
+}
+
+document.getElementById("toggleGrebKnap").addEventListener("click", () => {
+  visAlleGreb = !visAlleGreb;
+
+  const knap = document.getElementById("toggleGrebKnap");
+  knap.textContent = visAlleGreb ? "🙈 Skjul greb" : "🔍 Vis alle greb";
+
+  drawSelection();
+});
+
+  window.fortrydSidste = function () {
+    valgtRute.pop();
+    drawSelection();
+  };
+
+  window.rydValg = function () {
+    valgtRute = [];
+    drawSelection();
+  };
+  
+canvas = document.getElementById("canvas");
+// === Klik på greb for at tilføje ===
+canvas.addEventListener("click", function (e) {
+  if (!allPredictions.length) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const clickX = ((e.clientX - rect.left) * (canvas.width / rect.width) - offsetX) / zoom;
+  const clickY = ((e.clientY - rect.top) * (canvas.height / rect.height) - offsetY) / zoom;
+
+  const clicked = allPredictions.find(p => {
+    const { x, y, width, height } = p;
+    return (
+      clickX >= x - width / 2 &&
+      clickX <= x + width / 2 &&
+      clickY >= y - height / 2 &&
+      clickY <= y + height / 2
+    );
+  });
+
+  const aktivtBilledeId = document.getElementById("billedeIdValg").value;
+  const match = clicked
+    ? gemteRuter
+        .filter(rute => rute.billede_id === aktivtBilledeId)
+        .find(rute =>
+          rute.greb.some(g =>
+            Math.abs(g.x - clicked.x) < 5 &&
+            Math.abs(g.y - clicked.y) < 5 &&
+            g.class === clicked.class
+          )
+        )
+    : null;
+
+  if (match) {
+    visRute(match);
+  } else if (clicked) {
+    valgtRute.push(clicked);
+    drawSelection();
+  } else if (redigeretRuteId && valgtRute.length === 0) {
+    // Kun nulstil hvis du var i gang med at redigere og ingen greb er valgt
+    redigeretRuteId = null;
+    document.getElementById("gemKnap").dataset.redigerId = "";
+    document.getElementById("rutenavn").value = "";
+    document.getElementById("rutefarve").value = "";
+    document.getElementById("rutegrad").value = "";
+    document.getElementById("rutebygger").value = "";
+    document.getElementById("ruteAktiv").checked = true;
+    valgtRute = [];
+    drawSelection();
+    alert("✏️ Redigering annulleret.");
+  }
+});
+
+// === Højreklik for at fjerne greb ===
+canvas.addEventListener("contextmenu", function (e) {
+  e.preventDefault();
+
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const canvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const clickX = (canvasX - offsetX) / zoom;
+  const clickY = (canvasY - offsetY) / zoom;
+
+  // Find det valgte greb (baglæns = topmost først)
+  for (let i = valgtRute.length - 1; i >= 0; i--) {
+    const greb = valgtRute[i];
+
+    if (greb.points && greb.points.length >= 3) {
+      // Polygon-mode
+      const polygon = greb.points.map(p => Array.isArray(p) ? p : [p.x, p.y]);
+      if (pointInPolygon(clickX, clickY, polygon)) {
+        valgtRute.splice(i, 1);
+        drawSelection();
+        return;
+      }
+    } else {
+      // Backup til bbox
+      const { x, y, width, height } = greb;
+      if (
+        clickX >= x - width / 2 &&
+        clickX <= x + width / 2 &&
+        clickY >= y - height / 2 &&
+        clickY <= y + height / 2
+      ) {
+        valgtRute.splice(i, 1);
+        drawSelection();
+        return;
+      }
+    }
+  }
+});
+
+// === Event listeners ===
+document.getElementById("billedeIdValg")?.addEventListener("change", opdaterRuteListe);
+
+document.getElementById("eksisterendeBilleder")?.addEventListener("change", () => {
+  const valgtFil = document.getElementById("eksisterendeBilleder").value;
+  const defaultSektor = valgtFil.split("_")[0]; // fx "sektor-a"
+  const sektorSelect = document.getElementById("billedeIdValg");
+
+  // Finder automatisk sektoren
+  if (defaultSektor) {
+  sektorSelect.value = defaultSektor;
+  }
+  
+  opdaterRuteListe();
+  opdaterOverskrift();
+});
+
+document.getElementById("deaktiverAlleKnap").addEventListener("click", async () => {
+  const billedeId = document.getElementById("billedeIdValg").value;
+  if (!billedeId) return alert("Vælg billede først.");
+
+  const input = prompt("⚠️ Bekræft handlingen:\n\nSkriv 'gør inaktiv' for at deaktivere ALLE ruter for denne væg.");
+  if (input !== "gør inaktiv") {
+    alert("❌ Handling afbrudt – teksten matchede ikke.");
+    return;
+  }
+
+  const { error } = await client
+    .from("ruter")
+    .update({ aktiv: false })
+    .eq("billede_id", billedeId);
+
+  if (error) {
+    console.error("❌ Kunne ikke deaktivere ruter:", error);
+    alert("Fejl ved deaktivering.");
+  } else {
+    alert("🚫 Alle ruter for dette billede er sat som inaktive.");
+    await hentRuter();
+    drawSelection();
+  }
+});
+
+document.getElementById("visAlleRuterKnap").addEventListener("click", () => {
+  const billedeId = document.getElementById("billedeIdValg").value;
+  if (!billedeId) return alert("Vælg en væg/sektor først.");
+
+  const ruter = gemteRuter.filter(r => r.billede_id === billedeId && r.aktiv);
+
+  if (ruter.length === 0) {
+    return alert("Ingen aktive ruter fundet for denne væg.");
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(img, 0, 0);
+
+  ruter.forEach(r => {
+    const farve = r.farve || "cyan";
+    r.greb.forEach(p => drawSingleHold(p, farve));
+  });
+
+  ctx.restore();
+});
+
+// 🔍 Zoom med mus (scroll)
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const zoomFactor = 1.1;
+  zoom *= e.deltaY < 0 ? zoomFactor : 1 / zoomFactor;
+  drawSelection();
+});
+
+// 🖱️ Pan med mus
+canvas.addEventListener("mousedown", (e) => {
+  isDragging = true;
+  dragStart = { x: e.offsetX, y: e.offsetY };
+  e.preventDefault(); // 🛑 Stop scroll
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (isDragging) {
+    const dx = e.offsetX - dragStart.x;
+    const dy = e.offsetY - dragStart.y;
+
+    const panSpeed = 1.5;
+    offsetX += dx * panSpeed;
+    offsetY += dy * panSpeed;
+
+    dragStart = { x: e.offsetX, y: e.offsetY };
+    drawSelection();
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener("mouseup", () => (isDragging = false));
+canvas.addEventListener("mouseleave", () => (isDragging = false));
+
+// 📱 Touch: pan & pinch
+canvas.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1) {
+    const rect = canvas.getBoundingClientRect();
+    dragStart = {
+      x: e.touches[0].clientX - rect.left,
+      y: e.touches[0].clientY - rect.top
+    };
+    isDragging = true;
+  }
+
+  // 🛑 Forhindr browserens scroll og zoom
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener("touchmove", (e) => {
+  if (isDragging && e.touches.length === 1) {
+    const rect = canvas.getBoundingClientRect();
+
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+
+    const dx = x - dragStart.x;
+    const dy = y - dragStart.y;
+
+    const panSpeed = 1.5;
+    offsetX += dx * panSpeed;
+    offsetY += dy * panSpeed;
+
+    dragStart = { x, y };
+    drawSelection();
+  }
+
+  // 🛑 Forhindr scrolling af hele siden
+  e.preventDefault();
+}, { passive: false });
+
+document.getElementById("nulstilZoomKnap")?.addEventListener("click", () => {
+  zoom = 1;
+  offsetX = 0;
+  offsetY = 0;
+  drawSelection();
+});
+
+
+</script>
+
+<!-- Navne foreslag generator -->
+<script>
+const farveOrd = {
+  grøn: [
+    "Skov", "Gift", "Græs", "Jungle", "Mos", "Løv", "Alge", "Slange", "Smaragd",
+    "Trolddom", "Ork", "Skæl", "Bambus", "Skovhugger", "Urkraft", "Trætop", "Gro", "Paddehat", "Plante", "Vækst"
+  ],
+  blå: [
+    "Is", "Himmel", "Bølge", "Frost", "Storm", "Hval", "Ocean", "Laser", "Dråbe",
+    "Frossen sjæl", "Rumsø", "Avatar", "Jazz", "Cyber", "Skyline", "Blues", "Torden", "Deep Space", "Sømand", "Rovfugl"
+  ],
+  rød: [
+    "Ild", "Blod", "Flamme", "Lava", "Solnedgang", "Krise", "Inferno", "Vulkan", "Hjerte",
+    "Kærlighed", "Djævel", "Sabotør", "Drama", "Scarlet", "Lyn", "Salsa", "Krig", "Alarm", "Rød zone", "Kirsebær"
+  ],
+  gul: [
+    "Sol", "Banan", "Guld", "Lys", "Støv", "Majs", "Tigerøje", "Flare", "Komet",
+    "Glød", "Jazzhånd", "Citron", "Blixt", "Honning", "Champagne", "Bål", "Desert", "Solsikke", "Bølgelængde", "Radioaktiv"
+  ],
+  sort: [
+    "Skygge", "Nat", "Røg", "Kul", "Sort hul", "Mørke", "Batman", "Aske", "Edderkop",
+    "Goth", "Dæmon", "Blæk", "Ravnemark", "Søvn", "Skyggejæger", "Dystopi", "Blindhed", "Sort sol", "Morder", "Korp"
+  ],
+  lilla: [
+    "Mystik", "Trylleri", "Bær", "Tåge", "Amethyst", "Magi", "Eliksir", "Fe", "Heks",
+    "Galaxy", "Hypnose", "Psyke", "Lavendel", "Karma", "Jazznattens tåge", "Druer", "Violet", "Drøm", "Skumring", "Spirit"
+  ],
+  pink: [
+    "Candy", "Slik", "Læbestift", "Enhjørning", "Ballade", "K-pop", "Glitter", "Cheerleader", "Barbie",
+    "Hjerteknuser", "Disco", "Punkprinsesse", "Popstar", "Diva", "Konfetti", "Glimmer", "Bubblegum", "Fashion", "Flash", "Elektrisk kærlighed"
+  ],
+  mint: [
+    "Menthol", "Frisk", "Frost", "Slik", "Blade", "Krystal", "Mojito", "Wintermute", "Breeze",
+    "Matrix", "Neonblad", "Glas", "Cool Shot", "Icebyte", "Nanobot", "Køler", "Cybermint", "Polar", "Techflora", "Freshline"
+  ],
+  hvid: [
+    "Sky", "Snedrive", "Kridt", "Spøgelse", "Snefnug", "Skytsengel", "Blitz", "Støvfnug", "Genskær",
+    "Skywalker", "Snehvid", "Stille", "Ghost Mode", "Tavshed", "Dagslys", "Flok", "Tåge", "Nordlys", "Evighed", "Sneugle"
+  ],
+  orange: [
+    "Flamme", "Morgen", "Gulerod", "Tiger", "Raket", "Solsprøjt", "Mamba", "Magma", "Solkriger",
+    "Zappy", "Fakkel", "Marmelade", "Krydderi", "Brænding", "Høst", "Vulkan", "Zest", "Sonic Boom", "Antares", "Brandalarm"
+  ],
+  grå: [
+  "Sten", "Tåge", "Aske", "Støv", "Granit", "Skærv", "Stål", "Metal", "Skygge",
+  "Beton", "Bro", "Sølv", "Dis", "Maskine", "Tårn", "Gletsjer", "Bymur", "Rust", "Tung luft", "Smedejern"
+  ]
+
+};
+
+function oversætGradTilSværhed(grad) {
+  const g = grad.toLowerCase();
+  if (["4", "4a", "4b", "4c", "5", "5a"].includes(g)) return "let";
+  if (["5b", "5c", "6a", "6a+"].includes(g)) return "middel";
+  if (["6b", "6b+", "6c", "6c+"].includes(g)) return "hård";
+  return "ekstrem"; // fx 7a og op
+}
+
+const oversætFarve = {
+  grey: "grå", red: "rød", green: "grøn", blue: "blå", orange: "orange",
+  purple: "lilla", black: "sort", yellow: "gul", white: "hvid",
+  pink: "pink", mint: "mint"
+};
+
+const sværhedsEndelse = {
+  let: [
+    "eventyr", "vej", "dans", "sti", "leg", "fløjlstur", "skridt", "hyggetur", "sving", "loop",
+    "smutvej", "hop", "trille", "morgenstræk", "zenrejse", "flyvetur", "børnesjov", "dugdråbe", "fjeder", "kattepote"
+  ],
+  middel: [
+    "rejse", "test", "bane", "mission", "træk", "stigning", "sløjfe", "klatreplan", "kurs", "taktik",
+    "svej", "kampbane", "zone", "udfordring", "serie", "indsats", "kontrol", "grebstime", "mønster", "pulsstigning"
+  ],
+  hård: [
+    "kamp", "duel", "knuser", "krig", "hån", "strafrunde", "sveddryp", "konflikt", "mur", "knækpunkt",
+    "opgør", "slag", "blokade", "smertepunkt", "væg", "dom", "testamente", "force", "monsterbane", "trykmåler"
+  ],
+  ekstrem: [
+    "mareridt", "katastrofe", "underverden", "afgrund", "slagtning", "dommedag", "desperation", "eksplosion", "dødsspring", "hjernevrid",
+    "smertedyk", "helvede", "kaos", "nulpunkt", "total nedlukning", "grædemur", "sjælevandring", "mentaltest", "apokalypse", "bensplint"
+  ]
+};
+
+const actionOrd = [
+  "Tryk", "Flugt", "Eksplosion", "Snit", "Slam", "Opstigning", "Overtag", "Hvirvel",
+  "Spring", "Ryk", "Power", "Chok", "Styrt", "Lyn", "Fald", "Klatre", "Dyk", "Greb",
+  "Impact", "Zoom", "Snap", "Skift", "Vrid", "Glid", "Panik"
+];
+
+function genererRutenavn(farve, grad) {
+  const danskFarve = oversætFarve[farve.toLowerCase()] || "grøn";
+  const farveListe = farveOrd[danskFarve] || ["Skygge"];
+  const sværhed = oversætGradTilSværhed(grad);
+  const sværhedsListe = sværhedsEndelse[sværhed] || [];
+
+  const type = Math.random(); // bruges til at afgøre typen
+
+  if (type < 0.25) {
+    // 🔹 25% chance: kun farveord
+    return farveListe[Math.floor(Math.random() * farveListe.length)];
+  } else if (type < 0.45) {
+    // 🔸 20% chance: kun actionord
+    return actionOrd[Math.floor(Math.random() * actionOrd.length)];
+  } else {
+    // ⚙️ 55% chance: farveord + sværhedsord
+    const ord1 = farveListe[Math.floor(Math.random() * farveListe.length)];
+    const ord2 = sværhedsListe[Math.floor(Math.random() * sværhedsListe.length)];
+    return `${ord1} ${ord2}`;
+  }
+}
+
+
+
+document.getElementById("foreslå-navn").addEventListener("click", () => {
+  const farve = document.getElementById("rutefarve")?.value || "grøn";
+  const grad = document.getElementById("rutegrad")?.value || "6a";
+  const container = document.getElementById("navneforslag");
+
+  container.innerHTML = ""; // ryd gamle forslag
+  container.classList.remove("hidden");
+
+  const forslag = new Set();
+  while (forslag.size < 3) {
+    forslag.add(genererRutenavn(farve, grad));
+  }
+
+  forslag.forEach(navn => {
+    const btn = document.createElement("button");
+    btn.textContent = navn;
+    btn.addEventListener("click", () => {
+      document.getElementById("rutenavn").value = navn;
+      container.classList.add("hidden");
+    });
+    container.appendChild(btn);
+  });
+});
+
+
+
+</script>
+
+
+</body>
+</html>

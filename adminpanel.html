@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <script src="gate.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Adminpanel – NKL</title>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <link rel="stylesheet" href="css/adminpanel.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+</head>
+<body>
+
+<!-- ========================= HEADER ========================= -->
+<h2 style="text-align:center; margin-top: 1rem;">🛠️ Adminpanel</h2>
+
+<!-- ========================= TABS =========================== -->
+<div class="tab-container" role="tablist" aria-label="Admin faner">
+  <button class="tab" role="tab" aria-controls="users" data-target="users">👤 Roller</button>
+  <button class="tab" role="tab" aria-controls="stats" data-target="stats">📊 Statistik</button>
+  <button class="tab" role="tab" aria-controls="members" data-target="members">🧍 Klubmedlemmer</button>
+  <button class="tab" role="tab" aria-controls="tools" data-target="tools">🔧 Værktøjer</button>
+</div>
+
+<div class="tab-content">
+  <!-- ========== USERS / ROLLER ========= -->
+  <section id="users" class="tab-panel hidden" role="tabpanel" aria-labelledby="users-tab">
+    <h3>👤 Brugere fordelt på roller</h3>
+    <div id="roller-visning">
+      <section class="rolle-sektion">
+        <h4>🛠️ Admins</h4>
+        <ul id="admin-liste"></ul>
+      </section>
+
+      <section class="rolle-sektion">
+        <h4>🔑 Nøglebærere</h4>
+        <ul id="noeglebaerer-liste"></ul>
+      </section>
+
+      <section class="rolle-sektion">
+        <h4>🎉 Eventmakers</h4>
+        <ul id="eventmaker-liste"></ul>
+      </section>
+      
+      <section class="rolle-sektion">
+        <h4>🧗 Rutebyggere</h4>
+        <ul id="rutebygger-liste"></ul>
+      </section>
+
+      <section class="rolle-sektion">
+        <h4>📋 Bestyrelsesmedlemmer</h4>
+        <ul id="bestyrelsesmedlem-liste"></ul>
+      </section>
+	  
+	  <section class="rolle-sektion">
+        <h4>👨🏻‍🎓 Instruktører</h4>
+        <ul id="instruktør-liste"></ul>
+      </section>
+	  
+	  <section class="rolle-sektion">
+        <h4>💪 Trænere</h4>
+        <ul id="træner-liste"></ul>
+      </section>
+    </div>
+  </section>
+
+  <!-- ========== STATS ========= -->
+  <section id="stats" class="tab-panel hidden" role="tabpanel" aria-labelledby="stats-tab">
+    <h3>📊 Statistik</h3>
+
+    <div id="event-stats">
+      <div style="margin-bottom: 1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+        <button id="show-role-chart">Rollefordeling</button>
+        <button id="show-month-chart">Oprettelser pr. måned</button>
+        <button id="show-event-chart">Begivenheder</button>
+        <button id="visNoglebaererStatistik">Nøglebærer-statistik</button>
+        <button id="bygger-grad-knap">🛠️ Bygger vs. grader</button>
+      </div>
+
+      <!-- Popup med event-lister -->
+      <div id="event-popup" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="popup-title">
+        <div class="modal-wrapper">
+          <button onclick="document.getElementById('event-popup').classList.add('hidden')" aria-label="Luk" style="position: absolute; top: 0.5rem; right: 0.5rem; font-weight: bold;">✖</button>
+          <h4 id="popup-title">Begivenheder</h4>
+          <ul id="popup-content" style="margin-top: 1rem;"></ul>
+        </div>
+      </div>
+
+      <!-- Admin modal med eventdetaljer -->
+      <div id="admin-event-detail" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-wrapper">
+          <button onclick="closeAdminEvent()" aria-label="Luk" style="position:absolute; top:10px; right:10px;">❌</button>
+          <div id="admin-event-content">⏳ Indlæser begivenhed...</div>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="stats-chart" width="400" height="300"></canvas>
+  </section>
+
+  <!-- ========== MEMBERS ========= -->
+  <section id="members" class="tab-panel hidden" role="tabpanel" aria-labelledby="members-tab">
+    <h3>🧍 Klubmedlemmer</h3>
+    <input type="text" id="member-search-input" placeholder="Søg på navn" aria-label="Søg på navn" />
+    <div id="member-list" aria-live="polite">Indlæser medlemmer...</div>
+  </section>
+
+  <!-- ========== TOOLS ========= -->
+  <section id="tools" class="tab-panel hidden" role="tabpanel" aria-labelledby="tools-tab">
+    <h3>🔧 Adminværktøjer</h3>
+
+    <!-- VÆRKTØJSKNAPPER -->
+    <div id="tool-buttons" style="margin-bottom: 1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+      <button onclick="visVærktøj('tilmeld-tool')">📥 Tilmeld/frameld brugere</button>
+      <button onclick="visVærktøj('bruger-tool')">👤 Redigér/slet brugere</button>
+    </div>
+
+    <!-- TILMELD/FRAMELD TOOL -->
+    <div id="tilmeld-tool" class="hidden tool-card">
+      <h3>📥 Tilmeld/frameld brugere</h3>
+      <div class="tool-form">
+        <label>
+          Begivenhed:
+          <select id="event-select"></select>
+        </label>
+        <label>
+          Bruger:
+          <input type="text" id="user-autocomplete" placeholder="Søg bruger..." />
+          <ul id="autocomplete-list"></ul>
+        </label>
+      </div>
+      <div class="tool-actions">
+        <button onclick="adminTilmeld()">✅ Tilmeld</button>
+        <button onclick="adminFrameld()">❌ Frameld</button>
+      </div>
+      <p id="admin-signup-feedback"></p>
+    </div>
+    <!-- REDIGÉR/ADMINISTRÉR BRUGERE -->
+    <div id="bruger-tool" class="hidden tool-card">
+      <h3>👤 Redigér/slet brugere</h3>
+      <input type="text" id="bruger-søg" placeholder="Søg efter navn" />
+      <ul id="bruger-liste">Indlæser...</ul>
+    </div>	
+<!-- ➕ Questmaker-knap -->
+<button id="questmakerBtn" class="btn-sub" type="button">➕ Opret ny quest</button>
+
+<!-- Modal: Opret Quest -->
+<div id="quest-modal" class="modal" style="display:none;">
+  <div class="modal-wrapper">
+    <div class="modal-content">
+      <h2 style="margin-top:0;">Opret ny quest</h2>
+
+      <form id="questForm">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:820px;">
+          <label class="qm-col-span-2">
+            Navn *
+            <input name="name" required maxlength="120" placeholder="Fx 'Ugens Campus-klatring'">
+          </label>
+
+          <label>
+            Type *
+            <select name="type" required>
+              <option value="daily">daily</option>
+              <option value="weekly">weekly</option>
+              <option value="special">special</option>
+              <option value="bonus">bonus</option>
+            </select>
+          </label>
+
+          <label>
+            Validation *
+            <select name="validation" required>
+              <option value="route_selection">route_selection</option>
+              <option value="count_in_session">count_in_session</option>
+              <option value="video_capture">video_capture</option>
+              <option value="text">text</option>
+              <option value="hardest_lead_grade">hardest_lead_grade</option>
+			  <option value="hardest_toprope_grade">hardest_toprope_grade</option>
+			  <option value="hardest_boulder_grade">hardest_boulder_grade</option>
+              <option value="timer">timer</option>
+			  
+            </select>
+          </label>
+		  
+		  <label>
+		  <div id="payloadFields" class="qm-col-span-2"></div>
+		  </label>
+		  
+          <label>
+            XP reward *
+            <input name="xp_reward" type="number" min="0" step="1" required placeholder="Fx 100">
+          </label>
+
+          <label class="qm-col-span-2">
+            Beskrivelse
+            <textarea name="description" rows="3" placeholder="Kort beskrivelse..."></textarea>
+          </label>
+
+          <label>
+            Aktiv fra
+            <input name="active_from" type="datetime-local">
+          </label>
+
+          <label>
+            Aktiv til (valgfri)
+            <input name="active_to" type="datetime-local">
+          </label>
+
+          <label>
+            Min. level
+            <input name="min_level" type="number" min="1" max="99" step="1" value="1">
+          </label>
+
+          <label>
+            Max. level
+            <input name="max_level" type="number" min="1" max="99" step="1" value="99">
+          </label>
+
+          <label style="display:flex;align-items:center;gap:.5rem;">
+            <input type="checkbox" name="is_active" checked>
+            Aktiv
+          </label>
+        </div>
+
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:12px;">
+          <button type="button" id="questCancel" class="btn">Annuller</button>
+          <button type="submit" class="btn-sub">Opret</button>
+        </div>
+      </form>
+
+      <p id="questFeedback" style="margin-top:.5rem;"></p>
+    </div>
+  </div>
+</div>
+  </section>
+</div>
+
+<!-- Roller popup -->
+<div id="rolle-popup" class="rolle-popup skjult" role="dialog" aria-modal="true">
+  <div class="rolle-popup-indhold">
+    <h3 id="rolle-popup-navn">Roller for ...</h3>
+    <form id="rolle-form">
+      <label><input type="checkbox" name="roller" value="klubmedlem"> klubmedlem</label>
+      <label><input type="checkbox" name="roller" value="eventmaker"> eventmaker</label>
+      <label><input type="checkbox" name="roller" value="nøglebærer"> nøglebærer</label>
+	  <label><input type="checkbox" name="roller" value="instruktør"> instruktør</label>
+	  <label><input type="checkbox" name="roller" value="træner"> træner</label>
+      <label><input type="checkbox" name="roller" value="admin"> admin</label>
+      <label><input type="checkbox" name="roller" value="bestyrelsesmedlem"> bestyrelsesmedlem</label>
+      <label><input type="checkbox" name="roller" value="rutebygger"> rutebygger</label>
+      <div class="rolle-popup-knapper">
+        <button type="submit">💾 Gem</button>
+        <button type="button" id="rolle-popup-annuller">Annullér</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bekræftelse: Quest oprettet -->
+<div id="questConfirmModal" class="modal skjult" role="dialog" aria-modal="true" aria-labelledby="questConfirmTitle">
+  <div class="modal-wrapper">
+    <div class="modal-content">
+      <h3 id="questConfirmTitle" style="margin-top:0;">✅ Quest oprettet</h3>
+      <p id="questConfirmText">Din quest er blevet oprettet.</p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:12px;">
+        <button type="button" id="questConfirmClose" class="btn">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ========================= SCRIPTS ========================= -->
+<script type="module">
+  import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: ["admin"],
+    redirectVedFejl: "index.html",
+    efterLogin: (bruger) => {
+      if (window.releaseAuthGate) window.releaseAuthGate();
+      indsætMenu(bruger);
+      initAdminpanel();
+    }
+  });
+
+  // ====================== INIT TABS =======================
+  function initAdminpanel() {
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.tab-panel');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.add('hidden'));
+        tab.classList.add('active');
+        const target = tab.dataset.target;
+        document.getElementById(target).classList.remove('hidden');
+
+        // Lazy load per fane
+        if (target === 'users') loadRolesOverview();
+        if (target === 'members') loadMembers();
+        if (target === 'stats') loadStats();
+      });
+    });
+
+    // Default: vis medlemmer ved load
+    loadMembers();
+  }
+
+  // ====================== HJÆLPERE (SÆSON & DATO) =========
+  function getSeasonBounds() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const aug1ThisYear = new Date(year, 7, 1); // 0-indexed måned
+    const start = now >= aug1ThisYear ? aug1ThisYear : new Date(year - 1, 7, 1);
+    const end = new Date(start.getFullYear() + 1, 7, 1);
+    return { start, end };
+  }
+  const toISODateTime = (d) => new Date(d).toISOString();
+
+  // ====================== ROLLER ==========================
+  async function loadRolesOverview() {
+    const { data, error } = await client
+      .from('users')
+      .select('id, navn, rolle')
+      .order('navn', { ascending: true });
+
+    if (error) { console.error('Fejl ved hentning af roller:', error); return; }
+
+    const admins = data.filter(u => u.rolle?.includes('admin'));
+    const noeglebaerere = data.filter(u => u.rolle?.includes('nøglebærer'));
+    const eventmakers = data.filter(u => u.rolle?.includes('eventmaker'));
+    const rutebyggere = data.filter(u => u.rolle?.includes('rutebygger'));
+    const bestyrelsesmedlemmer = data.filter(u => u.rolle?.includes('bestyrelsesmedlem'));
+	const instruktører = data.filter(u => u.rolle?.includes('instruktør'));
+	const trænere = data.filter(u => u.rolle?.includes('træner'));
+
+    const renderList = (elementId, brugere) => {
+      const ul = document.getElementById(elementId);
+      ul.innerHTML = brugere.map(u => `<li>${u.navn}</li>`).join('');
+    };
+
+    renderList('admin-liste', admins);
+    renderList('noeglebaerer-liste', noeglebaerere);
+    renderList('eventmaker-liste', eventmakers);
+    renderList('rutebygger-liste', rutebyggere);
+    renderList('bestyrelsesmedlem-liste', bestyrelsesmedlemmer);
+	renderList('instruktør-liste', instruktører);
+	renderList('træner-liste', trænere);
+  }
+
+  // ====================== MEDLEMMER =======================
+  async function loadMembers() {
+    const { data, error } = await client
+      .from('users')
+      .select('id, navn, rolle, oprettet_dato');
+
+    const list = document.getElementById('member-list');
+    const input = document.getElementById('member-search-input');
+
+    if (error) {
+      list.textContent = '❌ Fejl ved hentning af medlemmer.';
+      console.error(error);
+      return;
+    }
+    if (!data || data.length === 0) {
+      list.textContent = 'Ingen medlemmer fundet.';
+      return;
+    }
+
+    let sortBy = 'navn';
+    let sortAsc = true;
+    let filtreretData = [...data];
+
+    const renderList = () => {
+      const sorted = [...filtreretData].sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        if (sortBy === 'oprettet_dato') { aVal = new Date(aVal); bVal = new Date(bVal); }
+        if (aVal < bVal) return sortAsc ? -1 : 1;
+        if (aVal > bVal) return sortAsc ? 1 : -1;
+        return 0;
+      });
+
+      list.innerHTML = '';
+      const table = document.createElement('table');
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="navn">Navn</th>
+            <th class="sortable" data-sort="rolle">Rolle</th>
+            <th class="sortable" data-sort="oprettet_dato">Oprettet</th>
+            <th>Handling</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map(user => `
+            <tr>
+              <td>${user.navn}</td>
+              <td>${Array.isArray(user.rolle) ? user.rolle.join(', ') : user.rolle || ''}</td>
+              <td>${new Date(user.oprettet_dato).toLocaleDateString('da-DK')}</td>
+              <td>
+                <button class="roller-knap" data-id="${user.id}" data-navn="${user.navn}" data-roller='${JSON.stringify(user.rolle)}'>👥 Roller</button>
+                <button class="eksport-knap" data-id="${user.id}" data-navn="${user.navn}" style="margin-top:.5rem;">📄 Eksportér</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>`;
+
+      list.appendChild(table);
+
+      // Sorteringsindikator + klik
+      table.querySelectorAll('th[data-sort]').forEach(th => {
+        const kolonne = th.dataset.sort;
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (kolonne === sortBy) th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
+
+        th.addEventListener('click', () => {
+          if (kolonne === sortBy) sortAsc = !sortAsc; else { sortBy = kolonne; sortAsc = true; }
+          renderList();
+        });
+      });
+
+      // Bind knapper deterministisk
+      bindRoleButtons(list, data);
+      bindGdprExportButtons(list); // 🔐 GDPR-eksport
+    };
+
+    // Første render
+    renderList();
+
+    // Søgning
+    input.oninput = () => {
+      const søg = input.value.toLowerCase().trim();
+      filtreretData = data.filter(user => user.navn.toLowerCase().includes(søg));
+      renderList();
+    };
+  }
+
+  // === Roller popup/CRUD ===
+  function bindRoleButtons(root, allData) {
+    root.querySelectorAll('.roller-knap').forEach(knap => {
+      if (knap.dataset.roleInit === '1') return;
+      knap.dataset.roleInit = '1';
+
+      knap.addEventListener('click', () => {
+        const id = knap.dataset.id;
+        const navn = knap.dataset.navn;
+        const eksisterendeRoller = JSON.parse(knap.dataset.roller || '[]');
+
+        const popup = document.getElementById('rolle-popup');
+        popup.classList.remove('skjult');
+
+        document.getElementById('rolle-popup-navn').textContent = `Roller for ${navn}`;
+        const form = document.getElementById('rolle-form');
+
+        // sæt tjekbokse fra eksisterende roller
+        form.querySelectorAll("input[name='roller']").forEach(cb => {
+          cb.checked = Array.isArray(eksisterendeRoller) && eksisterendeRoller.includes(cb.value);
+        });
+
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const valgte = Array.from(form.querySelectorAll("input[name='roller']:checked")).map(cb => cb.value);
+          const { error } = await client.from('users').update({ rolle: valgte }).eq('id', id);
+          if (error) { alert('❌ Fejl ved opdatering'); console.error(error); }
+          else { alert('✅ Roller opdateret'); popup.classList.add('skjult'); loadMembers(); }
+        };
+
+        document.getElementById('rolle-popup-annuller').onclick = () => popup.classList.add('skjult');
+      });
+    });
+  }
+
+  // === GDPR-eksport knapper (uændret) ===
+  function bindGdprExportButtons(root = document) {
+    root.querySelectorAll('.eksport-knap').forEach(knap => {
+      if (knap.dataset.gdprInit === '1') return;
+      knap.dataset.gdprInit = '1';
+
+      knap.addEventListener('click', async () => {
+        const brugerId = knap.dataset.id;
+        const navn = (knap.dataset.navn || 'bruger').trim() || 'bruger';
+
+        // helpers
+        const pad = n => String(n).padStart(2, '0');
+        const makeFileName = (base, ext) => {
+          const d = new Date();
+          return `${base}-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.${ext}`;
+        };
+        const downloadBlobAs = (blob, filename) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+        };
+
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          if (!session?.access_token) { alert('❌ Du er ikke logget ind.'); return; }
+
+          const qs = new URLSearchParams({
+            lookupType: 'userId',
+            lookupValue: brugerId,
+            includeSystemMeta: '1'
+          });
+
+          const res = await fetch(`https://nglevagter-test.onrender.com/gdpr-export?${qs}`, {
+            method: 'GET',
+            headers: { Accept: 'application/json', Authorization: `Bearer ${session.access_token}` },
+            credentials: 'omit'
+          });
+
+          if (!res.ok) {
+            let msg = `Fejl ${res.status}`;
+            try { const j = await res.json(); msg = j.error || j.fejl || msg; } catch {}
+            alert(`❌ ${msg}`);
+            return;
+          }
+
+          const blob = await res.blob();
+          let filename;
+          const cd = res.headers.get('Content-Disposition');
+          if (cd && cd.includes('filename=')) filename = cd.split('filename=')[1].replaceAll('"','').trim();
+          if (!filename) {
+            const safe = navn.replace(/[^a-zA-Z0-9._-]+/g, '_');
+            filename = makeFileName(`gdpr_${safe}`, 'json');
+          }
+
+          downloadBlobAs(blob, filename);
+        } catch (err) {
+          console.error(err);
+          alert('❌ Teknisk fejl ved eksport.');
+        }
+      });
+    });
+  }
+
+  // ====================== STATISTIK =======================
+  let chartInstance = null;
+  let popupAktiveret = false;
+
+// ======================== OPRET QUESTS ===================== 
+  const btn     = document.getElementById('questmakerBtn');
+  const modal   = document.getElementById('quest-modal');
+  const form    = document.getElementById('questForm');
+  const cancel  = document.getElementById('questCancel');
+  const fb      = document.getElementById('questFeedback');
+  const confirmModal = document.getElementById('questConfirmModal');
+  const confirmText  = document.getElementById('questConfirmText');
+  const confirmClose = document.getElementById('questConfirmClose');
+  const payloadWrap   = document.getElementById('payloadFields');
+  const validationSel = form?.querySelector('select[name="validation"]');
+
+  const TYPES      = new Set(['daily','weekly','special','bonus']);
+  const VALIDATION = new Set(['route_selection','count_in_session','video_capture','text','hardest_lead_grade','hardest_toprope_grade','hardest_boulder_grade','timer']);
+
+  const show = () => {  if (!modal) return;  modal.classList.remove('skjult');  modal.style.display = 'flex';  modal.classList.add('show');  if (fb) fb.textContent = ''; };
+  const hide = () => {  if (!modal) return;  modal.style.display = 'none';  modal.classList.remove('show');  modal.classList.add('skjult'); };
+
+  btn?.addEventListener('click', show);
+  cancel?.addEventListener('click', hide);
+
+// Tegn felter pr. validation
+function renderPayloadFields(v){
+  if (!payloadWrap) return;
+  const val = (v || '').trim();
+
+  // Hjælper: små HTML-bygger
+  const label = (text, inner) => `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>${text}</span>
+      ${inner}
+    </label>
+  `;
+  const num = (name, min=0, step=1, ph='') => `<input type="number" name="${name}" min="${min}" step="${step}" placeholder="${ph}">`;
+  const txt = (name, rows=2, ph='') => `<textarea name="${name}" rows="${rows}" placeholder="${ph}"></textarea>`;
+  const sel = (name, opts, multiple=false) => `
+    <select name="${name}" ${multiple?'multiple size="3"':''}>
+      ${opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
+    </select>
+  `;
+  const cb  = (name, checked=false, labelTxt='') => `
+    <label style="display:flex;gap:.5rem;align-items:center;">
+      <input type="checkbox" name="${name}" ${checked?'checked':''}>
+      <span>${labelTxt}</span>
+    </label>
+  `;
+
+  // Farver, stilarter og forsøg/styles
+  const FARVER = ['gul','grøn','blå','lilla','rød','sort']
+    .map(f => ({ value:f, label:f }));
+  const STYLES = [
+    { value:'lead', label:'lead' },
+    { value:'toprope', label:'toprope' },
+    { value:'boulder', label:'boulder' },
+  ];
+  const ACCEPTED = [
+    { value:'onsight',  label:'onsight'  },
+    { value:'redpoint', label:'redpoint' },
+    { value:'toprope',  label:'toprope'  },
+  ];
+
+  // Skift UI pr. type
+  switch (val) {
+    case 'route_selection':
+      payloadWrap.innerHTML = `
+        ${label('Farve', sel('payload_color', FARVER))}
+        ${label('Antal (count)', num('payload_count', 1, 1, 'fx 3 eller 5'))}
+      `;
+      break;
+
+    case 'count_in_session':
+      payloadWrap.innerHTML = `
+        ${label('Mål (target)', num('payload_target', 1, 1, 'fx 1 eller 3'))}
+      `;
+      break;
+
+    case 'timer':
+      payloadWrap.innerHTML = `
+        ${label('Sekunder', num('payload_seconds', 1, 1, 'fx 180'))}
+      `;
+      break;
+
+    case 'video_capture':
+      payloadWrap.innerHTML = `
+        ${label('Minimum sekunder (valgfri)', num('payload_min_seconds', 1, 1, 'fx 10'))}
+      `;
+      break;
+
+    case 'text':
+      payloadWrap.innerHTML = `
+        ${label('Prompt (påkrævet)', txt('payload_prompt', 2, 'fx Nævn fire forskellige grebstyper'))}
+        ${label('Kategori (valgfri)', `<input name="payload_category" placeholder="fx grebstyper">`)}
+        ${label('Min. matches (valgfri)', num('payload_min_matches', 1, 1, 'fx 4'))}
+      `;
+      break;
+
+case 'hardest_lead_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="hlg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6b">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="lead" disabled>
+      <input type="hidden" name="payload_style" value="lead">
+    </label>
+
+    <div class="qm-col-span-2" style="display:flex;gap:16px;align-items:center;">
+      <strong>Tilladte styles:</strong>
+      <label>
+        <input type="checkbox" name="payload_acc_onsight" checked> <span>onsight</span>
+      </label>
+      <label>
+        <input type="checkbox" name="payload_acc_redpoint" checked> <span>redpoint</span>
+      </label>
+    </div>
+  `;
+  // Gør target-feltet visuelt tydeligt kun ved target_mode
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('hlg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+case 'hardest_toprope_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="htg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6a">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="toprope" disabled>
+      <input type="hidden" name="payload_style" value="toprope">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Tilladte styles</span>
+      <input value="toprope" disabled>
+      <!-- ingen checkbox; vi sætter accepted_styles=['toprope'] i builder -->
+    </label>
+  `;
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('htg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+case 'hardest_boulder_grade':
+  payloadWrap.innerHTML = `
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Mode</span>
+      <select name="payload_mode">
+        <option value="hardest_personal">hardest_personal</option>
+        <option value="target_grade">target_grade</option>
+      </select>
+    </label>
+
+    <label class="qm-col-span-2" id="hbg-target-wrap" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Target (kun hvis mode = target_grade)</span>
+      <input name="payload_target" placeholder="fx 6A eller 6A+">
+    </label>
+
+    <label class="qm-col-span-2" style="display:flex;flex-direction:column;gap:6px;">
+      <span>Style</span>
+      <input value="boulder" disabled>
+      <input type="hidden" name="payload_style" value="boulder">
+    </label>
+
+    <div class="qm-col-span-2" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+      <strong>Tilladte styles:</strong>
+      <label><input type="checkbox" name="payload_acc_flash" checked> <span>flash</span></label>
+      <label><input type="checkbox" name="payload_acc_plus2"> <span>+2 forsøg</span></label>
+      <label><input type="checkbox" name="payload_acc_plus3"> <span>+3 forsøg</span></label>
+      <label><input type="checkbox" name="payload_acc_plus5"> <span>+5 forsøg</span></label>
+    </div>
+  `;
+  (function(){
+    const modeEl   = form?.elements?.['payload_mode'];
+    const targetEl = form?.elements?.['payload_target'];
+    const wrap     = document.getElementById('hbg-target-wrap');
+    const sync = () => {
+      const need = (modeEl?.value === 'target_grade');
+      if (wrap) wrap.style.opacity = need ? '1' : '.6';
+      if (targetEl) targetEl.required = need;
+    };
+    modeEl?.addEventListener('change', sync);
+    sync();
+  })();
+  break;
+
+    default:
+      payloadWrap.innerHTML = `<small>Ingen særlige felter for denne validering.</small>`;
+  }
+}
+
+// Læs værdier og byg JSON klar til DB
+function buildPayloadFromForm(val){
+  const f = form;
+  const v = (val||'').trim();
+  const get = (n) => f?.elements?.[n]?.value ?? '';
+  const getInt = (n) => {
+    const x = parseInt(get(n), 10);
+    return Number.isFinite(x) ? x : undefined;
+  };
+  const getBool = (n) => !!f?.elements?.[n]?.checked;
+  const getMulti = (n) => {
+    const el = f?.elements?.[n];
+    if (!el || !el.options) return [];
+    return Array.from(el.options).filter(o => o.selected).map(o => o.value);
+  };
+
+  switch (v) {
+    case 'route_selection': {
+      const color = get('payload_color') || undefined;
+      const count = getInt('payload_count');
+      return { color, count };
+    }
+    case 'count_in_session': {
+      const target = getInt('payload_target');
+      return { target };
+    }
+    case 'timer': {
+      const seconds = getInt('payload_seconds');
+      return { seconds };
+    }
+    case 'video_capture': {
+      const min_seconds  = getInt('payload_min_seconds');
+      const store_video  = getBool('payload_store_video');
+      const out = {};
+      if (min_seconds !== undefined) out.min_seconds = min_seconds;
+      if (store_video) out.store_video = true; 
+      return out;
+    }
+    case 'text': {
+      const prompt       = (get('payload_prompt')||'').trim();
+      const category     = (get('payload_category')||'').trim() || undefined;
+      const min_matches  = getInt('payload_min_matches');
+      const out = { prompt };
+      if (category) out.category = category;
+      if (min_matches !== undefined) out.min_matches = min_matches;
+      return out;
+    }
+case 'hardest_lead_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'lead';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  const accepted_styles = [
+    form?.elements?.['payload_acc_onsight']?.checked ? 'onsight' : null,
+    form?.elements?.['payload_acc_redpoint']?.checked ? 'redpoint' : null,
+  ].filter(Boolean);
+
+  return {
+    mode,
+    style,
+    target,
+    accepted_styles: accepted_styles.length ? accepted_styles : ['onsight','redpoint']
+  };
+}
+
+case 'hardest_toprope_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'toprope';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  return {
+    mode,
+    style,
+    target,
+    accepted_styles: ['toprope']
+  };
+}
+
+case 'hardest_boulder_grade': {
+  const mode   = get('payload_mode') || 'hardest_personal';
+  const style  = 'boulder';
+  const target = mode === 'target_grade' ? ((get('payload_target')||'').trim() || null) : null;
+
+  const accepted_styles = [
+    form?.elements?.['payload_acc_flash']?.checked  ? 'flash'      : null,
+    form?.elements?.['payload_acc_plus2']?.checked  ? '+2 forsøg'  : null,
+    form?.elements?.['payload_acc_plus3']?.checked  ? '+3 forsøg'  : null,
+    form?.elements?.['payload_acc_plus5']?.checked  ? '+5 forsøg'  : null,
+  ].filter(Boolean);
+
+  return { mode, style, target, accepted_styles };
+}
+
+  }
+}
+
+// Init payload-UI ved load og ved skift af validation
+validationSel?.addEventListener('change', () => renderPayloadFields(validationSel.value));
+renderPayloadFields(validationSel?.value || 'route_selection');
+
+  function isoOrNull(dtLocalValue){
+    if(!dtLocalValue) return null;
+    const dt = new Date(dtLocalValue);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  }
+  function clamp(n, min, max){
+    n = Number(n);
+    if (Number.isNaN(n)) return min;
+    return Math.max(min, Math.min(max, n));
+  }
+
+form?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const fd = new FormData(form);
+  const v  = (fd.get('validation') || '').trim();
+
+  // Byg payload fra UI
+  const questPayload = buildPayloadFromForm(v);
+
+  // ----- Basal record -----
+  const record = {
+    name: (fd.get('name') || '').trim(),
+    type: (fd.get('type') || '').trim(),
+    validation: v,
+    xp_reward: Number(fd.get('xp_reward')),
+    is_active: fd.get('is_active') !== null,
+    description: (fd.get('description') || '').trim(),
+    payload: questPayload, // <— brug nyt navn
+    active_from: isoOrNull(fd.get('active_from')) || new Date().toISOString(),
+    active_to: isoOrNull(fd.get('active_to')),
+    min_level: clamp(fd.get('min_level') || 1, 1, 99),
+    max_level: clamp(fd.get('max_level') || 99, 1, 99)
+  };
+
+  // ----- Basal validering -----
+  if (!record.name) return alert('Navn er påkrævet.');
+  if (!TYPES.has(record.type)) return alert('Ugyldig type.');
+  if (!VALIDATION.has(record.validation)) return alert('Ugyldig validation.');
+  if (!Number.isInteger(record.xp_reward) || record.xp_reward < 0) return alert('XP reward skal være et ikke-negativt heltal.');
+  if (record.min_level > record.max_level) return alert('Min. level må ikke være større end max. level.');
+
+  // ----- Payload-specifik validering -----
+  switch (record.validation) {
+    case 'route_selection':
+      if (!questPayload?.color) return alert('Vælg en farve til route_selection.');
+      if (!Number.isInteger(questPayload?.count) || questPayload.count < 1) return alert('Angiv et antal (count) ≥ 1.');
+      break;
+    case 'count_in_session':
+      if (!Number.isInteger(questPayload?.target) || questPayload.target < 1) return alert('Angiv target ≥ 1.');
+      break;
+    case 'timer':
+      if (!Number.isInteger(questPayload?.seconds) || questPayload.seconds < 1) return alert('Angiv seconds ≥ 1.');
+      break;
+    case 'video_capture':
+      if (questPayload.min_seconds === undefined && questPayload.min_pullups === undefined)
+        return alert('Angiv enten minimum sekunder eller minimum pull-ups.');
+      break;
+    case 'text':
+      if (!questPayload?.prompt) return alert('Prompt er påkrævet til text-validation.');
+      if (questPayload.min_matches !== undefined && (!Number.isInteger(questPayload.min_matches) || questPayload.min_matches < 1))
+        return alert('min_matches skal være ≥ 1.');
+      break;
+
+    case 'hardest_lead_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'lead') return alert('Style skal være lead.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.length === 0)
+        return alert('Vælg mindst én accepted_style (onsight/redpoint).');
+      break;
+
+    case 'hardest_toprope_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'toprope') return alert('Style skal være toprope.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.join(',') !== 'toprope')
+        return alert('accepted_styles skal være ["toprope"].');
+      break;
+
+    case 'hardest_boulder_grade':
+      if (!questPayload?.mode) return alert('Vælg mode.');
+      if (questPayload.mode === 'target_grade' && !questPayload.target) return alert('Angiv target når mode=target_grade.');
+      if (questPayload.style !== 'boulder') return alert('Style skal være boulder.');
+      if (!Array.isArray(questPayload.accepted_styles) || questPayload.accepted_styles.length === 0)
+        return alert('Vælg mindst én accepted_style.');
+      {
+        const allowed = new Set(['flash','+2 forsøg','+3 forsøg','+5 forsøg']);
+        const invalid = questPayload.accepted_styles.filter(s => !allowed.has(s));
+        if (invalid.length) return alert('Ugyldige accepted_styles: ' + invalid.join(', '));
+      }
+      break;
+  }
+
+  // ----- Insert til DB -----
+  try {
+    const { data, error } = await client
+      .from('beta_quests')
+      .insert([record])
+      .select()
+      .single();
+
+    if (error) {
+      showQuestConfirm('❌ Kunne ikke oprette quest: ' + (error.message || 'Ukendt fejl'));
+    } else {
+      showQuestConfirm(`✅ Quest '${data?.name || record.name}' er oprettet!`);
+      try { document.getElementById('questForm')?.reset(); } catch (e) {}
+      renderPayloadFields(validationSel?.value || 'route_selection');
+      hide();
+    }
+  } catch (err) {
+    showQuestConfirm('❌ Kunne ikke oprette quest: ' + (err?.message || 'Ukendt fejl'));
+  }
+});
+
+
+function showModal(el){
+  if (!el) return;
+  el.classList.remove('skjult');   
+  el.style.display = 'flex';
+  el.classList.add('show');
+}
+function hideModal(el){
+  if (!el) return;
+  el.style.display = 'none';
+  el.classList.remove('show');
+  el.classList.add('skjult');        
+}
+
+function showQuestConfirm(msg = "Din quest er blevet oprettet.") {
+  if (confirmText) confirmText.textContent = msg;
+  if (!confirmModal) return;
+  confirmModal.classList.remove('skjult');
+  confirmModal.style.display = 'flex';
+  confirmModal.classList.add('show');
+
+  // auto-luk efter 2 sek. så UI ikke blokeres
+  clearTimeout(confirmModal._autoTimer);
+  confirmModal._autoTimer = setTimeout(() => hideQuestConfirm(), 2000);
+}
+function hideQuestConfirm() {
+  if (!confirmModal) return;
+  confirmModal.style.display = 'none';
+  confirmModal.classList.remove('show');
+  confirmModal.classList.add('skjult');
+}
+confirmClose?.addEventListener('click', hideQuestConfirm);
+
+// Luk ved klik uden for boksen + ESC
+confirmModal?.addEventListener('click', (e) => {
+  if (e.target === confirmModal) hideQuestConfirm();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideQuestConfirm();
+});
+
+
+  function renderChart(config) {
+    const canvas = document.getElementById('stats-chart');
+    const ctx = canvas.getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, config);
+  }
+
+// --------- Nøglebærer-stat fra SUPABASE (assignments + status='tildelt') ---------
+document.getElementById('visNoglebaererStatistik').addEventListener('click', async () => {
+  document.querySelectorAll('.chart-section').forEach(s => s.style.display = 'none');
+  document.getElementById('stats-chart').style.display = 'block';
+  popupAktiveret = false; if (chartInstance?.canvas) chartInstance.canvas.onclick = null;
+
+  const { start, end } = getSeasonBounds();
+
+  // Supabase expects ISO-datoer som "YYYY-MM-DD" når kolonnen er af typen DATE
+  const toISODate = d => new Date(d).toISOString().slice(0, 10);
+
+  // Hent assignments for sæsonen
+  const { data: rows, error } = await client
+    .from('assignments')
+    .select('navn, status, dato')
+    .gte('dato', toISODate(start))
+    .lt('dato',  toISODate(end));
+
+  if (error) {
+    console.error('❌ Fejl ved hentning af assignments:', error);
+    alert('Kunne ikke hente nøglevagter.');
+    return;
+  }
+
+  // Hvad tæller som en åbnevagt?
+  const erAabnevagt = (status = '') => {
+    const s = String(status).toLowerCase();
+    // medregn 'tildelt' + almindelige varianter af "åbn"/"open"
+    return s === 'tildelt' || /(åbn|åbne|åbnevagt|open|opening|åbnet)/.test(s);
+  };
+
+  // Filtrér til åbnevagter
+  const aabne = (rows || []).filter(r => erAabnevagt(r.status));
+
+  if (!aabne.length) {
+    console.warn('Ingen åbnevagter i sæsonen. Rå rækker (før filter):', rows?.slice(0, 5));
+    alert('Ingen åbnevagter fundet i sæsonen.');
+    return;
+  }
+
+  // Optæl pr. navn
+  const counts = {};
+  for (const r of aabne) {
+    const navn = (r.navn || 'Ukendt').trim() || 'Ukendt';
+    counts[navn] = (counts[navn] || 0) + 1;
+  }
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(([n]) => n);
+  const values = sorted.map(([, c]) => c);
+
+  renderChart({
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Åbnet antal dage', data: values }] },
+    options: {
+      responsive: true,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        title: { display: true, text: '🔑 Nøglebærer: antal åbnevagter (sæson)' }
+      },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+});
+
+
+  // --------- Begivenheder fra SUPABASE ---------
+  async function loadStats() {
+    document.getElementById('event-popup').classList.add('hidden');
+
+    const { data, error } = await client.from('users').select('rolle, oprettet_dato');
+    if (error || !data) { console.error('Fejl ved statistik-data:', error); return; }
+
+    document.getElementById('show-role-chart').onclick = () => {
+      const rolleCounts = {};
+      data.forEach(user => {
+        if (Array.isArray(user.rolle)) user.rolle.forEach(r => { rolleCounts[r] = (rolleCounts[r] || 0) + 1; });
+        else if (user.rolle) rolleCounts[user.rolle] = (rolleCounts[user.rolle] || 0) + 1;
+      });
+      popupAktiveret = false;
+      renderChart({
+        type: 'pie',
+        data: { labels: Object.keys(rolleCounts), datasets: [{ label: 'Rollefordeling', data: Object.values(rolleCounts) }] },
+        options: { plugins: { datalabels: { color: '#000', font: { weight: 'bold', size: 14 }, formatter: (v) => v } } },
+        plugins: [ChartDataLabels]
+      });
+    };
+
+    document.getElementById('show-month-chart').onclick = () => {
+      const månedCounts = {};
+      data.forEach(user => {
+        const dato = new Date(user.oprettet_dato);
+        const nøgle = `${dato.getFullYear()}-${String(dato.getMonth() + 1).padStart(2, '0')}`;
+        månedCounts[nøgle] = (månedCounts[nøgle] || 0) + 1;
+      });
+      const labels = Object.keys(månedCounts).sort();
+      const values = labels.map(label => månedCounts[label]);
+      popupAktiveret = false;
+      renderChart({ type: 'bar', data: { labels, datasets: [{ label: 'Brugeroprettelser pr. måned', data: values }] } });
+    };
+  }
+
+// Klik på "Begivenheder": hent fra Supabase (fleksible kolonnenavne)
+let currentEventsMap = new Map();
+document.getElementById('show-event-chart').addEventListener('click', async () => {
+  popupAktiveret = false;
+  document.getElementById('event-popup').classList.add('hidden');
+
+  const { start, end } = getSeasonBounds();
+
+  async function hentEventsFra(tabel) {
+    const { data, error } = await client.from(tabel).select('*');
+    if (error) throw error;
+    return data || [];
+  }
+
+  // Find første tabel der findes
+  let rows = [];
+  const kandidater = ['events', 'begivenheder', 'public_events', 'kalender'];
+  for (const t of kandidater) {
+    try {
+      const tmp = await hentEventsFra(t);
+      if (tmp.length) { rows = tmp; break; }
+    } catch {}
+  }
+  if (!rows.length) {
+    console.error('Ingen events-tabeller fundet.');
+    alert('❌ Kunne ikke hente begivenhedsdata.');
+    return;
+  }
+
+  // Normalisér felter + datoer (titel prioriteres)
+  const norm = rows.map(ev => {
+    const startVal = ev.start ?? ev.start_date ?? ev.starttime ?? ev.start_at ?? ev.start_dato;
+    const endVal   = ev.end   ?? ev.end_date   ?? ev.endtime   ?? ev.end_at   ?? ev.slut_dato ?? startVal;
+
+    const s = new Date(startVal || Date.now());
+    const rawEnd = new Date(endVal || startVal || Date.now());
+
+    // minus 1 dag KUN hvis slut er eksklusiv ved midnat
+    const isMidnight = d => d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const e = (rawEnd > s && isMidnight(rawEnd)) ? new Date(rawEnd.getTime() - oneDayMs) : rawEnd;
+
+    return {
+      id: ev.id ?? ev.uuid ?? ev.event_id,
+      summary: ev.titel ?? ev.summary ?? ev.title ?? ev.navn ?? ev.name ?? '(uden titel)',
+      description: ev.description ?? ev.beskrivelse ?? ev.desc ?? '',
+      start: s,
+      end: e
+    };
+  });
+
+  // Sæsonfilter + gem i hukommelse til openModal
+  const sæsonEvents = norm.filter(ev => ev.start >= start && ev.start < end);
+  currentEventsMap = new Map(sæsonEvents.map(ev => [ev.id, ev]));
+
+  // Kategorisering
+  const kategorier = { '🛠️ Rutebygning': [], '🏆 Konkurrence': [], '🎉 Socialt': [], '🚪 Lukkedag': [], '❓ Andet': [] };
+  for (const ev of sæsonEvents) {
+    const t = `${ev.summary} ${ev.description}`.toLowerCase();
+    const kat =
+      t.includes('rutebyg') ? '🛠️ Rutebygning' :
+      (t.includes('konkurrence') || t.includes('mesterskab')) ? '🏆 Konkurrence' :
+      (t.includes('grill') || t.includes('hygge') || t.includes('tur') || t.includes('fælles')) ? '🎉 Socialt' :
+      (t.includes('lukket') || t.includes('closed')) ? '🚪 Lukkedag' :
+      '❓ Andet';
+    kategorier[kat].push(ev);
+  }
+
+  // Chart
+  if (chartInstance?.canvas) chartInstance.canvas.onclick = null;
+  renderChart({
+    type: 'bar',
+    data: {
+      labels: Object.keys(kategorier),
+      datasets: [{ label: 'Begivenheder pr. kategori (sæson)', data: Object.values(kategorier).map(arr => arr.length) }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, datalabels: { color: '#000', font: { weight: 'bold', size: 14 }, formatter: v => v } }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // Klik på søjle -> popup med events
+  popupAktiveret = true;
+  chartInstance.canvas.onclick = (evt) => {
+    if (!popupAktiveret) return;
+    const points = chartInstance.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+    if (points.length) {
+      const index = points[0].index;
+      const kategoriNavn = Object.keys(kategorier)[index];
+      visPopup(kategoriNavn, kategorier[kategoriNavn]);
+    }
+  };
+});
+
+
+  // ====================== POPUPS (til events) ==========================
+  function visPopup(titel, events) {
+    const popup = document.getElementById('event-popup');
+    const popupTitle = document.getElementById('popup-title');
+    const popupContent = document.getElementById('popup-content');
+
+    popupTitle.textContent = titel;
+    popupContent.innerHTML = '';
+
+    if (!events || events.length === 0) {
+      popupContent.innerHTML = '<li>Ingen begivenheder fundet.</li>';
+    } else {
+      for (const ev of events) {
+        const li = document.createElement('li');
+        const start = new Date(ev.start);
+        const end = new Date(ev.end || ev.start);
+        end.setDate(end.getDate() - 1);
+        const startStr = start.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+        const endStr = end.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+        const dateText = startStr === endStr ? startStr : `${startStr} – ${endStr}`;
+
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = `${ev.summary} (${dateText})`;
+        link.onclick = (e) => { e.preventDefault(); openModal(ev.id); };
+        li.appendChild(link);
+        popupContent.appendChild(li);
+      }
+    }
+    popup.classList.add('show');
+    popup.classList.remove('hidden');
+  }
+
+async function openModal(id) {
+  const { data: ev, error } = await client
+    .from('events')
+    .select('*')                 // hent alle felter
+    .eq('id', id)
+    .single();
+
+  if (error || !ev) { alert('❌ Begivenhed ikke fundet.'); console.warn('🔍 Event ID søgt:', id, error); return; }
+
+  const title = ev.titel ?? ev.summary ?? ev.title ?? ev.navn ?? ev.name ?? '(uden titel)';
+
+  const s = new Date(ev.start ?? ev.start_dato);
+  const rawEnd = new Date(ev.end ?? ev.slut_dato ?? ev.start ?? ev.start_dato);
+  const isMidnight = d => d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+  const oneDay = 24 * 60 * 60 * 1000;
+  const e = (rawEnd > s && isMidnight(rawEnd)) ? new Date(rawEnd.getTime() - oneDay) : rawEnd;
+
+  const dateStr =
+    s.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' }) +
+    (s.toDateString() !== e.toDateString()
+      ? ` – ${e.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}`
+      : '');
+
+  // (resten af din parsing af description er uændret)
+  const lines = (ev.description ?? ev.beskrivelse ?? '').split('\n');
+  let img = '', desc = '', location = '', timeStart = '', timeEnd = '';
+  let collectingDesc = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('img:')) img = trimmed.slice(4).trim();
+    else if (trimmed.startsWith('desc:')) { desc += trimmed.slice(5).trim() + '\n'; collectingDesc = true; }
+    else if (trimmed.startsWith('lokation:')) location = trimmed.slice(9).trim();
+    else if (trimmed.startsWith('start:')) timeStart = trimmed.slice(6).trim();
+    else if (trimmed.startsWith('end:')) timeEnd = trimmed.slice(4).trim();
+    else if (collectingDesc && trimmed !== '') desc += trimmed + '\n';
+  }
+
+  const container = document.getElementById('admin-event-content');
+  const modal = document.getElementById('admin-event-detail');
+  container.innerHTML = `
+    <h2 style="color: var(--accent);">${title}</h2>
+    <p><strong>📅 Dato:</strong> ${dateStr}</p>
+    ${location ? `<p><strong>📍 Lokation:</strong> ${location}</p>` : ''}
+    ${timeStart || timeEnd ? `<p><strong>🕓 Tid:</strong> ${timeStart}${timeEnd ? ` – ${timeEnd}` : ''}</p>` : ''}
+    ${img ? `<div style="margin:1rem 0;"><img src="${img}" alt="Banner" style="max-width:100%; border-radius:10px;"></div>` : ''}
+    ${desc ? `<div>${linkify(desc)}</div>` : ''}
+    <p style="font-size:0.85rem; color:gray;">🆔 Event ID: <code>${id}</code></p>
+  `;
+  modal.classList.remove('hidden');
+  modal.classList.add('show');
+}
+
+  function closeAdminEvent() {
+    const modal = document.getElementById('admin-event-detail');
+    modal.classList.remove('show');
+    modal.classList.add('hidden');
+  }
+  window.closeAdminEvent = closeAdminEvent;
+
+  function linkify(text) {
+    if (!text) return '';
+    return text.split('\n').map(line => line.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`)).map(line => `<p>${line}</p>`).join('');
+  }
+
+  // ====================== SIGNUP TOOL =====================
+  async function adminTilmeld() {
+    const id = document.getElementById('event-select').value;
+    const name = document.getElementById('user-autocomplete').value.trim();
+    const fb = document.getElementById('admin-signup-feedback');
+
+    if (!id || !name) { fb.classList.remove('fade-out'); fb.textContent = '❌ Udfyld både begivenhed og brugernavn.'; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000); return; }
+
+    try {
+      const resTilmeldinger = await fetch('https://nglevagter-test.onrender.com/signups');
+      const alleTilmeldinger = await resTilmeldinger.json();
+      const alleredeTilmeldt = alleTilmeldinger.some(entry => entry.eventId === id && entry.name.toLowerCase() === name.toLowerCase());
+      if (alleredeTilmeldt) { fb.classList.remove('fade-out'); fb.textContent = `⚠️ ${name} er allerede tilmeldt denne begivenhed.`; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000); return; }
+
+      const res = await fetch('https://nglevagter-test.onrender.com/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: id, names: name }) });
+      if (res.ok) { fb.classList.remove('fade-out'); fb.textContent = `✅ ${name} er tilmeldt begivenheden`; fb.className = 'feedback ok'; }
+      else { const data = await res.json(); fb.classList.remove('fade-out'); fb.textContent = '❌ Fejl: ' + (data.error || 'Ukendt fejl'); fb.className = 'feedback fejl'; }
+      setTimeout(() => fb.classList.add('fade-out'), 3000);
+    } catch (err) {
+      console.error('Fejl:', err);
+      fb.classList.remove('fade-out'); fb.textContent = '❌ Netværksfejl'; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000);
+    }
+  }
+
+  async function adminFrameld() {
+    const id = document.getElementById('event-select').value;
+    const name = document.getElementById('user-autocomplete').value.trim();
+    const fb = document.getElementById('admin-signup-feedback');
+
+    if (!id || !name) { fb.classList.remove('fade-out'); fb.textContent = '❌ Udfyld både begivenhed og brugernavn.'; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000); return; }
+
+    try {
+      const resTilmeldinger = await fetch('https://nglevagter-test.onrender.com/signups');
+      const alleTilmeldinger = await resTilmeldinger.json();
+      const erTilmeldt = alleTilmeldinger.some(entry => entry.eventId === id && entry.name.toLowerCase() === name.toLowerCase());
+      if (!erTilmeldt) { fb.classList.remove('fade-out'); fb.textContent = `⚠️ ${name} er ikke tilmeldt denne begivenhed.`; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000); return; }
+
+      const res = await fetch('https://nglevagter-test.onrender.com/unsign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: id, names: name }) });
+      if (res.ok) { fb.classList.remove('fade-out'); fb.textContent = `✅ ${name} er frameldt begivenheden`; fb.className = 'feedback ok'; }
+      else { const data = await res.json(); fb.classList.remove('fade-out'); fb.textContent = '❌ Fejl: ' + (data.error || 'Ukendt fejl'); fb.className = 'feedback fejl'; }
+      setTimeout(() => fb.classList.add('fade-out'), 3000);
+    } catch (err) {
+      console.error('Fejl:', err);
+      fb.classList.remove('fade-out'); fb.textContent = '❌ Netværksfejl'; fb.className = 'feedback fejl'; setTimeout(() => fb.classList.add('fade-out'), 3000);
+    }
+  }
+
+  window.adminTilmeld = adminTilmeld;
+  window.adminFrameld = adminFrameld;
+
+  // Autocomplete + events
+  let alleBrugere = [];
+  async function initAdminSignupTool() {
+    const eventSelect = document.getElementById('event-select');
+    const input = document.getElementById('user-autocomplete');
+    const list = document.getElementById('autocomplete-list');
+
+    const eventsRes = await fetch('https://nglevagter-test.onrender.com/public-events');
+    const events = await eventsRes.json();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    const eventOptions = events
+      .filter(e => new Date(e.start) >= today)
+      .map(e => {
+        const idMatch = e.description?.match(/event:([a-z0-9\-]+)/i);
+        const id = idMatch ? idMatch[1] : null;
+        if (!id) return null;
+        const start = new Date(e.start);
+        const date = start.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+        return `<option value="${id}">${date} – ${e.summary}</option>`;
+      })
+      .filter(Boolean);
+
+    eventSelect.innerHTML = `<option value="">-- Vælg begivenhed --</option>` + eventOptions.join('');
+
+    const { data: users, error } = await client.from('users').select('id, navn').order('navn', { ascending: true });
+    if (error) { list.innerHTML = `<li>❌ Fejl ved hentning af brugere</li>`; return; }
+    alleBrugere = users.map(u => u.navn);
+
+    let søgTid;
+    input.addEventListener('input', () => {
+      clearTimeout(søgTid);
+      søgTid = setTimeout(() => {
+        const søg = input.value.toLowerCase();
+        list.innerHTML = '';
+        if (!søg || søg.length < 1) return;
+        const resultater = alleBrugere.filter(navn => navn.toLowerCase().includes(søg)).slice(0, 5);
+        resultater.forEach(navn => {
+          const li = document.createElement('li');
+          li.textContent = navn;
+          li.onclick = () => { input.value = navn; list.innerHTML = ''; };
+          list.appendChild(li);
+        });
+      }, 200);
+    });
+
+    document.addEventListener('click', (e) => { if (e.target !== input) list.innerHTML = ''; });
+    input.dataset.init = 'true';
+  }
+
+  // Værktøjsvisning (tilmeld/brugere)
+  function visVærktøj(id) {
+    document.querySelectorAll('#tilmeld-tool, #bruger-tool').forEach(el => el.classList.add('hidden'));
+    const aktiv = document.getElementById(id);
+    aktiv.classList.remove('hidden');
+    if (id === 'tilmeld-tool') initAdminSignupTool();
+    if (id === 'bruger-tool') {
+      hentBrugere();
+      const søgInput = document.getElementById('bruger-søg');
+      if (!søgInput.dataset.init) {
+        let søgTid;
+        søgInput.addEventListener('input', e => {
+          clearTimeout(søgTid);
+          søgTid = setTimeout(() => { hentBrugere(e.target.value); }, 200);
+        });
+        søgInput.dataset.init = 'true';
+      }
+    }
+  }
+  window.visVærktøj = visVærktøj;
+
+  async function hentBrugere(filter = '') {
+    const container = document.getElementById('bruger-liste');
+    const { data: users, error } = await client.from('users').select('id, navn, rolle').order('navn', { ascending: true });
+    if (error || !users) { container.innerHTML = '<li>❌ Kunne ikke hente brugere</li>'; return; }
+
+    const filtrerede = users.filter(u => u.navn.toLowerCase().includes(filter.toLowerCase()));
+    if (filtrerede.length === 0) { container.innerHTML = '<li>Ingen brugere matcher søgningen.</li>'; return; }
+
+    container.innerHTML = filtrerede.map(u => `
+      <li>
+        <div class="bruger-info"><strong>${u.navn}</strong><span>(${u.rolle})</span></div>
+        <div class="bruger-handlinger">
+          <button class="ikon-btn rediger" onclick="visRedigerNavn('${u.id}', '${u.navn}')">✏️</button>
+          <button class="ikon-btn slet" onclick="sletBruger('${u.id}', '${u.navn}')">🗑️</button>
+        </div>
+      </li>
+    `).join('');
+  }
+
+  async function sletBruger(id, navn) {
+    if (!confirm(`Vil du slette brugeren ${navn}?`)) return;
+    try {
+      const res = await fetch('https://nglevagter-test.onrender.com/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const result = await res.json();
+      if (res.ok) { alert(`🗑️ Bruger ${navn} er slettet`); hentBrugere(); }
+      else { alert(`❌ Fejl: ${result.error || 'ukendt fejl'}`); }
+    } catch (err) {
+      console.error('Fejl ved sletning:', err);
+      alert('❌ Netværksfejl – kunne ikke slette bruger');
+    }
+  }
+  window.sletBruger = sletBruger;
+
+  function visRedigerNavn(id, navn) {
+    const nytnavn = prompt('Redigér navn for brugeren:', navn);
+    if (nytnavn && nytnavn.trim() !== navn) redigerBrugerNavn(id, nytnavn.trim());
+  }
+  window.visRedigerNavn = visRedigerNavn;
+
+  async function redigerBrugerNavn(id, nytNavn) {
+    const { error } = await client.from('users').update({ navn: nytNavn }).eq('id', id);
+    if (error) { alert('❌ Kunne ikke opdatere navn.'); console.error(error); }
+    else { alert('✅ Navn opdateret.'); hentBrugere(); }
+  }
+
+  // ====================== EKSTRA STATS ====================
+  async function visRutebyggerePrGrad() {
+    document.querySelectorAll('.chart-section').forEach(s => { s.style.display = 'none'; });
+    const canvas = document.getElementById('stats-chart');
+    if (canvas.style.display === 'none') canvas.style.display = 'block';
+    if (chartInstance && chartInstance.canvas) chartInstance.canvas.onclick = null;
+
+    const { data: ruter, error } = await client.from('ruter').select('rutebygger, grad').eq('aktiv', true);
+    if (error || !ruter) { console.error('❌ Fejl ved hentning af rutedata', error); return; }
+
+    const tælling = {};
+    ruter.forEach(({ rutebygger, grad }) => { if (!rutebygger || !grad) return; if (!tælling[rutebygger]) tælling[rutebygger] = {}; tælling[rutebygger][grad] = (tælling[rutebygger][grad] || 0) + 1; });
+
+    const alleGradNavne = [...new Set(ruter.map(r => r.grad).filter(Boolean))].sort();
+    const alleByggere = Object.keys(tælling);
+    const datasets = alleGradNavne.map((grad, i) => ({ label: grad, data: alleByggere.map(bygger => tælling[bygger][grad] || 0) }));
+    Chart.register(ChartDataLabels);
+
+    renderChart({
+      type: 'bar',
+      data: { labels: alleByggere, datasets },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: '🛠️ Rutebyggere fordelt på grader' }, tooltip: { mode: 'index', intersect: false }, legend: { position: 'right' }, datalabels: { color: '#111', font: { weight: 'bold' }, formatter: (value, context) => value > 0 ? `${context.dataset.label} → ${value}` : '' } },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const statsTab = document.querySelector('[data-target="stats"]');
+    statsTab?.addEventListener('click', () => {
+      const byggerKnap = document.getElementById('bygger-grad-knap');
+      if (byggerKnap && !byggerKnap.dataset.init) {
+        byggerKnap.addEventListener('click', visRutebyggerePrGrad);
+        byggerKnap.dataset.init = 'true';
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

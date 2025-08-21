@@ -1,0 +1,459 @@
+<html lang="da">
+<head>
+  <script src="gate.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📨 Beskeder – NKL</title>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+</head>
+<body>
+
+<div id="app" class="beskeder-app">
+  <!-- Sidebar med tråde -->
+  <aside id="tråd-liste" class="tråd-liste">
+    <h2>💬 Samtaler</h2>
+    <input type="text" id="tråd-søg" placeholder="🔍 Søg..." />
+    <div id="tråde-container"></div>
+  </aside>
+
+  <!-- Aktiv tråd -->
+  <main id="aktiv-tråd" class="aktiv-tråd">
+    <div id="aktiv-header" class="tråd-header">
+	  <button id="tilbage-knap" class="tilbage-knap" aria-label="Tilbage">←</button>
+	  <span id="aktiv-navn"></span>
+    </div>
+
+    <div id="beskeder-container" class="beskeder-container"></div>
+
+    <form id="svar-form" class="svar-form skjult">
+      <textarea id="besked-input" placeholder="Skriv en besked..."></textarea>  	  
+	  <button type="submit">📤</button>
+	  
+	  <div class="emoji-wrap">
+		<button type="button" id="emoji-btn" class="emoji-btn" aria-label="Vælg emoji">😊</button>
+		<emoji-picker id="emoji-picker" class="skjult" skin-tone-emoji="👍"></emoji-picker>
+		</div>
+	  
+    </form>
+  </main>
+</div>
+
+
+<script type="module">
+  import { adgangskontrol, indsætMenu, client } from './auth.js';
+
+  const BASE_URL = "https://nglevagter-test.onrender.com";
+
+  // ==== STATE ====
+  let bruger = null;
+  let brugerId = null;
+  let alleTråde = [];
+  let aktivTrådId = null;
+  let navnOpslag = {};  // userId -> navn (cache)
+  let notifThreads = new Set();
+
+  // ==== DOM ====
+  const trådeContainer = document.getElementById("tråde-container");
+  const trådSøg = document.getElementById("tråd-søg");
+  const aktivKolonne = document.getElementById("aktiv-tråd");
+  const aktivHeaderTitel = document.getElementById("aktiv-navn");
+  const beskederContainer = document.getElementById("beskeder-container");
+  const svarForm = document.getElementById("svar-form");
+  const beskedInput = document.getElementById("besked-input");
+  const traadListeEl = document.querySelector(".tråd-liste");
+  const tilbageKnap = document.getElementById("tilbage-knap");
+  const emojiBtn = document.getElementById('emoji-btn');
+  const emojiPicker = document.getElementById('emoji-picker');
+
+  // ==== INIT ====
+  adgangskontrol({
+    tilladteRoller: [],
+    redirectVedFejl: "index.html",
+    efterLogin: async (b) => {
+	  if (window.releaseAuthGate) window.releaseAuthGate();
+      bruger = b;
+      brugerId = b.id;
+      indsætMenu(b);
+
+      await preloadNavne();
+	  await hentNotifikationer();
+      await hentTråde();
+
+      bindUI();
+      autoOpenFromQuery();
+      startRealtime();
+    }
+  });
+
+  async function preloadNavne() {
+    const { data, error } = await client
+      .from("users")
+      .select("id, navn");
+    if (!error && data) {
+      navnOpslag = Object.fromEntries(data.map(u => [u.id, u.navn]));
+    }
+  }
+
+  async function hentNotifikationer() {
+  const { data, error } = await client
+    .from("kontakt_notifications")
+    .select("thread_id")
+    .eq("bruger_id", brugerId);
+
+  if (!error && Array.isArray(data)) {
+    notifThreads = new Set(data.map(r => r.thread_id));
+  }
+}
+
+  async function hentTråde() {
+    const res = await fetch(`${BASE_URL}/threads?brugerId=${encodeURIComponent(brugerId)}`);
+    const data = await res.json();
+    alleTråde = Array.isArray(data) ? data : [];
+
+    // berig med navne + simple “anden part”
+    for (const t of alleTråde) {
+      t.oprettet_af_navn = navnOpslag[t.oprettet_af] || t.oprettet_af;
+      // "andenPartId" = hvis du er afsender, er modtageren den anden — ellers omvendt
+      const anden = (t.oprettet_af === brugerId) ? t.modtager : t.oprettet_af;
+      t.anden_part_id = anden;
+      t.anden_part_navn = navnOpslag[anden] || anden;
+	  t.har_notif = notifThreads.has(t.id);
+    }
+
+    renderTrådListe();
+  }
+
+  function bindUI() {
+    trådSøg.addEventListener("input", () => renderTrådListe());
+    svarForm.addEventListener("submit", onSend);
+	
+		if (tilbageKnap) {
+		tilbageKnap.addEventListener("click", goBackToList);
+		}
+  }
+
+  function renderTrådListe() {
+    const q = trådSøg.value.trim().toLowerCase();
+    trådeContainer.innerHTML = "";
+
+    // sortér som Messenger: senest opdaterede øverst
+    const sorterede = [...alleTråde].sort((a, b) => {
+      const da = new Date(a.opdateret || a.created_at).getTime();
+      const db = new Date(b.opdateret || b.created_at).getTime();
+      return db - da;
+    });
+
+    const filtrerede = sorterede.filter(t => {
+      if (!q) return true;
+      return (
+        (t.titel && t.titel.toLowerCase().includes(q)) ||
+        (t.anden_part_navn && t.anden_part_navn.toLowerCase().includes(q))
+      );
+    });
+
+    for (const t of filtrerede) {
+      const el = document.createElement("div");
+      el.className = "tråd-preview" + (t.id === aktivTrådId ? " aktiv" : "");
+      const dato = formaterDatoKort(t.opdateret || t.created_at);
+	  const harNotifikation = notifThreads.has(t.id) && t.id !== aktivTrådId;
+
+
+el.innerHTML = `
+  <div class="tråd-header">
+    <div style="font-weight:bold">
+      ${harNotifikation ? '<span class="bell" aria-hidden="true">🔔</span>' : ''}
+      ${escapeHtml(t.anden_part_navn || "Samtale")}
+    </div>
+    <div class="tråd-info">${dato}</div>
+  </div>
+  <div class="teaser">${escapeHtml(t.titel || "")}</div>
+`;
+
+      el.addEventListener("click", () => åbnTråd(t.id));
+      trådeContainer.appendChild(el);
+    }
+  }
+
+  async function åbnTråd(trådId) {
+    aktivTrådId = trådId;
+    markAktivIListen();
+
+    const tråd = alleTråde.find(t => t.id === trådId);
+    if (!tråd) return;
+
+    // Header + show højre kolonne
+    aktivHeaderTitel.textContent = tråd.anden_part_navn || "Samtale";
+    aktivKolonne.classList.add("vis"); // mobil: vis højreside
+	
+	if (window.matchMedia("(max-width: 800px)").matches) {
+	traadListeEl?.classList.add("skjul");
+	}
+	
+    svarForm.classList.toggle("skjult", !!tråd.er_lukket);
+
+    // hent beskeder
+    await hentOgVisBeskeder(trådId);
+
+    // markér som læst i backend
+    markAsRead(trådId);
+
+    // scroll til bund
+    scrollTilBund();
+  }
+
+  function markAktivIListen() {
+    [...trådeContainer.children].forEach((node, idx) => {
+      const id = (alleTråde[idx] || {}).id;
+      if (!id) return;
+      if (id === aktivTrådId) node.classList.add("aktiv");
+      else node.classList.remove("aktiv");
+    });
+  }
+
+  async function hentOgVisBeskeder(trådId) {
+    beskederContainer.innerHTML = "";
+
+    const { data: beskeder, error } = await client
+      .from("messages")
+      .select("*")
+      .eq("thread_id", trådId)
+      .order("tidspunkt", { ascending: true });
+
+    if (error) {
+      beskederContainer.innerHTML = `<p>❌ Kunne ikke hente beskeder</p>`;
+      return;
+    }
+
+    for (const b of beskeder) {
+      appendBesked(b);
+    }
+  }
+
+  function appendBesked(b) {
+    const div = document.createElement("div");
+    const erMig = b.afsender === brugerId;
+    div.className = "besked " + (erMig ? "afsender" : "modtager");
+    const navn = navnOpslag[b.afsender] || (erMig ? "Mig" : "Ukendt");
+    const tekst = b.tekst ? escapeHtml(b.tekst) : "";
+
+    // Tilføj evt. lyd/billede senere
+    div.innerHTML = `
+      <div style="font-weight:600; margin-bottom:2px;">${escapeHtml(navn)}</div>
+      <div>${tekst}</div>
+    `;
+
+    beskederContainer.appendChild(div);
+  }
+
+  async function onSend(e) {
+    e.preventDefault();
+    if (!aktivTrådId) return;
+
+    const tekst = beskedInput.value.trim();
+    if (!tekst) return;
+
+    const body = { thread_id: aktivTrådId, afsender: brugerId, tekst };
+    try {
+      const res = await fetch(`${BASE_URL}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Fejl ved afsendelse");
+
+      beskedInput.value = "";
+
+      bumpTråd(aktivTrådId);
+      scrollTilBund();
+
+      // markér som læst for mig (fjerner evt. 🔔 hos mig)
+      await markAsRead(aktivTrådId);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Kunne ikke sende besked");
+    }
+  }
+
+  function bumpTråd(trådId) {
+    const idx = alleTråde.findIndex(t => t.id === trådId);
+    if (idx >= 0) {
+      alleTråde[idx].opdateret = new Date().toISOString();
+      // flyt øverst i liste igen ved næste render
+      notifThreads.delete(trådId);
+	  renderTrådListe();
+      markAktivIListen();
+    }
+  }
+
+  function scrollTilBund() {
+    requestAnimationFrame(() => {
+      beskederContainer.scrollTop = beskederContainer.scrollHeight;
+    });
+  }
+
+  async function markAsRead(trådId) {
+    try {
+      await fetch(`${BASE_URL}/mark-thread-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: trådId, bruger_id: brugerId })
+      });
+    } catch (_) {}
+  }
+
+  function autoOpenFromQuery() {
+    const p = new URLSearchParams(location.search);
+    const tid = p.get("tråd");
+    if (tid) {
+      // hvis tråden ikke er i listen endnu, hentes den med næste polling/realtime
+      // prøv at åbne – og ellers falder det bare til jorden uden fejl
+      åbnTråd(tid);
+    }
+  }
+
+  function goBackToList() {
+  // kun relevant på mobil – men gør ikke skade på desktop
+  aktivKolonne.classList.remove("vis");
+  traadListeEl?.classList.remove("skjul");
+  // bevar aktivTrådId hvis du vil markere den i listen; ellers nulstil:
+  // aktivTrådId = null;
+}
+
+emojiBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  togglePicker(); // åbn/luk
+});
+
+// indsæt valgt emoji ved cursor
+emojiPicker?.addEventListener('emoji-click', (ev) => {
+  const emoji = ev.detail.unicode;
+  insertAtCursor(beskedInput, emoji);
+  togglePicker(false);
+  beskedInput.focus();
+});
+
+// klik udenfor → luk
+document.addEventListener('click', (e) => {
+  if (!emojiPicker || emojiPicker.classList.contains('skjult')) return;
+  const wrap = document.querySelector('.emoji-wrap');
+  if (!wrap?.contains(e.target)) togglePicker(false);
+});
+
+// Escape → luk
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') togglePicker(false);
+});
+
+// ved submit → luk
+document.getElementById('svar-form')?.addEventListener('submit', () => togglePicker(false));
+
+
+  // ==== REALTIME ====
+  function startRealtime() {
+    // 1) Lyt efter nye beskeder (opdater aktiv tråd eller bump i listen)
+    client.channel('messages-rt')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        const m = payload.new;
+        // hvis det er min aktive tråd → append
+        if (m.thread_id === aktivTrådId) {
+          appendBesked(m);
+          bumpTråd(m.thread_id);
+          scrollTilBund();
+        } else {
+          // ellers bump listen (hvis jeg er part i tråden)
+          const t = alleTråde.find(t => t.id === m.thread_id);
+          if (t) {
+            bumpTråd(t.id);
+          } else {
+            // fallback: hent tråde igen (ny tråd dukket op / ændret ejerskab)
+            hentTråde();
+          }
+        }
+      })
+      .subscribe();
+
+    // 2) Lyt efter ændringer i threads (luk/genåbn mv.)
+    client.channel('threads-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'threads' }, payload => {
+        const t = payload.new || payload.old;
+        if (!t) return;
+        // Hvis ændring vedrører mig → opdatér
+        if (t.oprettet_af === brugerId || t.modtager === brugerId) {
+          hentTråde();
+        }
+      })
+      .subscribe();
+	  
+	  client.channel('kontakt-notifs-rt')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kontakt_notifications' }, payload => {
+    const r = payload.new;
+    if (r?.bruger_id === brugerId) {
+      notifThreads.add(r.thread_id);
+      // opdater flag på den konkrete tråd hvis den allerede er i listen
+      const t = alleTråde.find(t => t.id === r.thread_id);
+      if (t) t.har_notif = true;
+      renderTrådListe();
+    }
+  })
+  .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'kontakt_notifications' }, payload => {
+    const r = payload.old;
+    if (r?.bruger_id === brugerId) {
+      notifThreads.delete(r.thread_id);
+      const t = alleTråde.find(t => t.id === r.thread_id);
+      if (t) t.har_notif = false;
+      renderTrådListe();
+    }
+  })
+  .subscribe();
+
+  }
+
+  // ==== HELPERS ====
+  
+  function togglePicker(show) {
+  if (show === true) emojiPicker.classList.remove('skjult');
+  else if (show === false) emojiPicker.classList.add('skjult');
+  else emojiPicker.classList.toggle('skjult');
+}
+  
+  function formaterDatoKort(iso) {
+    try {
+      const d = new Date(iso);
+      const nu = new Date();
+      const sameDay = d.toDateString() === nu.toDateString();
+      if (sameDay) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString();
+    } catch {
+      return "";
+    }
+  }
+
+  function insertAtCursor(input, text) {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const before = input.value.slice(0, start);
+  const after  = input.value.slice(end);
+  input.value = before + text + after;
+  const pos = start + text.length;
+  input.setSelectionRange(pos, pos);
+  input.focus();
+}
+
+  function escapeHtml(str) {
+    return (str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
+
+</script>
+
+
+</body>
+</html>

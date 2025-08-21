@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <title>Instruktør – Beviser</title>
+  <style>
+    .preview-wrap { position:relative; width:600px; margin:12px 0; border:1px solid #ddd; border-radius:8px; overflow:hidden; background:#fff; }
+    #pdfBg { display:block; width:100%; height:auto; z-index: 1; }
+    #signaturePad { position:absolute; touch-action:none; border:1px dashed #888; border-radius:6px; background:transparent; z-index: 2; }
+	
+	.measure-hud {
+    font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+    background: rgba(17,24,39,.9);
+    color: #e5e7eb;
+    position: fixed; right: 12px; bottom: 12px;
+    padding: 10px 12px; border-radius: 10px; z-index: 9999;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    max-width: 340px;
+  }
+  .measure-hud code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .measure-tip { opacity:.8; margin-top:4px }
+  .measure-btn { margin:.25rem .25rem 0 0; }
+  .measure-rect {
+    position:absolute; outline: 2px dashed #14b8a6; background: rgba(20,184,166,.15);
+    pointer-events:none; z-index: 3;
+  }
+
+/* når vi måler: gør signatur-canvas klik-gennemsigtig */
+.sigpad-disabled {
+  pointer-events: none !important;
+  opacity: .25;           /* kun visuelt hint – fjern hvis du vil */
+}
+	
+  </style>
+</head>
+<body>
+<main class="kort" style="max-width: 847px; margin: 16px auto;">
+  <h2>Beviser</h2>
+
+  <form id="issueForm">
+    <label for="memberSearch">Søg medlem</label>
+    <input type="text" id="memberSearch" class="felt" placeholder="Skriv navn" autocomplete="off">
+    <ul id="memberResults"></ul>
+    <input type="hidden" id="memberId">
+
+    <label for="birthdate">Fødselsdato</label>
+    <input type="date" id="birthdate" class="felt" required>
+
+    <label>Type</label>
+    <select id="certType" class="felt" required>
+      <option value="k1">K1</option>
+      <option value="k2">K2</option>
+    </select>
+
+    <!-- PDF som baggrund + signatur-canvas ovenpå -->
+    <div class="preview-wrap" id="wrap">
+      <canvas id="pdfBg"></canvas>
+      <canvas id="signaturePad"></canvas>
+    </div>
+
+    <div class="tool-actions" style="margin-bottom:8px;">
+      <button type="button" id="sigClear" class="knap sekundær">Ryd</button>
+      <button type="button" id="sigUndo" class="knap sekundær">Fortryd</button>
+      <small style="color: var(--tekst, #666);">Signer i den stiplede boks</small>
+    </div>
+
+    <div class="tool-actions">
+  <button type="submit" class="knap">📜 Udsted bevis</button>
+</div>
+  </form>
+
+  <div id="issueResult" style="margin-top:1rem;"></div>
+</main>
+
+
+  <script type="module">
+    // 1) Importer nødvendige moduler (ESM) – ingen globals
+    import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs";
+    import SignaturePad from "https://cdn.jsdelivr.net/npm/signature_pad@5.0.4/dist/signature_pad.min.js";
+    import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+  adgangskontrol({
+    tilladteRoller: ["instruktør", "admin"],
+    redirectVedFejl: "index.html",
+    efterLogin: (bruger) => {
+      if (window.releaseAuthGate) window.releaseAuthGate();
+      indsætMenu(bruger);
+    }
+  });   
+
+  let sigPad = null, pdfScale = 1, pdfHeightPx = 0;
+
+  // Mål i PDF‑points (samme som edge-function)
+  const SIGNATURE_BOX = { x: 20.4, fromTop: 180.4, w: 300.0, h: 125.6 };
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  async function init() {
+    const out = document.getElementById('issueResult');
+    const sel = document.getElementById('memberSelect');
+
+    // Hent medlemmer
+    const searchInput = document.getElementById('memberSearch');
+const resultsList = document.getElementById('memberResults');
+const memberIdInput = document.getElementById('memberId');
+
+let searchTimeout;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  const term = searchInput.value.trim();
+  if (term.length < 2) {
+    resultsList.style.display = 'none';
+    return;
+  }
+  // Lav debounce, så vi ikke skyder en query af for hvert tastetryk
+  searchTimeout = setTimeout(() => searchMembers(term), 300);
+});
+
+async function searchMembers(term) {
+  const { data, error } = await client
+    .from('users')
+    .select('id, navn')
+    .or(`navn.ilike.%${term}%`)
+    .limit(10);
+
+  if (error) {
+    console.error(error);
+    resultsList.style.display = 'none';
+    return;
+  }
+
+  resultsList.innerHTML = '';
+  data.forEach(user => {
+    const li = document.createElement('li');
+    li.textContent = `${user.navn ?? '(uden navn)'} – ${user.email ?? ''}`;
+    li.style.padding = '6px 8px';
+    li.style.cursor = 'pointer';
+    li.addEventListener('click', () => {
+      searchInput.value = user.navn ?? user.id;
+      memberIdInput.value = user.id;
+      resultsList.style.display = 'none';
+    });
+    resultsList.appendChild(li);
+  });
+
+  resultsList.style.display = data.length ? 'block' : 'none';
+}
+
+
+    // SignaturePad
+    const sigCanvas = document.getElementById('signaturePad');
+document.getElementById('sigClear').addEventListener('click', () => sigPad?.clear());
+document.getElementById('sigUndo').addEventListener('click', () => {
+  if (!sigPad) return;
+  const data = sigPad.toData();
+  if (data.length) { data.pop(); sigPad.fromData(data); }
+});
+
+    // PDF preview
+    const typeSel = document.getElementById('certType');
+    typeSel.addEventListener('change', () => renderPdf(typeSel.value));
+    await renderPdf(typeSel.value);
+
+    // Submit → issue-certificate
+    document.getElementById('issueForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const memberId = document.getElementById('memberId').value;
+if (!memberId) {
+  out.textContent = 'Vælg venligst et medlem først';
+  return;
+}
+      const type = typeSel.value;
+      if (!sigPad) { out.textContent = 'Signaturfeltet er ikke klar endnu – prøv igen.'; return; }
+	  const birthdate = document.getElementById('birthdate').value;
+	  const signatureImage = sigPad.isEmpty() ? null : sigPad.toDataURL("image/png");
+
+      out.textContent = "Udsteder bevis…";
+      const { data, error } = await client.functions.invoke('issue-certificate', {
+        body: { memberId, type, signatureImage, birthdate }
+      });
+      if (error) {
+        out.innerHTML = `<p style="color:red;">Fejl: ${error.message ?? error.toString()}</p>`;
+        return;
+      }
+      out.innerHTML = `
+        <p>Bevis udstedt ✔️</p>
+        <p><a href="${data.downloadUrl}" target="_blank" rel="noopener">Download / vis bevis (midlertidigt link)</a></p>
+      `;
+    });
+  }
+
+async function renderPdf(type) {
+  const pdfCanvas = document.getElementById('pdfBg');
+
+  const url = `https://cianxaxaphvrutmstydr.supabase.co/storage/v1/object/public/templates/${type}.pdf`;
+  const loading = pdfjsLib.getDocument(url);
+  const pdf = await loading.promise;
+  const page = await pdf.getPage(1);
+
+  const desiredWidth = 600;
+  const vp1 = page.getViewport({ scale: 1 });
+  const scale = desiredWidth / vp1.width;
+  const vp = page.getViewport({ scale });
+
+  const ctx = pdfCanvas.getContext('2d');
+  pdfCanvas.width = Math.floor(vp.width);
+  pdfCanvas.height = Math.floor(vp.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+  // Placer pad'en præcist i underskriftsfeltet
+  placeSignaturePad(document.getElementById('pdfBg'),
+                  document.getElementById('signaturePad'),
+                  SIGNATURE_BOX,
+                  scale);
+
+// Re‑init SignaturePad EFTER canvas-størrelse er sat
+if (sigPad && typeof sigPad.off === 'function') sigPad.off(); // ok hvis findes
+sigPad = new SignaturePad(document.getElementById('signaturePad'), {
+  minWidth: 0.8,
+  maxWidth: 2.0,
+  penColor: "black",
+  backgroundColor: "rgba(255,255,255,0)"
+});
+
+}
+
+// Hjælpere: CSS‑px -> PDF points
+function cssCoords(canvas, evt) {
+  const r = canvas.getBoundingClientRect();
+  const x = evt.clientX - r.left;
+  const y = evt.clientY - r.top;
+  return { x, y, rect: r };
+}
+function placeRect(canvas) {
+  const r = canvas.getBoundingClientRect();
+  const box = PDF_MEASURE.currentBox;
+  if (!box) return;
+
+  const left = Math.min(box.x0, box.x1);
+  const top  = Math.min(box.y0, box.y1);
+  const w    = Math.abs(box.x1 - box.x0);
+  const h    = Math.abs(box.y1 - box.y0);
+  Object.assign(PDF_MEASURE.rectEl.style, {
+    left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px'
+  });
+}
+
+// CSS -> PDF points (kender vi scale + pageH)
+function cssToPdf({x, y}) {
+  const scale = PDF_MEASURE.scale;           // desiredWidth / pageWidthPoints
+  const pageH = PDF_MEASURE.pageHeight;
+  const xp = x / scale;                      // pdf points
+  const yp = pageH - (y / scale);            // målt fra bunden → fra top i Edge Function
+  return { xp, yp_from_bottom: yp, y_from_top: pageH - yp };
+}
+
+function placeSignaturePad(pdfCanvas, sigCanvas, box, scale) {
+  // .preview-wrap er position:relative; sigCanvas er absolute
+  sigCanvas.style.position = 'absolute';
+  sigCanvas.style.left   = (box.x * scale) + 'px';
+  sigCanvas.style.top    = (box.fromTop * scale) + 'px';   // 👈 fromTop bruges direkte
+  sigCanvas.style.width  = (box.w * scale) + 'px';
+  sigCanvas.style.height = (box.h * scale) + 'px';
+  sigCanvas.style.zIndex = 2;
+
+  // HiDPI backing‑store (skarpe streger)
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  sigCanvas.width  = Math.floor(box.w * scale * ratio);
+  sigCanvas.height = Math.floor(box.h * scale * ratio);
+  const ctx = sigCanvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(ratio, ratio);
+}
+
+  // === Konvertering mellem PDF-coords og CSS-px ===
+  function placeOverlayFromPdfCoords() {
+    const sigCanvas = document.getElementById('signaturePad');
+
+    const cssLeft   = SIG_PDF_X * pdfScale;
+    const cssWidth  = SIG_PDF_W * pdfScale;
+    const cssHeight = SIG_PDF_H * pdfScale;
+    const cssTop    = pdfHeightPx - (SIG_PDF_Y + SIG_PDF_H) * pdfScale;
+
+    Object.assign(sigCanvas.style, {
+      left: cssLeft + "px",
+      top: cssTop + "px",
+      width: cssWidth + "px",
+      height: cssHeight + "px"
+    });
+
+    // HiDPI skarphed
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    sigCanvas.width = Math.floor(cssWidth * ratio);
+    sigCanvas.height = Math.floor(cssHeight * ratio);
+    sigCanvas.getContext('2d').scale(ratio, ratio);
+
+    // Vis coords i HUD
+    showCoords();
+  }
+
+
+</script>
+</body>
+</html>

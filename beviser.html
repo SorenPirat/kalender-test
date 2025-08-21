@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <link rel="stylesheet" href="css/beviser.css" />
+
+  <title>Mine beviser</title>
+
+</head>
+<body>
+  <main class="wrap">
+    <h2>Mine beviser</h2>
+    <div id="list"></div>
+  </main>
+
+  <script type="module">
+    import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+    adgangskontrol({
+      tilladteRoller: [], 
+      redirectVedFejl: "index.html",
+      efterLogin: (bruger) => {
+        if (window.releaseAuthGate) window.releaseAuthGate();
+        indsætMenu(bruger);
+        loadCertificates(bruger);
+      }
+    });
+
+    async function loadCertificates(bruger) {
+      const host = document.getElementById('list');
+      host.innerHTML = 'Henter…';
+
+      // hent egne beviser
+      const { data, error } = await client
+        .from('certificates')
+        .select('id, type, issued_at, issued_by, storage_path')
+        .eq('user_id', bruger.id)
+        .order('issued_at', { ascending: false });
+
+      if (error) {
+        host.innerHTML = `<p class="empty">Kunne ikke hente beviser: ${error.message}</p>`;
+        return;
+      }
+      if (!data || data.length === 0) {
+        host.innerHTML = `<div class="card empty">Du har endnu ingen beviser.</div>`;
+        return;
+      }
+
+      host.innerHTML = '';
+      const fmt = (iso) => {
+        const d = new Date(iso);
+        const dd = String(d.getDate()).padStart(2,'0');
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const yyyy = d.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      };
+
+      for (const row of data) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <div class="row">
+            <div>
+              <div><span class="badge">${row.type?.toUpperCase() ?? 'UKENDT'}</span></div>
+              <div class="meta">Udstedt: ${row.issued_at ? fmt(row.issued_at) : '-'}</div>
+            </div>
+            <div>
+              <button data-id="${row.id}">Download</button>
+            </div>
+          </div>
+        `;
+        el.querySelector('button').addEventListener('click', async () => {
+  // 1) Prøv signed URL (privat bucket)
+  const signedRes = await client
+    .storage
+    .from('certificates')
+    .createSignedUrl(row.storage_path, 60 * 10);
+
+  if (!signedRes.error && signedRes.data?.signedUrl) {
+    window.open(signedRes.data.signedUrl, '_blank', 'noopener');
+    return;
+  }
+
+  // 2) Hvis 400 på public bucket: brug public URL (ikke-sensitivt indhold)
+  const pub = client.storage.from('certificates').getPublicUrl(row.storage_path);
+  if (pub?.data?.publicUrl) {
+    // OBS: hvis du forventer privat, bør du ikke lande her – se debugging nedenfor
+    window.open(pub.data.publicUrl, '_blank', 'noopener');
+    return;
+  }
+
+  // 3) Debug: vis serverens fejltekst (ofte: “cannot create signed urls for public buckets” eller “object not found”)
+  const msg = signedRes.error?.message ?? 'Ukendt fejl';
+  alert('Kunne ikke lave download-link: ' + msg);
+  console.error('createSignedUrl error:', signedRes.error);
+});
+
+
+        host.appendChild(el);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ruteoversigt – NKL</title>
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+
+</head>
+<body>
+  <div class="kort">
+  <h2>📋 Aktive ruter/bouldere</h2>
+  <div id="ruteContainer"></div>
+  <select id="vægValg">
+		<!-- Bouldere -->
+    <option value="sektor-a">Sektor A</option>
+    <option value="sektor-b">Sektor B</option>
+	<option value="sektor-c">Sektor C</option>
+	<option value="sektor-d">Sektor D</option>
+	    <!-- Højvæg -->
+    <option value="anker-a">Anker 1-2-3-4</option>
+    <option value="anker-b">Anker 5-6-7</option>
+    <option value="anker-c">Anker 8-9-10</option>
+	<option value="anker-d">Anker 11-12-13</option>
+	<option value="anker-e">Anker 14-15-16-17</option>
+	<option value="anker-f">Anker 18-19-20-21-22</option>
+	<option value="tagruter">Taget</option>
+  </select>
+  <select id="ruteValg">
+	<option value="">Vælg en rute</option>
+  </select>
+ <p id="status">Vælg en væg for at se ruter</p>
+</div>
+  
+
+<div class="kort">
+  <div id="canvasWrapper" style="position: relative;">
+    <canvas id="canvas"></canvas>
+
+    <div id="ruteInfoBoks" class="rute-info skjul">
+      <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
+      <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
+      <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
+    </div>
+  </div>
+</div>
+
+
+  <div id="ruteInfoBoks" class="rute-info skjul">
+    <div class="ikon-linje">📌 <span id="infoNavn"></span></div>
+    <div class="ikon-linje">🎯 <span id="infoGrad"></span></div>
+    <div class="ikon-linje">👷 <span id="infoBygger"></span></div>
+  </div>
+
+<div id="logModal" class="skjul modal-overlay">
+  <div class="modal-box">
+    <h3>📘 Log din rute</h3>
+	<label>Forsøg:
+		<select id="logForsøg">
+		<option value="">Vælg</option>
+	</select>
+</label>
+<label>Din gradering:
+  <input id="logEgenGrad" type="text" placeholder="fx 6A+ (boulder) eller 6b (rute)" list="gradForslag" />
+  <datalist id="gradForslag"></datalist>
+</label>
+<div id="bedømmelseContainer">
+  <span class="star" data-værdi="1">★</span>
+  <span class="star" data-værdi="2">★</span>
+  <span class="star" data-værdi="3">★</span>
+  <span class="star" data-værdi="4">★</span>
+  <span class="star" data-værdi="5">★</span>
+</div>
+<input type="hidden" id="logBedømmelse" value="">
+
+<label for="logKommentar">Kommentar:</label>
+<textarea id="logKommentar" rows="3"></textarea>
+    <div class="tool-actions">
+      <button id="gemLogKnap">📘 Gem i logbog</button>
+      <button onclick="lukLogModal()">❌ Luk</button>
+    </div>
+  </div>
+</div>
+
+  <script type="module">
+import { client, adgangskontrol, indsætMenu, hentPublicUrlMedCache } from './auth.js';
+
+
+adgangskontrol({
+  tilladteRoller: [],
+  redirectVedFejl: "index.html",
+  efterLogin: bruger => indsætMenu(bruger)
+});
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let img = new Image();
+let alleRuter = [];
+let ruterKlar = false;
+let pulsAnimationId = null;
+let pulsFrame = 0;
+
+const farveMap = {
+  mint: "#3EB489",
+  pink: "pink",
+  gul: "yellow",
+  grøn: "green",
+  lilla: "purple",
+  blå: "blue",
+  orange: "orange",
+  rød: "red",
+  sort: "black",
+  hvid: "white",
+  cyan: "cyan",
+  magenta: "magenta",
+  grå: "gray"
+};
+
+const vægValg = document.getElementById("vægValg");
+const ruteValg = document.getElementById("ruteValg");
+
+vægValg.addEventListener("change", () => visRuterForVæg(vægValg.value));
+
+vægValg.addEventListener("change", () => {
+  const valgt = vægValg.value;
+  const overskrift = document.querySelector("h2");
+  if (["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(valgt)) {
+    overskrift.textContent = "📋 Aktive bouldere";
+  } else {
+    overskrift.textContent = "📋 Aktive ruter";
+  }
+  visRuterForVæg(valgt);
+});
+
+
+ruteValg.addEventListener("change", () => {
+  const valgtId = ruteValg.value;
+  const rute = alleRuter.find(r => r.id == valgtId);
+  if (rute) visRute(rute);
+});
+
+async function visRuterForVæg(billedeId) {
+  ruterKlar = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  alleRuter = [];
+
+// 🛑 Stop tidligere animation og ryd info
+cancelAnimationFrame(pulsAnimationId);
+pulsAnimationId = null;
+document.getElementById("ruteInfoBoks").classList.add("skjul");
+document.getElementById("status").textContent = "Indlæser...";
+
+  ruteValg.innerHTML = '<option value=""></option>';
+  document.getElementById("ruteInfoBoks").classList.add("skjul");
+
+  // 🔁 Skjul log-knap ved hvert skift af sektor
+  const logWrapper = document.getElementById("logKnapWrapper");
+  if (logWrapper) logWrapper.classList.add("skjult");
+
+
+  // 🔍 Find nyeste billede for den valgte væg
+  const { data: alleFiler, error } = await client
+    .storage
+    .from("ruter")
+    .list("", { limit: 100 });
+
+  if (error) {
+    document.getElementById("status").textContent = "❌ Kunne ikke hente billeder.";
+    return;
+  }
+
+  // Filtrér billeder der matcher fx "sektor-d_"
+  const matcher = alleFiler
+    .filter(f => f.name.startsWith(`${billedeId}_`) && f.name.endsWith(".webp"))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // seneste først
+
+  if (matcher.length === 0) {
+    document.getElementById("status").textContent = "❌ Ingen billede fundet for væg.";
+    return;
+  }
+
+  const nyesteFilnavn = matcher[0].name;
+
+  // 🔗 Hent billedets signed URL
+  const billedeUrl = hentPublicUrlMedCache(nyesteFilnavn);
+  if (!billedeUrl) {
+  console.warn("❌ Kunne ikke hente billedet:", nyesteFilnavn);
+  return;
+  }
+
+  
+  // Vis billedet
+  img = new Image();
+  img.onload = async () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+	canvas.style.width = "100%";
+    canvas.style.height = "auto";
+    ctx.drawImage(img, 0, 0);
+
+    // Hent ruter for billedeId (uden dato)
+   const { data: ruter, error } = await client
+  .from("ruter")
+  .select("*")
+  .eq("billede_id", billedeId)
+  .eq("aktiv", true)
+  .order("navn", { ascending: true });
+
+    if (error || !ruter.length) {
+      document.getElementById("status").textContent = "Ingen ruter fundet.";
+      return;
+    }
+
+    alleRuter = ruter;
+    udfyldRuteDropdown(ruter);
+    const erBoulder = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(billedeId);
+	document.getElementById("status").textContent = erBoulder
+	? "✅ Vælg en boulder eller klik på et greb"
+	: "✅ Vælg en rute eller klik på et greb";
+    ruterKlar = true;
+  };
+  
+  img.src = billedeUrl;
+
+}
+
+function udfyldRuteDropdown(ruter) {
+ruteValg.innerHTML = ''; // ryd alt
+
+// Tilføj default-valg afhængigt af sektor
+const valgtVæg = vægValg.value;
+const defaultOption = document.createElement("option");
+defaultOption.value = "";
+defaultOption.textContent = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(valgtVæg)
+  ? "Vælg en boulder"
+  : "Vælg en rute";
+defaultOption.disabled = true;
+defaultOption.selected = true;
+ruteValg.appendChild(defaultOption);
+
+
+  // Tilføj ruter
+  for (const r of ruter) {
+    const option = document.createElement("option");
+    option.value = r.id;
+    option.textContent = r.navn;
+    ruteValg.appendChild(option);
+  }
+
+  // Tjek om knap-container findes
+  let actionsWrapper = document.getElementById("logKnapWrapper");
+  if (!actionsWrapper) {
+    actionsWrapper = document.createElement("div");
+    actionsWrapper.className = "tool-actions";
+    actionsWrapper.id = "logKnapWrapper";
+    ruteValg.parentNode.appendChild(actionsWrapper);
+  }
+
+  // Tilføj log-knap hvis ikke den findes
+  let logKnap = document.getElementById("logKnap");
+  if (!logKnap) {
+    logKnap = document.createElement("button");
+    logKnap.id = "logKnap";
+    logKnap.textContent = "📘 Log denne rute";
+    actionsWrapper.appendChild(logKnap);
+  }
+
+  // Start med at deaktivere knappen
+  logKnap.disabled = true;
+
+  // Når rute vælges – opdater klikfunktion og aktivér knap
+  ruteValg.addEventListener("change", () => {
+    const valgtId = ruteValg.value;
+    if (valgtId) {
+      logKnap.disabled = false;
+      logKnap.onclick = () => logRute(valgtId);
+      logKnapWrapper.classList.remove("skjult");
+    } else {
+      logKnap.disabled = true;
+      logKnapWrapper.classList.add("skjult");
+    }
+  });
+
+  // 👇 Vis wrapper når dropdown vises med ruter
+  logKnapWrapper.classList.add("skjult");
+}
+
+function visRute(rute) {
+  if (!canvas || !ctx) return;
+  if (!img) return;
+
+  cancelAnimationFrame(pulsAnimationId); // Stop evt. gammel animation
+  const startTid = performance.now();
+
+  function tegnScene() {
+    // Baggrundsbillede
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+
+    // Mørklæg hele canvas
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Klip polygoner ud
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    rute.greb.forEach(p => {
+      if (p.points?.length >= 3) {
+        ctx.beginPath();
+        ctx.moveTo(p.points[0].x, p.points[0].y);
+        for (let i = 1; i < p.points.length; i++) {
+          ctx.lineTo(p.points[i].x, p.points[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    });
+    ctx.restore();
+
+    // Tilbage til normal tegning
+    ctx.globalCompositeOperation = "source-over";
+
+    // Tegn glødende puls
+    const tidNu = performance.now();
+    const delta = (tidNu - startTid) / 1000; // sekunder
+	const pulsStyrke = Math.sin(delta * 2 * Math.PI) * 0.5 + 0.5;
+
+    rute.greb.forEach(p => tegnGlød(p, "white", pulsStyrke));
+
+    // Tegn grebene i farve
+    const farve = farveMap[rute.farve?.toLowerCase()] || rute.farve || "gray";
+	rute.greb.forEach(p => tegnGreb(p, farve));
+
+    // Kør næste frame
+    pulsFrame++;
+    pulsAnimationId = requestAnimationFrame(tegnScene);
+  }
+
+  tegnScene(); // start animation
+
+  // Opdater info
+  document.getElementById("infoNavn").textContent = rute.navn;
+  document.getElementById("infoGrad").textContent = rute.grad || "?";
+  document.getElementById("infoBygger").textContent = rute.rutebygger || "Ukendt";
+  document.getElementById("ruteInfoBoks").classList.remove("skjul");
+
+  document.getElementById("status").textContent = `🧗 ${rute.navn}`;
+  if (!ruteValg.value) ruteValg.value = rute.id;
+
+  let logKnap = document.getElementById("logKnap");
+  if (!logKnap) {
+    logKnap = document.createElement("button");
+    logKnap.id = "logKnap";
+    logKnap.textContent = "📘 Log denne rute";
+    logKnap.style.marginLeft = "1rem";
+    ruteValg.parentNode.insertBefore(logKnap, ruteValg.nextSibling);
+  }
+  logKnap.onclick = () => logRute(rute.id);
+  
+  // Forbered forsøg-dropdown ud fra den viste rute
+const kategoriTilForsøg = rute?.billede_id || document.getElementById("vægValg")?.value || "sektor-a";
+opdaterForsøgsvalg(kategoriTilForsøg);
+
+}
+
+function tegnGlød(polygon, farve = "white", puls = 1) {
+  if (!polygon?.points || polygon.points.length < 3) return;
+
+  const maxGlow = 6;
+  for (let i = maxGlow; i > 0; i--) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
+    for (let j = 1; j < polygon.points.length; j++) {
+      ctx.lineTo(polygon.points[j].x, polygon.points[j].y);
+    }
+    ctx.closePath();
+
+    ctx.strokeStyle = farve;
+    ctx.globalAlpha = (i / maxGlow) * 0.15 * puls;
+    ctx.lineWidth = i * 2;
+    ctx.shadowColor = farve;
+    ctx.shadowBlur = i * 4 * puls;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function tegnGreb(p, farve = "magenta") {
+  if (!p.points || p.points.length < 3) return;
+
+  // Justér visning: tydelig fyld og kraftig kant
+  const fyldFarve = hexOrNamedToRgba(farve, 0.2);       
+  const kantFarve = hexOrNamedToRgba(farve, 1.0);        
+  const skyggeFarve = hexOrNamedToRgba("black", 0.25);    
+
+  ctx.save();
+
+  // Skygge bag polygon
+  ctx.beginPath();
+  ctx.moveTo(p.points[0].x + 1, p.points[0].y + 1);
+  for (let i = 1; i < p.points.length; i++) {
+    ctx.lineTo(p.points[i].x + 1, p.points[i].y + 1);
+  }
+  ctx.closePath();
+  ctx.fillStyle = skyggeFarve;
+  ctx.fill();
+
+  // Fyld
+  ctx.beginPath();
+  ctx.moveTo(p.points[0].x, p.points[0].y);
+  for (let i = 1; i < p.points.length; i++) {
+    ctx.lineTo(p.points[i].x, p.points[i].y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fyldFarve;
+  ctx.fill();
+
+  // Kant
+  ctx.strokeStyle = kantFarve;
+  ctx.lineWidth = 0.1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function hexOrNamedToRgba(color, alpha) {
+  try {
+    const dummy = document.createElement("div");
+    dummy.style.color = color;
+    document.body.appendChild(dummy);
+    const computed = getComputedStyle(dummy).color;
+    document.body.removeChild(dummy);
+    const rgb = computed.match(/\d+/g);
+    if (!rgb || rgb.length < 3) throw new Error("Ugyldig farve");
+    return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+  } catch {
+    return `rgba(255, 0, 255, ${alpha})`;
+  }
+}
+
+function erBoulderKategori(id) {
+  return ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(id);
+}
+
+function opdaterGradForslag(kategori, aktuelGrad) {
+  const datalist = document.getElementById("gradForslag");
+  const input = document.getElementById("logEgenGrad");
+  datalist.innerHTML = "";
+
+  const forslagBoulder = ["4","4+","5","5+","6A","6A+","6B","6B+","6C","6C+","7A","7A+","7B","7B+","7C","7C+","8A"];
+  const forslagRute    = ["4","4+","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b","7b+","7c","7c+"];
+
+  const liste = erBoulderKategori(kategori) ? forslagBoulder : forslagRute;
+  for (const g of liste) {
+    const opt = document.createElement("option");
+    opt.value = g;
+    datalist.appendChild(opt);
+  }
+  // Prefill med rute.grad hvis den findes
+  input.value = aktuelGrad || "";
+}
+
+function opdaterForsøgsvalg(kategori) {
+  const select = document.getElementById("logForsøg");
+  if (!select) return; // hvis modal ikke er i DOM endnu
+
+  // Reset til kun placeholder
+  select.innerHTML = '<option value="">Vælg</option>';
+
+  const erBoulder = ["sektor-a", "sektor-b", "sektor-c", "sektor-d"].includes(kategori);
+
+  const muligheder = erBoulder
+    ? ["Flash", "2 forsøg", "3 forsøg", "+5 forsøg"]
+    : ["Onsight", "Redpoint", "Toprope"];
+
+  for (const tekst of muligheder) {
+    const opt = document.createElement("option");
+    opt.value = tekst.toLowerCase();
+    opt.textContent = tekst;
+    select.appendChild(opt);
+  }
+}
+
+
+let aktivRuteId = null;
+
+const gradRækkefølge = [
+  "4","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+",
+  "7a","7a+","7b","7b+","7c"
+];
+
+function basePointsForGrad(grad){
+  const k = gradRækkefølge.indexOf((grad||"").toLowerCase());
+  if (k < 0) return 0;
+  return Math.round(5 * Math.pow(1.32, k));
+}
+
+function multiplierForAttempt(forsøg, erBoulder){
+  const v = (forsøg||"").toLowerCase();
+  if (erBoulder){
+    // Boulder: Flash/2/3/+5
+    if (v === "flash")      return 1.25;
+    if (v === "2 forsøg")   return 1.12;
+    if (v === "3 forsøg")   return 1.06;
+    if (v === "+5 forsøg")  return 0.85;
+    return 1.00;
+  } else {
+    // Rute: Onsight/Redpoint/Toprope
+    if (v === "onsight")    return 1.25; // svarer til Flash
+    if (v === "redpoint")   return 1.12;
+    if (v === "toprope")    return 0.85;
+    return 1.00;
+  }
+}
+
+window.logRute = async function(ruteId) {
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const userId = bruger?.id;
+  if (!userId) {
+    alert("❌ Du skal være logget ind for at logge ruter.");
+    return;
+  }
+
+  // Tjek om ruten allerede er logget af brugeren
+  const { data: eksisterende, error } = await client
+    .from("rutelog")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("rute_id", ruteId);
+
+  if (error) {
+    console.error("❌ Fejl ved opslag i rutelog:", error);
+    alert("Kunne ikke tjekke om ruten er logget.");
+    return;
+  }
+
+  if (eksisterende.length > 0) {
+    alert("🎉 Du har allerede logget denne rute.");
+    return;
+  }
+
+  // Hvis ikke logget endnu → vis modal
+  aktivRuteId = ruteId;
+  document.getElementById("logKommentar").value = "";
+  document.getElementById("logForsøg").value = "";
+  document.getElementById("logBedømmelse").value = "";
+  document.querySelectorAll("#bedømmelseContainer .star").forEach(s => s.classList.remove("selected"));
+  document.getElementById("logModal").classList.remove("skjul");
+
+const rute = alleRuter.find(r => r.id == ruteId);
+const kategoriTilForsøg = rute?.billede_id || document.getElementById("vægValg")?.value || "sektor-a";
+opdaterForsøgsvalg(kategoriTilForsøg);
+
+};
+
+document.querySelectorAll("#bedømmelseContainer .star").forEach(stjerne => {
+  stjerne.addEventListener("click", () => {
+    const valgt = parseInt(stjerne.dataset.værdi);
+    document.getElementById("logBedømmelse").value = valgt;
+
+    document.querySelectorAll("#bedømmelseContainer .star").forEach(s => {
+      const værdi = parseInt(s.dataset.værdi);
+      s.classList.toggle("selected", værdi <= valgt);
+    });
+  });
+});
+
+window.lukLogModal = function() {
+  document.getElementById("logModal").classList.add("skjul");
+};
+
+document.getElementById("gemLogKnap").addEventListener("click", async () => {
+  const kommentar  = document.getElementById("logKommentar").value.trim();
+  const forsøg     = document.getElementById("logForsøg").value;
+  const bedømmelse = document.getElementById("logBedømmelse").value.trim();
+  const egen_grad  = document.getElementById("logEgenGrad").value.trim();
+
+  const bruger = JSON.parse(localStorage.getItem("bruger"));
+  const user_id = bruger?.id;
+
+  if (!user_id || !aktivRuteId) {
+    alert("Du skal være logget ind og vælge en rute.");
+    return;
+  }
+
+  // slå ruten op (for grad/points/kategori)
+  const rute = alleRuter.find(r => r.id == aktivRuteId);
+  const billedeId = rute?.billede_id || "";
+  const erBoulder = ["sektor-a","sektor-b","sektor-c","sektor-d"].includes(billedeId);
+
+  // base points: brug rute.points hvis sat, ellers beregn fra grad
+  const base = Number.isFinite(rute?.points) ? rute.points : basePointsForGrad(rute?.grad);
+
+  // multiplikator ud fra valgt forsøg og disciplin (boulder/rute)
+  const mult = multiplierForAttempt(forsøg, erBoulder);
+
+  // endelige point (mindst 1)
+  const earned_points = Math.max(1, Math.round(base * mult));
+
+  const { error } = await client
+    .from("rutelog")
+    .insert([{
+      user_id,
+      rute_id: aktivRuteId,
+      logget_dato: new Date().toISOString(),
+      kommentar,
+      forsøg,        // "flash"/"2 forsøg"/"3 forsøg"/"+5 forsøg" eller "onsight"/"redpoint"/"toprope"
+      bedømmelse,
+      earned_points,
+      egen_grad       
+    }]);
+
+  if (error) {
+    console.error("❌ Fejl:", error);
+    alert("Kunne ikke gemme log.");
+  } else {
+    alert(`✅ ${erBoulder ? "Boulderen" : "Ruten"} blev logget! · ${earned_points} point`);
+    lukLogModal();
+  }
+});
+
+// Klik på canvas = vælg rute via greb
+canvas.onclick = function (e) {
+  if (!ruterKlar) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
+
+  let fundet = false;
+
+  for (const rute of alleRuter) {
+    for (const greb of rute.greb) {
+      const { x, y, width, height } = greb;
+      const inBox =
+        clickX >= x - width / 2 && clickX <= x + width / 2 &&
+        clickY >= y - height / 2 && clickY <= y + height / 2;
+
+      if (inBox) {
+        visRute(rute);
+        ruteValg.value = rute.id;
+        fundet = true;
+
+        // ✅ Aktivér log-knap
+        let logKnap = document.getElementById("logKnap");
+        if (!logKnap) {
+          logKnap = document.createElement("button");
+          logKnap.id = "logKnap";
+          logKnap.textContent = "📘 Log denne rute";
+          logKnap.style.marginLeft = "1rem";
+          ruteValg.parentNode.insertBefore(logKnap, ruteValg.nextSibling);
+        }
+        logKnap.disabled = false;
+        logKnap.onclick = () => logRute(rute.id);
+
+        // ✅ Vis knappen
+        const logWrapper = document.getElementById("logKnapWrapper");
+        if (logWrapper) logWrapper.classList.remove("skjult");
+
+        return;
+      }
+    }
+  }
+
+  // 🧹 Hvis ikke der blev klikket på noget greb – ryd visning
+  if (!fundet) {
+    ctx.drawImage(img, 0, 0); // tegn bare billedet igen
+    document.getElementById("ruteInfoBoks").classList.add("skjul");
+    ruteValg.value = "";
+    const logWrapper = document.getElementById("logKnapWrapper");
+    if (logWrapper) logWrapper.classList.add("skjult");
+  }
+};
+
+
+// Start med første væg
+visRuterForVæg(vægValg.value);
+
+  </script>
+</body>
+</html>

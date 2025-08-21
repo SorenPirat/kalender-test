@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <script src="gate.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medlemsområde</title>
+
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/menu.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    .citat-boks {
+      margin-top: 2rem;
+      padding: 1rem;
+      border-left: 4px solid #007bff;
+      background-color: #f0f8ff;
+      font-style: italic;
+      font-size: 1rem;
+      color: #333;
+      border-radius: 6px;
+      max-width: 600px;
+    }
+  </style>
+
+  <script type="module">
+    import { client, adgangskontrol, indsætMenu } from './auth.js';
+
+    adgangskontrol({
+      tilladteRoller: [],
+      redirectVedFejl: "index.html",
+      efterLogin: async (bruger) => {
+	    if (window.releaseAuthGate) window.releaseAuthGate();
+        indsætMenu(bruger);
+
+        const h1 = document.getElementById("velkomst");
+        if (h1) h1.textContent = bruger?.navn ? `Hej, ${bruger.navn}!` : "Velkommen!";
+
+        try {
+          if (bruger?.id) {
+            const { data: profile } = await client
+              .from("users").select("navn, rolle").eq("id", bruger.id).single();
+            if (profile) {
+              localStorage.setItem("bruger", JSON.stringify({
+                id: bruger.id, navn: profile.navn, rolle: profile.rolle
+              }));
+            }
+          }
+        } catch(_) {}
+      }
+    });
+  </script>
+</head>
+<body>
+  <h1 id="velkomst">Velkommen!</h1>
+  <div id="klatre-citat" class="citat-boks"></div>
+
+  <script>
+    const klatreCitater = [
+      "🧗‍♂️ Livet starter, hvor komfortzonen slutter.",
+      "🧗‍♀️ Nogle ser en mur – andre ser en mulighed for at klatre.",
+      "🧗‍♂️ Små greb, store skridt.",
+      "🧗‍♀️ Det handler ikke om at nå toppen – det handler om rejsen op.",
+      "🧗‍♂️ Klip dig fast i nuet og klatr mod dine mål.",
+      "🧗‍♀️ Når alt andet glipper – find et bedre fodfæste.",
+      "🧗‍♂️ Hvert greb du tager, gør dig stærkere.",
+      "🧗‍♀️ Falder du? Så lær og prøv igen – sådan klatrer vi også i livet.",
+      "🧗‍♂️ Ingen top uden sved – og smil.",
+      "🧗‍♂️ Grebet er lille, men viljen er stor.",
+      "🧗‍♀️ Du falder ikke – du lærer at flyve nedad.",
+      "🧗‍♂️ Et skridt ad gangen. Et greb ad gangen. En sejr ad gangen.",
+      "🧗‍♀️ Væggen tester ikke dine muskler – den tester din beslutsomhed.",
+      "🧗‍♂️ Der findes ingen lige vej til toppen, kun din egen.",
+      "🧗‍♀️ Klatring handler ikke om styrke. Det handler om tillid – til dig selv.",
+      "🧗‍♂️ Når grebet glider, grib chancen for at prøve igen.",
+      "🧗‍♀️ Sved på fingrene, ild i hjertet.",
+      "🧗‍♂️ Det er først, når du hænger i et fingerboard, du mærker hvad du består af.",
+      "🧗‍♀️ Jo højere du kommer, jo mere ser du, hvor langt du allerede er nået."
+    ];
+
+    function visTilfældigCitat() {
+      const el = document.getElementById("klatre-citat");
+      if (!el) return;
+      const citat = klatreCitater[Math.floor(Math.random() * klatreCitater.length)];
+      el.textContent = citat;
+    }
+
+    document.addEventListener("DOMContentLoaded", visTilfældigCitat);
+  </script>
+</body>
+</html>
