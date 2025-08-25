@@ -1,0 +1,12 @@
+/* Canvas og wrapper må ikke trigge browserens scroll/zoom-gestures */
+#canvas,
+#canvas-container {
+  touch-action: none;              /* blokerer panning/zoom på elementet */
+  -ms-touch-action: none;          /* old Edge */
+  overscroll-behavior: contain;    /* stop “pull-to-refresh”/rubber band */
+}
+
+/* (valgfrit) lidt ekstra beskyttelse mod iOS bounce inde i wrapper */
+#canvas-container {
+  overscroll-behavior-y: contain;
+}
