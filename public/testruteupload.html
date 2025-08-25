@@ -348,9 +348,6 @@ function setupPointerEvents() {
     return;
   }
 
-  // slå browser-gestus fra KUN på canvas
-  canvas.style.touchAction = 'none';
-
   // Aktiver pointer events
   canvas.onpointerdown   = onPointerDown;
   canvas.onpointermove   = onPointerMove;
