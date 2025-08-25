@@ -13,6 +13,12 @@
 <script type="module">
   import { adgangskontrol, indsætMenu, client } from './auth.js';
 
+	  let gAssignments = [];
+	  const getRoles = (bruger) =>
+	  Array.isArray(bruger?.roller) ? bruger.roller :
+	  Array.isArray(bruger?.rolle)  ? bruger.rolle  : [];
+
+	  
   adgangskontrol({
     tilladteRoller: ["admin", "nøglebærer", "eventmaker"],
     redirectVedFejl: "index.html",
@@ -21,6 +27,21 @@
       indsætMenu(bruger);
 	  const assignments = await hentNøglevagter();
 	  const events = await hentEvents();
+	  
+	    // gem globalt til print
+	  gAssignments = assignments || [];
+
+// vis print-knap for admins
+const roles = getRoles(bruger);
+if (roles.includes("admin")) {
+  const btn = document.createElement("button");
+  btn.id = "printNoeglevagterBtn";
+  btn.textContent = "⬇️ Gem nøglevagter (PDF)";
+  btn.style.cssText = "position:fixed;right:.5rem;top:5rem;margin:.5rem;z-index:10000";
+  btn.addEventListener("click", () => gemNoeglevagter("pdf"));
+  document.body.appendChild(btn);
+}
+	  
 	  renderWeekOverview(assignments, events);
 	  renderCalendar(assignments, events);
     }
@@ -30,6 +51,8 @@
   const weekdays = ['søn', 'man', 'tirs', 'ons', 'tors', 'fre', 'lør'];
   const calendarContainer = document.getElementById('calendar');
   const calendarSpan = 12;
+
+
 
 function gemAktivMånedOgÅrFraDato(dato) {
   const month = dato.getMonth();
@@ -464,6 +487,169 @@ if (
     kort.appendChild(tdHandling);
     content.appendChild(kort);
   }
+}
+
+// Dynamisk loader – så du slipper for at ændre <head>
+async function loadScriptOnce(src) {
+  if (document.querySelector(`script[src="${src}"]`)) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error(`Kunne ikke loade ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+function lavDatoTekst(iso) {
+  const uger = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+  const md  = ["januar","februar","marts","april","maj","juni","juli","august","september","oktober","november","december"];
+  const d = new Date(iso + "T00:00:00");
+  return `${uger[d.getDay()]} d. ${d.getDate()}. ${md[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// Udtræk data som i din print-funktion
+function udtagNoeglevagterTilExport() {
+  if (!Array.isArray(gAssignments) || gAssignments.length === 0) return null;
+
+  const idag = new Date(); idag.setHours(0,0,0,0);
+  const idagISO = idag.toLocaleDateString('sv-SE');
+
+  const kunTildelte = gAssignments
+    .filter(a =>
+      a && typeof a.dato === "string" &&
+      a.dato >= idagISO &&
+      a.status !== "lukket" &&
+      a.navn && String(a.navn).trim() !== ""
+    )
+    .sort((a,b) => a.dato.localeCompare(b.dato));
+
+  if (kunTildelte.length === 0) return null;
+
+  const sidsteDato = kunTildelte[kunTildelte.length - 1].dato;
+  const rækker = kunTildelte.filter(a => a.dato <= sidsteDato);
+
+  return { idagISO, sidsteDato, rækker };
+}
+
+// Byg et usynligt A4-ark i DOM (vi undgår backticks inde i backticks → mindre risiko for ` literal-fejl)
+function bygExportNode({ idagISO, sidsteDato, rækker }) {
+  const wrap = document.createElement("div");
+  Object.assign(wrap.style, {
+    position: "fixed", left: "-99999px", top: "0",
+    width: "794px",          // ~ A4 bredde i px @96dpi
+    background: "#fff",      // stadig hvid baggrund
+    color: "#000",           // sort tekst
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+    padding: "20px"
+  });
+
+  const h1 = document.createElement("h1");
+  h1.textContent = "🔑 Nøglevagter";
+  h1.style.margin = "0 0 12px";
+  h1.style.fontSize = "20px";
+  h1.style.fontWeight = "bold";   // fed skrift
+
+  const meta = document.createElement("div");
+  meta.textContent = `Interval: ${lavDatoTekst(idagISO)} – ${lavDatoTekst(sidsteDato)}`;
+  meta.style.marginBottom = "14px";
+  meta.style.color = "#000";      // også sort her
+
+  const table = document.createElement("table");
+  table.style.borderCollapse = "collapse";
+  table.style.width = "100%";
+
+  const thead = document.createElement("thead");
+  const thr = document.createElement("tr");
+  ["Dato","Nøglebærer","Status"].forEach(t => {
+    const th = document.createElement("th");
+    th.textContent = t;
+Object.assign(th.style, {
+  border:"1px solid #000",
+  padding:"8px 10px",
+  textAlign:"left",
+  background:"#fff",
+  color:"#000",
+  fontWeight:"bold"
+});
+    thr.appendChild(th);
+  });
+  thead.appendChild(thr);
+
+  const tbody = document.createElement("tbody");
+  rækker.forEach(a => {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td"); td1.textContent = lavDatoTekst(a.dato);
+    const td2 = document.createElement("td"); td2.textContent = a.navn || "";
+    const td3 = document.createElement("td"); td3.textContent = (a.status || "");
+    [td1, td2, td3].forEach(td => {
+Object.assign(td.style, {
+  border:"1px solid #000",
+  padding:"8px 10px",
+  background:"#fff",
+  color:"#000"
+});
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  wrap.appendChild(h1);
+  wrap.appendChild(meta);
+  wrap.appendChild(table);
+  document.body.appendChild(wrap);
+  return wrap;
+}
+
+
+async function gemNoeglevagter(format = "pdf") {
+  const data = udtagNoeglevagterTilExport();
+  if (!data) { alert("Ingen tildelte nøglevagter at gemme."); return; }
+
+  // Load lib(s)
+  await loadScriptOnce("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+  if (format === "pdf") {
+    await loadScriptOnce("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+  }
+
+  const node = bygExportNode(data);
+
+  // Render til canvas
+  const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+  const pngDataUrl = canvas.toDataURL("image/png");
+
+  // Ryd DOM midlertidigt indhold
+  node.remove();
+
+  const filnavnBase = `noeglevagter_${data.idagISO}_til_${data.sidsteDato}`;
+
+  if (format === "png") {
+    // Download PNG
+    const a = document.createElement("a");
+    a.href = pngDataUrl;
+    a.download = `${filnavnBase}.png`;
+    a.click();
+    return;
+  }
+
+  // Ellers PDF
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  // Fit billede til A4 bredde (210mm minus små marginer)
+  const pageW = 210, pageH = 297, margin = 10;
+  const imgProps = { w: canvas.width, h: canvas.height };
+  const ratio = Math.min(
+    (pageW - margin*2) / imgProps.w,
+    (pageH - margin*2) / imgProps.h
+  );
+  const w = imgProps.w * ratio;
+  const h = imgProps.h * ratio;
+  const x = (pageW - w) / 2;
+  const y = margin;
+
+  pdf.addImage(pngDataUrl, "PNG", x, y, w, h, undefined, "FAST");
+  pdf.save(`${filnavnBase}.pdf`);
 }
 
 

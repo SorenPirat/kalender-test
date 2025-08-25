@@ -11,7 +11,7 @@
 <div class="kort">
   <h2>🧗 Upload billede og opret rute</h2>
 
-  <label for="imgInput">📷 Vælg nyt billede</label>
+  <label for="imgInput">📷 Vælg billede(OBS overskriver det gamle)</label>
   <input type="file" id="imgInput" accept="image/*" />
 
   <label for="eksisterendeBilleder">📁 Eller vælg eksisterende billede</label>
@@ -96,6 +96,7 @@
   <div class="tool-actions">
     <button id="gemKnap">✅ Gem rute</button>
     <button id="deaktiverAlleKnap">🚫 Gør alle ruter inaktive</button>
+	<button id="nulstilGrebKnap" type="button">🧹 Nulstil greb</button>
     <button onclick="fortrydSidste()">↩️ Fortryd sidste greb</button>
     <button onclick="rydValg()">🗑️ Ryd valg</button>
 	<button id="visAlleRuterKnap">👁️ Vis alle gemte ruter</button>
@@ -166,6 +167,200 @@ async function hentRuter() {
   let offsetY = 0;
   let isDragging = false;
   let dragStart = { x: 0, y: 0 };
+
+// --- Mobil/Touch support (Pointer Events + pinch-zoom) ---
+// Aktiv pointere til pinch-zoom mm.
+const activePointers = new Map();
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+let pinchStartOffset = { x: 0, y: 0 };
+let pinchCenter = { x: 0, y: 0 };
+let tapCandidate = null;           // til at skelne pan vs. tap
+const TAP_MAX_MOVEPX = 8;
+const TAP_MAX_TIME = 300;          // ms
+
+function getCanvasXY(evt) {
+  const rect = canvas.getBoundingClientRect();
+  // Skærm → canvas CSS-koordinater
+  const cssX = evt.clientX - rect.left;
+  const cssY = evt.clientY - rect.top;
+
+  // CSS → bitmap pixels (hvis du tegner i “device pixels”)
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const pxX = cssX * scaleX;
+  const pxY = cssY * scaleY;
+
+  // Pga. zoom/offset (du tegner billedet i world-space (0,0) så pan/zoom flytter koordinaterne)
+  const worldX = (pxX - offsetX) / zoom;
+  const worldY = (pxY - offsetY) / zoom;
+
+  return { cssX, cssY, pxX, pxY, worldX, worldY };
+}
+
+function dist(a, b) {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function mid(a, b) {
+  return { x: (a.clientX + b.clientX)/2, y: (a.clientY + b.clientY)/2 };
+}
+
+// Hit-test: tjek om et punkt er inde i en polygon (Roboflow-polygons)
+function pointInPoly(pt, poly) {
+  // poly: array [{x,y},...] eller [[x,y],...]
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x ?? poly[i][0];
+    const yi = poly[i].y ?? poly[i][1];
+    const xj = poly[j].x ?? poly[j][0];
+    const yj = poly[j].y ?? poly[j][1];
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function toggleHoldAt(worldX, worldY) {
+  if (!Array.isArray(allPredictions)) return;
+
+  // Find første polygon der rammes
+  const hit = allPredictions.find(p => {
+    const poly = (p?.points || p?.polygon || p?.segmentation || []).map(([x,y]) => ({x, y}));
+    return poly.length >= 3 && pointInPoly({x: worldX, y: worldY}, poly);
+  });
+
+  if (!hit) return;
+
+  // Brug fx id/center til at identificere valget
+  const holdId = hit?.id || `${hit.class}-${Math.round(hit.x)}-${Math.round(hit.y)}`;
+  const i = valgtRute.indexOf(holdId);
+  if (i >= 0) {
+    valgtRute.splice(i, 1);
+  } else {
+    valgtRute.push(holdId);
+  }
+  drawSelection();
+}
+
+function onPointerDown(e) {
+  canvas.setPointerCapture(e.pointerId);
+  activePointers.set(e.pointerId, e);
+
+  if (activePointers.size === 1) {
+    // start mulig tap/pan
+    const now = performance.now();
+    tapCandidate = { x: e.clientX, y: e.clientY, t: now };
+    isDragging = true;
+    const { pxX, pxY } = getCanvasXY(e);
+    dragStart = { x: pxX - offsetX, y: pxY - offsetY }; // husk relativt til offset
+  } else if (activePointers.size === 2) {
+    // pinch start
+    const [p1, p2] = [...activePointers.values()];
+    pinchStartDist = dist(p1, p2);
+    pinchStartZoom = zoom;
+    pinchStartOffset = { x: offsetX, y: offsetY };
+    const m = mid(p1, p2);
+    const rect = canvas.getBoundingClientRect();
+    // Pinch-center i canvas *pixel*-space:
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    pinchCenter = { x: (m.x - rect.left) * scaleX, y: (m.y - rect.top) * scaleY };
+  }
+
+  e.preventDefault();
+}
+
+function onPointerMove(e) {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, e);
+
+  if (activePointers.size === 1 && isDragging) {
+    // Pan
+    const { pxX, pxY } = getCanvasXY(e);
+    offsetX = pxX - dragStart.x;
+    offsetY = pxY - dragStart.y;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(zoom, zoom);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+    drawSelection();
+  }
+  else if (activePointers.size === 2) {
+    // Pinch-zoom (skaler omkring pinchCenter)
+    const [p1, p2] = [...activePointers.values()];
+    const d = dist(p1, p2);
+    if (pinchStartDist > 0) {
+      const factor = d / pinchStartDist;
+      const newZoom = Math.min(6, Math.max(0.3, pinchStartZoom * factor));
+
+      // justér offset, så pinchCenter holder sig “fast”
+      // world-koordinat for pinchCenter før/efter zoom:
+      const beforeWorldX = (pinchCenter.x - pinchStartOffset.x) / pinchStartZoom;
+      const beforeWorldY = (pinchCenter.y - pinchStartOffset.y) / pinchStartZoom;
+      offsetX = pinchCenter.x - beforeWorldX * newZoom;
+      offsetY = pinchCenter.y - beforeWorldY * newZoom;
+      zoom = newZoom;
+
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(zoom, zoom);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+      drawSelection();
+    }
+  }
+
+  e.preventDefault();
+}
+
+function onPointerUp(e) {
+  if (activePointers.has(e.pointerId)) {
+    activePointers.delete(e.pointerId);
+  }
+
+  // Tap-detektion (kun hvis der ikke er pinch og det var en stille kort bevægelse)
+  if (activePointers.size === 0) {
+    canvas.releasePointerCapture(e.pointerId);
+    if (tapCandidate) {
+      const moved = Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y);
+      const dt = performance.now() - tapCandidate.t;
+      if (moved <= TAP_MAX_MOVEPX && dt <= TAP_MAX_TIME) {
+        const { worldX, worldY } = getCanvasXY(e);
+        toggleHoldAt(worldX, worldY);
+      }
+      tapCandidate = null;
+    }
+    isDragging = false;
+    pinchStartDist = 0;
+  }
+
+  e.preventDefault();
+}
+
+function onPointerCancel(e) {
+  activePointers.delete(e.pointerId);
+  isDragging = false;
+  tapCandidate = null;
+  pinchStartDist = 0;
+}
+
+function setupPointerEvents() {
+  // Fjern evt. gamle mouse/touch-lyttere hvis du havde sådan nogle (valgfrit)
+ // canvas.onpointerdown = onPointerDown;
+ // canvas.onpointermove = onPointerMove;
+ // canvas.onpointerup = onPointerUp;
+ // canvas.onpointercancel = onPointerCancel;
+}
+
+// Kald denne når canvas + img er klar (du gør det efter load af billede i dine eksisterende flows)
+setupPointerEvents();
 
 
 function hexToRgba(color, alpha = 0.3) {
@@ -417,8 +612,11 @@ async function konverterOgUpload(fil, kategori) {
     );
 
     // 2. Navngivning: eks. sektor-a_2025-08-02.webp
-    const dato = new Date().toISOString().split("T")[0];
-    const filnavn = `${kategori}_${dato}.webp`;
+	const now = new Date();
+	const dato = now.toISOString().slice(0,10);                
+	const tid  = [now.getHours(), now.getMinutes()] 
+					.map(n => String(n).padStart(2, "0")).join("-"); 
+	const filnavn = `${kategori}_${dato}_${tid}.webp`;
     const sti = `${filnavn}`;
 
     // 3. Upload til Supabase Storage
@@ -695,7 +893,6 @@ ctx.fillText(`👷 ${rute.rutebygger || "Ukendt"}`, startX, startY);
   ctx.restore();
 }
 
-
 function redigérRute(rute) {
   document.getElementById("rutenavn").value = rute.navn || "";
   document.getElementById("rutefarve").value = rute.farve || "";
@@ -732,7 +929,6 @@ window.annullerRedigering = function () {
 
   drawSelection();
 };
-
 
 async function sletRute(id) {
 	
@@ -886,18 +1082,25 @@ canvas.addEventListener("click", function (e) {
     );
   });
 
-  const aktivtBilledeId = document.getElementById("billedeIdValg").value;
-  const match = clicked
-    ? gemteRuter
-        .filter(rute => rute.billede_id === aktivtBilledeId)
-        .find(rute =>
-          rute.greb.some(g =>
-            Math.abs(g.x - clicked.x) < 5 &&
-            Math.abs(g.y - clicked.y) < 5 &&
-            g.class === clicked.class
-          )
+const aktivtBilledeId = document.getElementById("billedeIdValg").value;
+const currentImageName = baseNavn ? `${baseNavn}.webp` : null;
+
+const match = clicked
+  ? gemteRuter
+      .filter(rute =>
+        rute.billede_id === aktivtBilledeId &&
+        rute.aktiv === true &&
+        (!currentImageName || rute.billedenavn === currentImageName)
+      )
+      .find(rute =>
+        rute.greb?.some(g =>
+          Math.abs(g.x - clicked.x) < 5 &&
+          Math.abs(g.y - clicked.y) < 5 &&
+          g.class === clicked.class
         )
-    : null;
+      )
+  : null;
+
 
   if (match) {
     visRute(match);

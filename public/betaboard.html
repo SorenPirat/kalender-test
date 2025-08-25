@@ -32,6 +32,8 @@
   </main>
 
 
+
+
 <!-- Lead-by-grade Modal -->
 <dialog id="leadGradeModal" class="beta-dialog" aria-labelledby="leadGradeModalTitle">
   <form method="dialog" id="leadGradeForm">
@@ -212,14 +214,13 @@
 
   <script type="module">
 import { client, adgangskontrol, indsætMenu } from './auth.js';
-
+import confetti from 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.module.mjs';
 
 adgangskontrol({
   tilladteRoller: [],
   redirectVedFejl: "index.html",
   efterLogin: bruger => indsætMenu(bruger)
 });
-
 
 // Farver til UI
 const COLOR_HEX = { 'grøn':'#2ecc71','gul':'#f1c40f','blå':'#3498db','lilla':'#9b59b6','rød':'#e74c3c','sort':'#2c3e50' };
@@ -245,6 +246,29 @@ let currentPreviewRouteId = null;
 let previewWcss = null;
 let leadPreviewWcss = null;
 let completedSet = new Set();
+
+// Husk seneste level på tværs af load()–kald (og page refresh)
+let prevLevel = Number(localStorage.getItem('bb_prev_level') || '0');
+
+function levelUpConfettiAtBar() {
+  const bar = document.querySelector('.xp-bar');
+  if (!bar) { confetti(); return; } // fallback midt på skærmen
+
+  const r = bar.getBoundingClientRect();
+  // lokal konfetti der starter ved højre side af baren
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    startVelocity: 35,
+    gravity: 0.9,
+    ticks: 160,
+    scalar: 0.9,
+    origin: {
+      x: (r.left + r.width * 0.85) / window.innerWidth,
+      y: (r.top  + r.height * 0.50) / window.innerHeight
+    }
+  });
+}
 
 // Åbn count-in-session modal: bruger tæller op til target i én session
 function openCountInSession({
@@ -545,7 +569,7 @@ const gradeNext = g => {
 };
 
 // Åben hårdeste føregrad
-async function openLeadPickerByGradeRange() {
+async function openLeadPickerByGradeRange({ mode = 'hardest_personal', target = null, accepted_styles = ['onsight','redpoint'] } = {}) {
   const dlg   = document.getElementById('leadGradeModal');
   const form  = document.getElementById('leadGradeForm');
   const listEl= document.getElementById('leadGradeList');
@@ -562,17 +586,27 @@ async function openLeadPickerByGradeRange() {
   submit.disabled = true;
   listEl.innerHTML = 'Indlæser…';
 
-  // 1) Hent din hårdeste føregrad (onsight/redpoint)
-  const hardest = await getUserHardestLeadGrade(['onsight','redpoint']);
-  if (!hardest) {
+ // 1) Bestem hvilke grader der er tilladt
+ let allow = [];
+ let hardest = null;
+ if (mode === 'target_grade' && target) {
+   const t = String(target).toLowerCase();
+   allow = [t, gradeNext(t)].filter(Boolean); // target + én grad sværere
+ } else {
+   hardest = await getUserHardestLeadGrade(accepted_styles);
+ if (!hardest) {
     err.textContent = 'Ingen føre‑log fundet (onsight/redpoint).';
     err.style.display = 'block';
-    return Promise.reject(new Error('no-hardest'));
+    return Promise.reject(new Error('Ingen føre-log fundet i Logs'));
   }
+   
+   const same = String(hardest.grade).toLowerCase();
+   const next = gradeNext(same);
+   allow = [same, ...(next ? [next] : [])].filter(Boolean);
+ }
 
-  const same  = hardest.grade;
-  const next  = gradeNext(hardest.grade);
-  const allow = [same, ...(next ? [next] : [])].filter(Boolean);
+
+
 
   // 2) Hent aktive føre‑ruter i disse grader (ikke sektor-*)
   const { data: routes, error: rErr } = await client
@@ -778,7 +812,7 @@ async function showPreview(route) {
       if (!selectedId) { err.textContent='Vælg en rute.'; err.style.display='block'; return; }
       const picked = leadRoutes.find(r => r.id === selectedId) || null;
       cleanup(); dlg.close();
-      resolve({ picked, hardest, allowedGrades: allow });
+      resolve({ picked, hardest, allowedGrades: allow, mode, target });
     }
     function onCancel(){ cleanup(); dlg.close(); reject(new Error('cancelled')); }
     function onEsc(e){ e.preventDefault(); onCancel(); }
@@ -832,7 +866,7 @@ async function getUserHardestTopropeGrade() {
 }
 
 // Åbn "vælg TOPROPE-rute" i samme/næste grad (genbrug lead-modal)
-async function openTopropePickerByGradeRange() {
+async function openTopropePickerByGradeRange({ mode = 'hardest_personal', target = null } = {}) {
   const dlg   = document.getElementById('leadGradeModal');
   const form  = document.getElementById('leadGradeForm');
   const listEl= document.getElementById('leadGradeList');
@@ -849,13 +883,19 @@ async function openTopropePickerByGradeRange() {
   submit.disabled = true;
   listEl.innerHTML = 'Indlæser…';
 
-  // 1) hårdeste toprope
-  const hardest = await getUserHardestTopropeGrade();
-  if (!hardest) { err.textContent = 'Ingen toprope-log fundet.'; err.style.display='block'; return Promise.reject(new Error('no-hardest')); }
-
-  const same = hardest.grade;
-  const next = gradeNext(hardest.grade);
-  const allow = [same, ...(next ? [next] : [])].filter(Boolean);
+ // 1) Bestem tilladte grader
+ let allow = [];
+ let hardest = null;
+ if (mode === 'target_grade' && target) {
+   const t = String(target).toLowerCase();
+    allow = [t, gradeNext(t)].filter(Boolean);
+ } else {
+   hardest = await getUserHardestTopropeGrade();
+   if (!hardest) { err.textContent = 'Ingen toprope-log fundet.'; err.style.display='block'; return Promise.reject(new Error('Ingen toprope-log fundet')); }
+   const same = String(hardest.grade).toLowerCase();
+   const next = gradeNext(same);
+   allow = [same, ...(next ? [next] : [])].filter(Boolean);
+ }
 
   // 2) aktive reb-ruter i disse grader (ikke sektor-*)
   const { data: routes, error: rErr } = await client
@@ -914,7 +954,7 @@ async function openTopropePickerByGradeRange() {
 
   return new Promise((resolve, reject) => {
     function cleanup(){ form.removeEventListener('submit', onSubmit); cancel.removeEventListener('click', onCancel); dlg.removeEventListener('cancel', onEsc); search.oninput = null; }
-    function onSubmit(e){ e.preventDefault(); if(!selectedId){ err.textContent='Vælg en rute.'; err.style.display='block'; return; } const picked = ropeRoutes.find(r=>r.id===selectedId)||null; cleanup(); dlg.close(); resolve({ picked, hardest, allowedGrades: allow }); }
+    function onSubmit(e){ e.preventDefault(); if(!selectedId){ err.textContent='Vælg en rute.'; err.style.display='block'; return; } const picked = ropeRoutes.find(r=>r.id===selectedId)||null; cleanup(); dlg.close(); resolve({ picked, hardest, allowedGrades: allow, mode, target }); }
     function onCancel(){ cleanup(); dlg.close(); reject(new Error('cancelled')); }
     function onEsc(e){ e.preventDefault(); onCancel(); }
     form.addEventListener('submit', onSubmit);
@@ -984,7 +1024,7 @@ async function openBoulderPickerByGradeRange(acceptedStyles = ['flash','+2 fors�
 
   // 1) hårdeste boulder (i de tilladte forsøg/styles)
   const hardest = await getUserHardestBoulderGrade(acceptedStyles);
-  if (!hardest) { err.textContent = 'Ingen boulder-log fundet.'; err.style.display='block'; return Promise.reject(new Error('no-hardest')); }
+  if (!hardest) { err.textContent = 'Ingen boulder-log fundet.'; err.style.display='block'; return Promise.reject(new Error('Ingen boulder-log fundet i Logs')); }
 
   const same = hardest.grade;
   const next = gradeNext(hardest.grade);
@@ -1831,46 +1871,63 @@ function isActiveNow(q, now = new Date()){
   return (q.is_active !== false) && fromOk && toOk;
 }
 
-async function adjustXp(delta) {
-  try {
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) return;
-
-    // sørg for en række findes
-    await client.from('user_xp').upsert({ user_id: user.id }).select();
-
-    // læs nuværende XP
-    const { data: ux, error: rErr } = await client
-      .from('user_xp')
-      .select('xp_total')
-      .eq('user_id', user.id)
-      .single();
-    if (rErr) throw rErr;
-
-    const curr = ux?.xp_total ?? 0;
-    const next = Math.max(0, curr + delta); // clamp til 0, så vi ikke går i minus
-    const today = new Date().toISOString().slice(0,10);
-
-    // opdatér XP
-    const { error: uErr } = await client
-      .from('user_xp')
-      .update({ xp_total: next, last_activity_date: today })
-      .eq('user_id', user.id);
-    if (uErr) throw uErr;
-
-    // log event (valgfrit men rart)
-    await client.from('user_xp_events').insert({
-      user_id: user.id,
-      delta_xp: delta,
-      reason: 'debug_adjust'
-    });
-
-    // opdatér UI
-    load();
-  } catch (e) {
-    alert(e.message || 'Kunne ikke justere XP');
-  }
+// --- Level/XP-model (30 levels = 6.000 XP) ---
+const MAX_LEVEL = 30;
+const MAX_XP    = 6000;
+// XP der kræves for at gå ét level op (Level 1→2 er første tal)
+const XP_PER_LEVEL = [
+  136,136,136,   // 1–3  : Kridt‑Rookie
+  152,152,152,   // 4–6  : Beta‑Jæger
+  168,168,168,   // 7–9  : Greb‑Spejder
+  184,184,184,   // 10–12: Crux‑Knuser
+  200,200,200,   // 13–15: Flow‑Klatrer
+  216,216,216,   // 16–18: Rute‑Taktiker
+  228,228,228,   // 19–21: Overhængs‑Ass
+  236,236,236,   // 22–24: Beta‑Mester
+  244,244,244,   // 25–27: Send‑Kaptajn
+  236,236,236    // 28–30: Væg‑Legende
+]; // sum = 6000
+function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
+// Total XP for at NÅ starten af et givent level (Level 1 = 0 XP)
+function totalXpForLevel(level){
+  const L = clamp(level, 1, MAX_LEVEL);
+  let sum = 0;
+  for (let i = 0; i < L - 1; i++) sum += XP_PER_LEVEL[i];
+  return sum;
 }
+// Total XP der skal til for at NÅ NÆSTE level (starten af level+1)
+function nextLevelTotalXp(level){
+  const L = clamp(level, 1, MAX_LEVEL);
+  let sum = 0;
+  for (let i = 0; i < L; i++) sum += XP_PER_LEVEL[i];
+  return sum;
+}
+// Beregn level ud fra samlet XP (0..6000)
+function levelFromXp(xp){
+  let acc = 0;
+  for (let i = 0; i < XP_PER_LEVEL.length; i++){
+    const need = XP_PER_LEVEL[i];
+    if (xp < acc + need) return i + 1; // i er 0‑indeks → level = i+1
+    acc += need;
+  }
+  return MAX_LEVEL;
+}
+// 10 danske titler á 3 levels hver (1–3, 4–6, …, 28–30)
+function titleFromXp(xp){
+  const lvl = levelFromXp(xp);
+  if (lvl <= 3)   return '🧴Kalk‑Rookie';
+  if (lvl <= 6)   return '🔍Beta‑Jæger';
+  if (lvl <= 9)   return '💥Greb‑Spejder';
+  if (lvl <= 12)  return '🎯Crux‑Knuser';
+  if (lvl <= 15)  return '🌊Flow‑Klatrer';
+  if (lvl <= 18)  return '♟️Rute‑Taktiker';
+  if (lvl <= 21)  return '🦾Overhængs‑Ass';
+  if (lvl <= 24)  return '📜Beta‑Mester';
+  if (lvl <= 27)  return '🚀Send‑Kaptajn';
+  if (lvl <= 29)  return '🏆Væg‑Legende';
+  return '🏆Klubmester🏆';
+}
+
 async function openRoutePicker(requiredCount = 5, color = 'gul') {
   const dlg = document.getElementById('routeModal');
   const form = document.getElementById('routeForm');
@@ -2018,24 +2075,6 @@ function cleanup(){
   dlg.addEventListener('cancel', onEscCancel); // gør Esc til "Annullér"
 });
 }
-function levelFromXp(xp) {
-  return Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * (xp / 100))) / 2));
-}
-function titleFromXp(xp){
-  if (xp < 300) return 'Chalk Rookie';
-  if (xp < 900) return 'Beta Seeker';
-  if (xp < 1800) return 'Crux Crusher';
-  if (xp < 3000) return 'Send Master';
-  return 'Wall Legend';
-}
-function nextLevelTotalXp(level){
-  // total XP to reach next level+1: 100*(L+1)*(L+2)/2
-  const L = Math.max(1, level);
-  return 100 * (L+1) * (L+2) / 2;
-}
-function totalXpForLevel(level){
-  return 100 * level * (level + 1) / 2;
-}
 async function load() {
   const { data: { user } } = await client.auth.getUser();
   if (!user) { window.location.href = '/login.html'; return; }
@@ -2044,29 +2083,24 @@ async function load() {
   const { data: ux } = await client.from('user_xp').select('*').eq('user_id', user.id).single();
 
   const xp = ux?.xp_total || 0;
-  const lvl = levelFromXp(xp);
   const minL = 1, maxL = 4;
   const title = titleFromXp(xp);
   const fitsLevel = q => (q.min_level ?? 1) <= lvl && lvl <= (q.max_level ?? 99);
+  const lvl  = levelFromXp(xp);
+  const base = totalXpForLevel(lvl);     // start på nuværende level
+  const next = nextLevelTotalXp(lvl);    // start på næste level
+  const span = Math.max(1, next - base); // XP i dette level
+  const within = Math.max(0, xp - base); // XP ind i dette level
+  const pct  = Math.min(100, (within / span) * 100);
 
-  document.getElementById('level').textContent = lvl;
-  document.getElementById('title').textContent = title;
-  document.getElementById('xp').textContent = xp;
+// UI
+document.getElementById('level').textContent = lvl;
+document.getElementById('title').textContent = titleFromXp(xp);
 
-function xpToReachLevel(L){           // total XP for at NÅ level L (1 => 0 XP)
-  return 100 * (L - 1) * L / 2;
-}
-const base = xpToReachLevel(lvl);     // baseline for nuværende level
-const next = xpToReachLevel(lvl + 1); // grænse til næste level
-const span = next - base;             // XP der kræves i DETTE level
-const within = xp - base;             // hvor meget du har i DETTE level
-const pct = Math.max(0, Math.min(100, (within / span) * 100));
-
+// progressbar + tal
 document.getElementById('xpFill').style.width = pct + '%';
-
-// Vis “inden i level / krav for level”
-document.getElementById('xp').textContent = within;  // fx 80
-document.getElementById('nextXp').textContent = span; // fx 100
+document.getElementById('xp').textContent     = within; // vist: XP i level’et
+document.getElementById('nextXp').textContent = span;   // vist: krav i level’et
 
   // fetch quests
   const { data: daily } = await client
@@ -2114,6 +2148,13 @@ const bonusPick  = pickDeterministic(bonusPool, 2, `bonus:${uid}:${dayKey(now)}`
 renderQuests('daily',  dailyPick,  false, completedSet);
 renderQuests('weekly', weeklyPick, true,  completedSet);
 renderQuests('bonus',  bonusPick,  false, completedSet);
+
+const firstLoad = (prevLevel === 0);
+if (!firstLoad && lvl > prevLevel) {
+  levelUpConfettiAtBar();
+}
+prevLevel = lvl;
+localStorage.setItem('bb_prev_level', String(lvl));
 
 }
 function renderQuests(containerId, quests, weekly=false, completedSet=new Set()){
@@ -2234,51 +2275,38 @@ async function completeQuest(q, btnEl){
   proof.history = history;
 } else if (q.validation === 'hardest_lead_grade') {
   // Åbn “vælg føre-rute efter grad”
-  const { picked, hardest, allowedGrades } = await openLeadPickerByGradeRange();
+  const {
+    picked,
+    hardest,
+    allowedGrades,
+    target: retTarget
+  } = await openLeadPickerByGradeRange({
+    mode:   q.payload?.mode   || 'hardest_personal',
+    target: q.payload?.target || null,
+    accepted_styles: q.payload?.accepted_styles || ['onsight','redpoint']
+  });
   if (!picked) return false;
 
-  // (valgfrit) hvis du stadig vil tjekke et q.payload.target:
-  const target = q.payload?.target ?? null;
-  if (target) {
-    const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
-    if (rank(picked.grad) < rank(target)) {
-      alert(`Valgte rute er ${picked.grad}, men målet er ${target}.`);
+  // Brug ét samlet 'target' uden at redeklarere navnet
+  const tgt = q.payload?.target ?? retTarget ?? null;
+  if (tgt) {
+    const rank = g => gradeOrderList().indexOf(String(g || '').toLowerCase());
+    if (rank(picked.grad) < rank(tgt)) {
+      alert(`Valgte rute er ${picked.grad}, men målet er ${tgt}.`);
       return false;
     }
   }
 
-  // Gem i proof
+  // Gem i proof (null-sikkert for target_mode)
   proof.hardest_lead = {
-    base_grade: hardest.grade,
+    base_grade: (hardest?.grade ?? tgt ?? null),
     allowed_grades: allowedGrades,
     chosen_route_id: picked.id,
     chosen_route_grade: picked.grad,
-    chosen_route_name: picked.navn
+    chosen_route_name: picked.navn ?? null
   };
- } else if (q.validation === 'hardest_toprope_grade') {
-  // Vælg toprope-rute i samme/næste grad som brugerens hårdeste toprope
-  const { picked, hardest, allowedGrades } = await openTopropePickerByGradeRange();
-  if (!picked) return false;
-
-  // Respektér evt. target i payload
-  const target = q.payload?.target ?? null;
-  if (target) {
-    const rank = g => gradeOrderList().indexOf(String(g||'').toLowerCase());
-    if (rank(picked.grad) < rank(target)) {
-      alert(`Valgte rute er ${picked.grad}, men målet er ${target}.`);
-      return false;
-    }
-  }
-
-  proof.hardest_toprope = {
-    base_grade: hardest.grade,
-    allowed_grades: allowedGrades,
-    chosen_route_id: picked.id,
-    chosen_route_grade: picked.grad,
-    chosen_route_name: picked.navn
-  };
-
-} else if (q.validation === 'hardest_boulder_grade') {
+}
+ else if (q.validation === 'hardest_boulder_grade') {
   // Vælg boulder + stil (flash / +2 / +3 / +5) blandt de tilladte
   const accepted = Array.isArray(q.payload?.accepted_styles) && q.payload.accepted_styles.length
     ? q.payload.accepted_styles
@@ -2356,16 +2384,15 @@ async function completeQuest(q, btnEl){
   }
 
   // Award XP
-  const { error: e3 } = await client.rpc('award_xp_for_quest', {
-    p_user_quest_id: uqRow.id
-  });
-  if (e3) { alert(e3.message); return false; }
+const { error: e3 } = await client.rpc('award_xp_for_quest', {
+  p_user_quest_id: uqRow.id
+});
+if (e3) { alert(e3.message); return false; }
 
-  // UI instant + reload
-  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Allerede fuldført'; }
-  alert(`Færdig! Du fik +${q.xp_reward} XP`);
-  load();
-  return true;
+await load();
+
+alert(`Færdig! Du fik +${q.xp_reward} XP`);
+return true;
 }
 
 async function getKeywords(category) {
