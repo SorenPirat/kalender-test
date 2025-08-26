@@ -36,7 +36,7 @@
     <div class="modal-indhold">
       <button id="luk-modal" class="luk" title="Luk" type="button" aria-label="Luk">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-             viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+             viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -54,7 +54,7 @@
     <div class="modal-indhold">
       <button class="luk" id="gdocs-luk" type="button" aria-label="Luk">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-             viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+             viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -72,7 +72,7 @@
     <div class="modal-indhold" style="overflow:auto; max-height:90vh;">
       <button class="luk" id="excel-luk" type="button" aria-label="Luk">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-             viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+             viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -141,6 +141,56 @@
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
     const bucketNavn = "bestyrelse";
+
+	// ---- Signed URL cache (localStorage) ----
+	const SIGN_CACHE_KEY = 'bestyrelse_signed_urls_v1';
+	const signedCache = new Map(); // key: fullPath -> { url, exp }
+
+try {
+  const raw = localStorage.getItem(SIGN_CACHE_KEY);
+  if (raw) {
+    const obj = JSON.parse(raw);
+    for (const [k, v] of Object.entries(obj)) signedCache.set(k, v);
+  }
+} catch {}
+
+function getCachedSignedUrl(path) {
+  const hit = signedCache.get(path);
+  if (!hit) return null;
+  if (Date.now() > hit.exp) { signedCache.delete(path); return null; }
+  return hit.url;
+}
+
+function saveSignedCacheSoon() {
+  clearTimeout(saveSignedCacheSoon.t);
+  saveSignedCacheSoon.t = setTimeout(() => {
+    const obj = Object.fromEntries(signedCache.entries());
+    localStorage.setItem(SIGN_CACHE_KEY, JSON.stringify(obj));
+  }, 200);
+}
+
+async function batchSignPaths(paths, { expiresSec = 1800 } = {}) {
+  const toSign = paths.filter(p => !getCachedSignedUrl(p));
+  if (toSign.length === 0) return;
+
+  // signér i chunks, så vi ikke laver mega-kald hvis der ligger 200+
+  const CHUNK = 40;
+  for (let i = 0; i < toSign.length; i += CHUNK) {
+    const slice = toSign.slice(i, i + CHUNK);
+    const { data, error } = await client.storage
+      .from(bucketNavn)
+      .createSignedUrls(slice, expiresSec);
+    if (error) { console.error('batchSign error', error); continue; }
+    const exp = Date.now() + expiresSec * 1000 - 10_000; // 10s buffer
+    // data følger rækkefølgen af slice
+    data.forEach((res, idx) => {
+      if (res?.signedUrl) {
+        signedCache.set(slice[idx], { url: res.signedUrl, exp });
+      }
+    });
+  }
+  saveSignedCacheSoon();
+}
 
 function visSektion(navn) {
   // Skjul alle sektioner
@@ -236,72 +286,216 @@ if (navn === "dokumenter") {
       await visMapper();
     }
 
-    async function toggleMappe(sti, wrapperEl){
-      let indhold = wrapperEl.querySelector(".mappe-indhold");
-      if(indhold){ indhold.remove(); return; }
+function hydrateRowUrl(row, signedUrl){
+  if (!row || !signedUrl) return;
+  const name = row.dataset.name || "";
+  const path = row.dataset.path || "";
+  
 
-      const { data, error } = await client.storage.from(bucketNavn).list(sti, { limit:100 });
-      if(error){ console.error(error); return; }
+  const isImg   = /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
+  const isExcel = /\.(xlsx?|csv|xlsm|xlsb)$/i.test(name);
+  const isGdoc  = /\.(docx?|pdf|pptx?|txt)$/i.test(name);
 
-      indhold = document.createElement("div");
-      indhold.className = "mappe-indhold";
+  const btn = row.querySelector('.fil-label');
+  if (!btn) return;
 
-      for(const item of (data||[])){
-        const fuldSti = `${sti}/${item.name}`.replace(/\/+/g,"/");
-        const skip = [".emptyFolderPlaceholder",".DS_Store","thumbs.db"];
-        if(!item.name || skip.includes(item.name)) continue;
+  btn.disabled = false;
+  btn.onclick = () => {
+    if (isImg)        visModal(signedUrl, path);
+    else if (isExcel) window.visExcelModal(signedUrl);
+    else if (isGdoc)  window.visDocModal(signedUrl, path);
+    else window.open(signedUrl, "_blank");
+  };
+}
 
-        if(item.metadata===null && !item.name.includes('.')){
-          // undermappe
-          const div = document.createElement("div");
-          div.className = "mappe";
-          const head = document.createElement("div");
-          head.className = "mappe-header";
-          head.textContent = `📁 ${item.name}`;
-          head.addEventListener("click", ()=>toggleMappe(fuldSti, div));
-          head.addEventListener("dragover", e=>{ e.preventDefault(); head.classList.add("highlight"); });
-          head.addEventListener("dragleave", ()=> head.classList.remove("highlight"));
-          head.addEventListener("drop", (e)=> onDropUpload(e, fuldSti, head));
-          div.appendChild(head);
-          indhold.appendChild(div);
-        }else{
-          // fil
-          const { data:signed } = await client.storage.from(bucketNavn).createSignedUrl(fuldSti, 3600);
-          const erBillede = /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name);
-          const erExcel   = /\.(xlsx?|csv|xlsm|xlsb)$/i.test(item.name);
-          const erGdoc    = /\.(docx?|pdf|pptx?|txt)$/i.test(item.name);
+async function toggleMappe(sti, wrapperEl) {
+  let indhold = wrapperEl.querySelector(".mappe-indhold");
+  if (indhold) { indhold.remove(); return; }
 
-          const row = document.createElement("div");
-          row.className = "fil-linje";
-          const label = document.createElement("span");
-          label.style.cursor = "pointer";
-          label.textContent = `${filtypeIkon(item.name)} ${item.name}`;
+  indhold = document.createElement("div");
+  indhold.className = "mappe-indhold";
+  wrapperEl.appendChild(indhold);
 
-          if(erBillede) label.onclick = ()=> visModal(signed.signedUrl, fuldSti);
-          else if(erExcel) label.onclick = ()=> visExcelModal(signed.signedUrl);
-          else if(erGdoc) label.onclick = ()=> visGdocsModal(signed.signedUrl, fuldSti);
-          else label.onclick = ()=> window.open(signed?.signedUrl || "#", "_blank");
+  // state pr. mappe
+  const STATE = {
+    page: 0,
+    pageSize: 20,
+    done: false,
+    ioSign: null,   // observer til at signere synlige rækker
+    ioLoad: null,   // observer til at loade næste side
+    listContainer: null,
+    sentinel: null,
+    loading: false
+  };
 
-          const menuKnap = document.createElement("button");
-          menuKnap.type="button";
-          menuKnap.className="slet-knap";
-          menuKnap.textContent = "⋮";
-          menuKnap.title = "Flere handlinger";
-          menuKnap.onclick = (e)=>{
-            e.preventDefault(); e.stopPropagation();
-            højreklikFilsti = fuldSti;
-            visMenuUdenforKant($("#file-context-menu"), e.pageX, e.pageY);
-            $("#file-context-menu").classList.remove("skjult");
-          };
+  // container til filrækker
+  const list = document.createElement("div");
+  list.className = "fil-liste";
+  indhold.appendChild(list);
+  STATE.listContainer = list;
 
-          row.appendChild(label);
-          row.appendChild(menuKnap);
-          indhold.appendChild(row);
-        }
+  // sentinel i bunden til infinite scroll
+  const sentinel = document.createElement("div");
+  sentinel.className = "scroll-sentinel";
+  sentinel.style.height = "1px";
+  indhold.appendChild(sentinel);
+  STATE.sentinel = sentinel;
+
+  // observer der pre-signer synlige rækker
+  STATE.ioSign = new IntersectionObserver(async entries => {
+    const needSign = [];
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const row = e.target;
+      const path = row.dataset.path;
+      const cached = getCachedSignedUrl(path);
+      if (cached) {
+        hydrateRowUrl(row, cached);
+        STATE.ioSign.unobserve(row);
+      } else {
+        needSign.push(path);
+      }
+    }
+    if (needSign.length) {
+      await batchSignPaths(needSign);
+      for (const p of needSign) {
+        const r = STATE.listContainer.querySelector(`[data-path="${CSS.escape(p)}"]`);
+        if (r) hydrateRowUrl(r, getCachedSignedUrl(p));
+      }
+    }
+  }, { rootMargin: "200px" });
+
+  // observer der loader næste page når man nærmer sig bunden
+  STATE.ioLoad = new IntersectionObserver(async entries => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      if (!STATE.done && !STATE.loading) {
+        await loadNextPage();
+      }
+    }
+  }, { rootMargin: "600px" });
+
+  STATE.ioLoad.observe(STATE.sentinel);
+
+  // første pages (så vi ikke kun viser 20 hvis der er plads til mere)
+  await loadNextPage();
+  while (!STATE.done && contentShorterThanViewport(indhold)) {
+    await loadNextPage();
+  }
+
+  function contentShorterThanViewport(container) {
+    const rect = container.getBoundingClientRect();
+    return rect.bottom <= (window.innerHeight + 100); // 100px buffer
+  }
+
+  async function loadNextPage() {
+    if (STATE.done || STATE.loading) return;
+    STATE.loading = true;
+
+    const { data, error } = await client.storage
+      .from(bucketNavn)
+      .list(sti, {
+        limit: STATE.pageSize,
+        offset: STATE.page * STATE.pageSize,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+
+    STATE.loading = false;
+
+    if (error) { console.error(error); return; }
+    const items = (data || []).filter(item => {
+      const skip = [".emptyFolderPlaceholder",".DS_Store","thumbs.db"];
+      return item?.name && !skip.includes(item.name);
+    });
+
+    if (!items.length) {
+      STATE.done = true;
+      return;
+    }
+
+    const rowsNeedingSign = [];
+    for (const item of items) {
+      const fuldSti = `${sti}/${item.name}`.replace(/\/+/g,"/");
+
+      // undermappe
+      if (item.metadata === null && !item.name.includes('.')) {
+        const div = document.createElement("div");
+        div.className = "mappe";
+        const head = document.createElement("div");
+        head.className = "mappe-header";
+        head.textContent = `📁 ${item.name}`;
+        head.addEventListener("click", () => toggleMappe(fuldSti, div));
+        head.addEventListener("dragover", e => { e.preventDefault(); head.classList.add("highlight"); });
+        head.addEventListener("dragleave", () => head.classList.remove("highlight"));
+        head.addEventListener("drop", (e)=> onDropUpload(e, fuldSti, head));
+        STATE.listContainer.appendChild(div);
+        div.appendChild(head);
+        continue;
       }
 
-      wrapperEl.appendChild(indhold);
+      // filrække
+      const row = document.createElement("div");
+      row.className = "fil-linje";
+      row.dataset.path = fuldSti;
+	  row.dataset.name = item.name;
+
+      const label = document.createElement("button");
+      label.type = "button";
+      label.className = "fil-label";
+      label.textContent = `${filtypeIkon(item.name)} ${item.name}`;
+      label.disabled = true; // aktiveres, når vi har URL
+
+      const menuKnap = document.createElement("button");
+      menuKnap.type = "button";
+      menuKnap.className = "slet-knap";
+      menuKnap.textContent = "⋮";
+      menuKnap.title = "Flere handlinger";
+      menuKnap.onclick = (e)=> {
+        e.preventDefault(); e.stopPropagation();
+        højreklikFilsti = fuldSti;
+        visMenuUdenforKant($("#file-context-menu"), e.pageX, e.pageY);
+        $("#file-context-menu").classList.remove("skjult");
+      };
+
+      row.appendChild(label);
+      row.appendChild(menuKnap);
+      STATE.listContainer.appendChild(row);
+
+      const cached = getCachedSignedUrl(fuldSti);
+      if (cached) {
+        hydrateRowUrl(row, cached);
+      } else {
+        rowsNeedingSign.push(row);
+      }
     }
+
+    // observer rækker der mangler sign
+    for (const r of rowsNeedingSign) STATE.ioSign.observe(r);
+
+    STATE.page += 1;
+
+    // pre-signér straks det, der allerede er i viewport
+    await signVisibleNow(rowsNeedingSign);
+  }
+
+  async function signVisibleNow(rows) {
+    const need = [];
+    for (const r of rows) {
+      const rect = r.getBoundingClientRect();
+      const inView = rect.top < window.innerHeight + 200 && rect.bottom > -200;
+      if (inView) {
+        const path = r.dataset.path;
+        if (!getCachedSignedUrl(path)) need.push(path);
+      }
+    }
+    if (!need.length) return;
+    await batchSignPaths(need);
+    for (const p of need) {
+      const r = STATE.listContainer.querySelector(`[data-path="${CSS.escape(p)}"]`);
+      if (r) hydrateRowUrl(r, getCachedSignedUrl(p));
+    }
+  }
+}
 
     // ---------- Modal helpers ----------
     function visMenuUdenforKant(menuEl, x, y){
@@ -334,18 +528,75 @@ if (navn === "dokumenter") {
       $("#download-knap").onclick = ()=> tvungenDownload(path, path.split("/").pop());
       $("#preview-modal").classList.remove("skjult");
     }
-    window.visGdocsModal = function(signedUrl, filsti){
-      $("#preview-modal")?.classList.add("skjult");
-      $("#preview-billede").src = "";
-      $("#gdocs-modal").classList.remove("skjult");
-      const gviewUrl = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
-      setTimeout(()=> { $("#gdocs-frame").src = gviewUrl; }, 50);
-      $("#gdocs-download-knap").onclick = ()=> tvungenDownload(filsti, filsti.split("/").pop());
-    };
-    window.lukGdocsModal = function(){
-      $("#gdocs-frame").src = "";
-      $("#gdocs-modal").classList.add("skjult");
-    };
+	window.visDocModal = function(signedUrl, path){
+  $("#preview-modal")?.classList.add("skjult");
+  $("#preview-billede").src = "";
+
+  const name = path.split("/").pop() || "";
+  const ext  = name.split(".").pop()?.toLowerCase() || "";
+
+  const $modal = $("#gdocs-modal");
+  const $frame = $("#gdocs-frame");
+
+  // altid vis modal – vi fylder indholdet nedenfor
+  $modal.classList.remove("skjult");
+
+  // helper: sæt iframe-src
+  const setFrame = (src) => { $frame.src = src; };
+
+  // helper: fallback download-knap
+  $("#gdocs-download-knap").onclick = ()=> tvungenDownload(path, name);
+
+  // 1) PDF → brug browserens egen viewer (hurtigst)
+  if (ext === "pdf") {
+    // De fleste browsere viser PDF lynhurtigt direkte
+    setFrame(signedUrl);
+    return;
+  }
+
+  // 2) Office-formater → brug Office Web Viewer (ofte hurtigere end gview)
+  const isWord = ["doc", "docx"].includes(ext);
+  const isPpt  = ["ppt", "pptx"].includes(ext);
+  // (XLS, XLSX, CSV håndteres af din eksisterende visExcelModal andre steder)
+  if (isWord || isPpt) {
+    // Microsofts viewer accepterer offentligt tilgængelige URLs og mange signed URLs
+    // (så længe de kan hentes af Office’s servere inden udløb)
+    const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrl)}`;
+    setFrame(officeUrl);
+    return;
+  }
+
+  // 3) TXT → fetch og vis simpel tekst (hurtigt og lokalt)
+  if (ext === "txt") {
+    (async () => {
+      try {
+        const res = await fetch(signedUrl);
+        const text = await res.text();
+        // vis som tekst i stedet for iframe
+        $frame.src = "about:blank";
+        const html = `
+          <div style="padding:1rem; max-height:80vh; overflow:auto; white-space:pre-wrap; font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;">
+            ${text.replace(/[&<>]/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;' }[s]))}
+          </div>`;
+        // skriv ind i iframe-dokumentet
+        const doc = $frame.contentDocument || $frame.contentWindow?.document;
+        doc.open(); doc.write(html); doc.close();
+      } catch (e) {
+        console.error(e);
+        setFrame(signedUrl); // sidste udvej
+      }
+    })();
+    return;
+  }
+
+  // 4) Alt andet → prøv direkte i iframe (mange browsere viser fx .rtf, .md via plugins)
+  setFrame(signedUrl);
+};
+	window.lukGdocsModal = function(){
+  $("#gdocs-frame").src = "";
+  $("#gdocs-modal").classList.add("skjult");
+  document.body.classList.remove("modal-open");
+};
     window.visExcelModal = async function(signedUrl){
       const res = await fetch(signedUrl); const blob = await res.blob();
       const reader = new FileReader();
