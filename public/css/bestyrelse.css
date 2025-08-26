@@ -1,3 +1,12 @@
+/* Globalt: undgå sideværts scroll */
+html, body { overflow-x: hidden; }
+
+/* Når en modal er åben, må baggrunden ikke scrolle */
+body.modal-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
   .modal {
     position: fixed;
     z-index: 9999;
@@ -123,16 +132,12 @@
 }
 
 #gdocs-modal .modal-indhold {
-  max-width: 95vw;
-  max-height: 90vh;
   width: 90vw;
   height: 90vh;
-  padding: 2rem 1rem 1rem;
-  background-color: #fff;
+  padding: 0;                /* ingen kant rundt om viewer */
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
 }
 
 #gdocs-modal .modal-header {
@@ -155,12 +160,19 @@
 
 #gdocs-modal .luk {
   position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 1.5rem;
-  color: #333;
-  cursor: pointer;
+  top: .5rem;
+  right: .75rem;
   z-index: 2;
+}
+
+#gdocs-modal .modal-knap-wrapper {
+  position: sticky;
+  bottom: 0;
+  background: inherit;
+  padding: .5rem;
+  display: flex;
+  gap: .5rem;
+  justify-content: center;
 }
 
 #download-knap {
@@ -175,11 +187,13 @@
 }
 
 #gdocs-frame {
+  display: block;
   width: 100%;
   height: 100%;
-  flex: 1;
-  border: none;
-  border-radius: 8px;
+  border: 0;
+  /* Friktion-fri scroll på iOS */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 #context-menu {
@@ -349,8 +363,12 @@ display: none !important;
   background: #005bb5;
 }
 
-#sektion-knapper { display: flex !important; }
+#sektion-knapper { 
+display: flex !important; }
 
+/* valgfrit, kun for at have noget at “ramme” med observeren */
+.scroll-sentinel { 
+height: 1px; }
 
 /* ---------- ÅRSHJUL ---------- */
 :root{
@@ -478,6 +496,23 @@ font-size:.85rem; padding:.2rem .6rem;
 font-size:.85rem; padding:.2rem .6rem; 
 }
 
+@media (max-width: 680px) {
+  #preview-modal .modal-indhold {
+    width: 100vw;
+    height: 100dvh;
+    max-width: 100vw;
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+  #preview-modal .modal-indhold img {
+    max-width: 100%;
+    max-height: 100%;
+    height: 100%;
+    object-fit: contain;  /* ingen sideværts scroll */
+  }
+}
+
 @media (max-width: 900px){
   #sektion-aarshjul .aarshjul-layout{
     grid-template-columns: 1fr;
@@ -578,7 +613,7 @@ font-size:.85rem; padding:.2rem .6rem;
   }
 
   .luk svg {
-    stroke: white;
+    stroke: red;
   }
 
   .mappe {
